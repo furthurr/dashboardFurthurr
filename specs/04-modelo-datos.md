@@ -1,6 +1,12 @@
 # 04 - Modelo De Datos
 
-Estado: `borrador`
+Estado: `aprobada`
+
+Última actualización: 2026-04-28
+
+## Archivo De Referencia
+
+El esquema completo está en [`supabase-schema.sql`](../supabase-schema.sql). Este documento resume las decisiones.
 
 ## Supabase Auth
 
@@ -90,3 +96,16 @@ Campos propuestos:
 - `alta`
 - `normal`
 - `baja`
+
+## Elementos Adicionales Implementados
+
+El archivo SQL incluye también:
+
+- **Triggers `updated_at`**: automatic timestamp updates on profiles, tasks, comments.
+- **Trigger `handle_new_user`**: auto-creates profile on auth.users signup.
+- **Índices**: para optimizar queries en status, priority, created_by, task_id, author_id.
+- **Views**:
+  - `tasks_with_assignees`: tasks con array JSON de asignados.
+  - `tasks_with_stats`: tasks con conteo de comentarios y adjuntos.
+- **Storage buckets**: `avatars` (público) y `task-attachments` (privado).
+- **RLS policies**: detalladas por tabla según roles documentados en `05-auth-roles-permisos.md`.

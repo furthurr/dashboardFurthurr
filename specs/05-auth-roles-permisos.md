@@ -1,6 +1,12 @@
 # 05 - Auth, Roles Y Permisos
 
-Estado: `borrador`
+Estado: `aprobada`
+
+Última actualización: 2026-04-28
+
+## Archivo De Referencia
+
+El esquema completo está en [`supabase-schema.sql`](../supabase-schema.sql). Las policies RLS están definidas ahí.
 
 ## Autenticación
 
@@ -44,18 +50,33 @@ Invitado:
 - No puede editar comentarios.
 - No puede editar comentarios aunque sean propios, porque no puede crearlos.
 
-## Reglas RLS Iniciales
+## Decisiones Resueltas
 
-- Todo usuario autenticado puede leer tareas.
-- Solo admin y usuario pueden crear comentarios.
-- Solo creador o admin pueden editar comentarios.
-- Invitado no puede insertar comentarios.
-- El admin puede actualizar roles.
-- Un usuario puede actualizar ciertos campos de su propio perfil.
+- Usuario puede eliminar tareas solo si es el creador o admin.
+- Usuario puede editar tareas solo si es el creador o admin.
+- Invitado puede ver adjuntos (SELECT en task_attachments para authenticated).
+- Primer usuario registrado será `invitado` por defecto; admin se configura manualmente en dashboard de Supabase.
+- Todos los nuevos usuarios se crean con rol `invitado` automáticamente via trigger.
 
-## Pendientes De Decisión
+## Roles: Definición Formal
 
-- Definir si usuario puede eliminar tareas.
-- Definir si usuario puede editar tareas creadas por otros.
-- Definir si invitado puede ver adjuntos.
-- Definir si el primer usuario registrado será admin automáticamente o si se configura manualmente en Supabase.
+| Acción | Admin | Usuario | Invitado |
+|---|---|---|---|
+| Ver tareas | Sí | Sí | Sí |
+| Crear tareas | Sí | Sí | No |
+| Editar tareas propias | Sí | Sí | No |
+| Editar tareas ajenas | Sí | No | No |
+| Eliminar tareas propias | Sí | Sí | No |
+| Eliminar tareas ajenas | Sí | No | No |
+| Ver comentarios | Sí | Sí | Sí |
+| Crear comentarios | Sí | Sí | No |
+| Editar comentarios propios | Sí | Sí | No |
+| Editar comentarios ajenos | Sí | No | No |
+| Eliminar comentarios propios | Sí | Sí | No |
+| Eliminar comentarios ajenos | Sí | No | No |
+| Subir adjuntos | Sí | Sí | No |
+| Ver adjuntos | Sí | Sí | Sí |
+| Eliminar adjuntos propios | Sí | Sí | No |
+| Eliminar adjuntos ajenos | Sí (de sus tareas) | No | No |
+| Editar perfil propio | Sí | Sí | Sí |
+| Editar roles de otros | Sí | No | No |
