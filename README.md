@@ -1,39 +1,73 @@
-# Dashboard Furthurr - Planeación SDD
+# React + TypeScript + Vite
 
-Este repositorio está en fase de planeación. Todavía no contiene el proyecto web ni código de aplicación.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-La fuente de verdad del proyecto será la carpeta [`specs/`](./specs), donde iremos documentando, ajustando y aprobando las decisiones antes y durante el desarrollo.
+Currently, two official plugins are available:
 
-## Objetivo
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-Crear una aplicación web tipo Trello para gestión de tareas mediante tableros Kanban, conectada a Supabase, con autenticación, roles, comentarios, asignaciones múltiples, adjuntos ligeros y despliegue en GitHub Pages.
+## React Compiler
 
-## Estado Actual
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-- Fase: Planeación
-- Metodología: SDD, Specification Driven Development
-- Backend previsto: Supabase
-- Frontend previsto: React + Vite + TypeScript
-- Deploy previsto: GitHub Pages
-- Diseño de referencia: `design-md/airtable`, con experiencia de tablero similar a Trello
+## Expanding the ESLint configuration
 
-## Documentos Principales
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-- [`arquitectura.md`](./arquitectura.md): arquitectura técnica propuesta.
-- [`specs/README.md`](./specs/README.md): índice y reglas de trabajo SDD.
-- [`specs/00-init.md`](./specs/00-init.md): documento inicial del proyecto.
-- [`specs/01-producto.md`](./specs/01-producto.md): visión, alcance y usuarios.
-- [`specs/02-requisitos-funcionales.md`](./specs/02-requisitos-funcionales.md): funcionalidades esperadas.
-- [`specs/03-requisitos-no-funcionales.md`](./specs/03-requisitos-no-funcionales.md): rendimiento, seguridad y compatibilidad.
-- [`specs/04-modelo-datos.md`](./specs/04-modelo-datos.md): modelo inicial de Supabase.
-- [`specs/05-auth-roles-permisos.md`](./specs/05-auth-roles-permisos.md): autenticación, roles y RLS.
-- [`specs/06-ui-ux-diseno.md`](./specs/06-ui-ux-diseno.md): guía visual y experiencia de usuario.
-- [`specs/07-kanban-drag-drop.md`](./specs/07-kanban-drag-drop.md): comportamiento del tablero.
-- [`specs/08-deploy-github-pages.md`](./specs/08-deploy-github-pages.md): estrategia de despliegue.
-- [`specs/09-backlog-sdd.md`](./specs/09-backlog-sdd.md): backlog técnico y funcional.
-- [`specs/10-decisiones.md`](./specs/10-decisiones.md): registro de decisiones.
-- [`specs/11-progreso.md`](./specs/11-progreso.md): bitácora de avance.
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
 
-## Regla De Trabajo
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
 
-Antes de programar una funcionalidad, debe existir una especificación en `specs/`. Si algo cambia durante el desarrollo, primero se actualiza la especificación correspondiente y después se implementa.
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
+
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```

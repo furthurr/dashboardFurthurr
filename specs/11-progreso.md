@@ -20,6 +20,15 @@
 - Se documentaron decisiones de roles y permisos resueltas.
 - Se registraron políticas RLS en el schema.
 - Se documentó trigger auto-crear perfil en signup.
+- Se ejecutó schema SQL en Supabase (base de datos lista).
+- Se creó scaffold del proyecto con Vite + React + TypeScript.
+- Se instalaron dependencias: Supabase client, dnd-kit, TanStack Query, React Router, React Hook Form, Zod, Tailwind CSS.
+- Se configuró Tailwind CSS con `@tailwindcss/vite`.
+- Se configuró HashRouter para compatibilidad con GitHub Pages.
+- Se configuró Supabase client con variables de entorno.
+- Se crearon tipos TypeScript para el proyecto.
+- Se creó estructura de carpetas: `features/`, `shared/`, `providers/`, `lib/`.
+- Se configuró `vite.config.ts` con `base: '/dashboardFurthurr/'` para GitHub Pages.
 
 ## Repo Creado
 
@@ -28,4 +37,6 @@
 
 ## Próximo Paso
 
-Ejecutar `supabase-schema.sql` en el SQL Editor de Supabase y obtener credenciales (URL + publishable key) para continuar con la implementación del proyecto.
+1. Actualizar `.env.local` con las credenciales reales de Supabase.
+2. Implementar autenticación (login, registro, logout) con Supabase Auth.
+3. Implementar el tablero Kanban con columnas, cards y drag & drop.
