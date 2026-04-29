@@ -459,13 +459,9 @@ grant select on public.task_attachments to authenticated;
 grant insert on public.task_attachments to authenticated;
 grant delete on public.task_attachments to authenticated;
 
--- Storage permissions
-grant usage on bucket avatars to authenticated;
-grant insert on bucket avatars to authenticated;
-grant update on bucket avatars to authenticated;
-grant select on bucket task-attachments to authenticated;
-grant insert on bucket task-attachments to authenticated;
-grant delete on bucket task-attachments to authenticated;
+-- NOTE: Storage permissions are handled via RLS policies in the storage.objects table.
+-- Policies for storage were defined earlier in this file.
+-- No additional GRANT statements needed for storage buckets.
 
 -- Grant access to views
 grant select on public.tasks_with_assignees to authenticated;
