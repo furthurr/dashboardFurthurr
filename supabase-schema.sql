@@ -147,7 +147,7 @@ begin
         new.id,
         coalesce(new.raw_user_meta_data->>'full_name', ''),
         new.email,
-        'invitado'
+        'usuario'
     );
     return new;
 end;

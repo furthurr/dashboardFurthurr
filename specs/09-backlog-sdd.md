@@ -1,54 +1,54 @@
 # 09 - Backlog SDD
 
-Estado: `borrador`
+Estado: `en proceso`
 
 ## Épica 1 - Planeación
 
 - [x] Crear documentación inicial.
 - [x] Crear carpeta `specs`.
 - [x] Definir arquitectura inicial.
-- [ ] Aprobar stack tecnológico.
-- [ ] Aprobar modelo de datos.
-- [ ] Aprobar reglas de roles.
+- [x] Aprobar stack tecnológico.
+- [x] Aprobar modelo de datos.
+- [x] Aprobar reglas de roles.
 
 ## Épica 2 - Base Del Proyecto
 
-- [ ] Crear proyecto Vite + React + TypeScript.
-- [ ] Configurar Tailwind.
-- [ ] Configurar estructura de carpetas.
-- [ ] Configurar Supabase client.
-- [ ] Configurar rutas base.
+- [x] Crear proyecto Vite + React + TypeScript.
+- [x] Configurar Tailwind.
+- [x] Configurar estructura de carpetas.
+- [x] Configurar Supabase client.
+- [x] Configurar rutas base.
 
 ## Épica 3 - Auth Y Usuarios
 
-- [ ] Registro.
-- [ ] Login.
-- [ ] Logout.
-- [ ] Perfil.
-- [ ] Roles.
-- [ ] RLS.
+- [x] Registro.
+- [x] Login.
+- [x] Logout.
+- [x] Perfil.
+- [x] Roles.
+- [x] RLS.
 
 ## Épica 4 - Tablero Kanban
 
-- [ ] Columnas de estados.
-- [ ] Cards de tarea.
-- [ ] Creación de tarea.
-- [ ] Edición de tarea.
-- [ ] Drag & drop.
-- [ ] Persistencia de posición.
+- [x] Columnas de estados.
+- [x] Cards de tarea.
+- [x] Creación de tarea.
+- [x] Edición de tarea.
+- [x] Drag & drop.
+- [x] Persistencia de posición.
 
 ## Épica 5 - Comentarios Y Adjuntos
 
-- [ ] Comentarios.
-- [ ] Edición por creador.
-- [ ] Edición por admin.
-- [ ] Bloqueo para invitados.
-- [ ] Adjuntos máximo 5 MB.
-- [ ] Anotaciones especiales.
+- [x] Comentarios.
+- [x] Edición por creador.
+- [x] Edición por admin.
+- [x] Bloqueo para invitados.
+- [x] Adjuntos máximo 5 MB.
+- [x] Anotaciones especiales.
 
 ## Épica 6 - Deploy
 
-- [ ] Build de producción.
-- [ ] GitHub Actions.
+- [x] Build de producción.
+- [x] GitHub Actions.
 - [ ] GitHub Pages.
 - [ ] Validación de rutas.
