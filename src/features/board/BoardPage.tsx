@@ -16,7 +16,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { useTasks, useUpdateTaskStatus, useCreateTask, useDeleteTask, useUpdateTask } from './api'
+import { useTasks, useUpdateTaskStatus, useCreateTask, useDeleteTask, useUpdateTask, useSwapTaskPosition } from './api'
 import { useComments, useCreateComment, useDeleteComment } from './commentsApi'
 import { useAttachments, useUploadAttachment, useDeleteAttachment } from './attachmentsApi'
 import { BOARD_COLUMNS } from './constants'
@@ -35,6 +35,7 @@ export function BoardPage() {
   const createTask = useCreateTask()
   const deleteTask = useDeleteTask()
   const updateTask = useUpdateTask()
+  const swapTaskPosition = useSwapTaskPosition()
   const [activeTask, setActiveTask] = useState<TaskWithAssignees | null>(null)
   const [optimisticTasks, setOptimisticTasks] = useState<TaskWithAssignees[] | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -144,37 +145,27 @@ export function BoardPage() {
     }
   }
 
-  function handleMoveTask(taskId: string, direction: 'left' | 'right') {
+  function handleMoveTaskVertical(taskId: string, direction: 'up' | 'down') {
     const task = displayTasks.find((t) => t.id === taskId)
     if (!task) return
 
-    const currentColumnIndex = BOARD_COLUMNS.findIndex((c) => c.id === task.status)
-    const newColumnIndex = direction === 'left' ? currentColumnIndex - 1 : currentColumnIndex + 1
+    const tasksInColumn = displayTasks.filter((t) => t.status === task.status)
+    const sortedTasks = [...tasksInColumn].sort((a, b) => a.position - b.position)
+    const currentIndex = sortedTasks.findIndex((t) => t.id === taskId)
 
-    if (newColumnIndex < 0 || newColumnIndex >= BOARD_COLUMNS.length) return
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
 
-    const newStatus = BOARD_COLUMNS[newColumnIndex].id
-    const tasksInNewColumn = displayTasks.filter((t) => t.status === newStatus)
-    const newPosition = tasksInNewColumn.length > 0 ? Math.max(...tasksInNewColumn.map((t) => t.position)) + 1 : 0
+    if (targetIndex < 0 || targetIndex >= sortedTasks.length) return
 
-    setOptimisticTasks((prev) => {
-      const updated = prev ?? displayTasks
-      return updated.map((t) =>
-        t.id === taskId ? { ...t, status: newStatus, position: newPosition } : t
-      )
+    const taskAbove = sortedTasks[currentIndex]
+    const taskBelow = sortedTasks[targetIndex]
+
+    swapTaskPosition.mutate({
+      taskId1: taskAbove.id,
+      position1: taskBelow.position,
+      taskId2: taskBelow.id,
+      position2: taskAbove.position,
     })
-
-    updateTaskStatus.mutate(
-      { taskId, status: newStatus, position: newPosition },
-      {
-        onError: () => {
-          setOptimisticTasks(null)
-        },
-        onSuccess: () => {
-          setOptimisticTasks(null)
-        },
-      }
-    )
   }
 
   return (
@@ -250,7 +241,7 @@ export function BoardPage() {
                       setSelectedTask(task)
                       setIsDetailOpen(true)
                     }}
-                    onMoveTask={handleMoveTask}
+                    onMoveTaskVertical={handleMoveTaskVertical}
                   />
                 </SortableContext>
               </div>

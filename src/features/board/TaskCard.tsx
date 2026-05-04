@@ -4,11 +4,13 @@ import { PRIORITY_COLORS } from './constants'
 interface TaskCardProps {
   task: TaskWithAssignees
   isDragging?: boolean
-  onMoveLeft?: () => void
-  onMoveRight?: () => void
+  onMoveUp?: () => void
+  onMoveDown?: () => void
+  canMoveUp?: boolean
+  canMoveDown?: boolean
 }
 
-export function TaskCard({ task, isDragging, onMoveLeft, onMoveRight }: TaskCardProps) {
+export function TaskCard({ task, isDragging, onMoveUp, onMoveDown, canMoveUp, canMoveDown }: TaskCardProps) {
   return (
     <div
       className={`
@@ -61,24 +63,29 @@ export function TaskCard({ task, isDragging, onMoveLeft, onMoveRight }: TaskCard
       )}
 
       <div className="mt-3 flex items-center justify-between gap-2">
-        <button
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMoveLeft?.() }}
-          className="p-1.5 rounded-lg bg-[var(--color-surface-elevated)] hover:bg-[var(--color-border)] text-[var(--color-text-muted)] hover:text-white text-xs transition-all duration-[var(--transition-fast)] hover:scale-110 active:scale-95"
-          title="Mover a la izquierda"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMoveRight?.() }}
-          className="p-1.5 rounded-lg bg-[var(--color-surface-elevated)] hover:bg-[var(--color-border)] text-[var(--color-text-muted)] hover:text-white text-xs transition-all duration-[var(--transition-fast)] hover:scale-110 active:scale-95"
-          title="Mover a la derecha"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+        {onMoveUp && canMoveUp && (
+          <button
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMoveUp?.() }}
+            className="p-1.5 rounded-lg bg-[var(--color-surface-elevated)] hover:bg-[var(--color-border)] text-[var(--color-text-muted)] hover:text-white text-xs transition-all duration-[var(--transition-fast)] hover:scale-110 active:scale-95"
+            title="Subir"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+            </svg>
+          </button>
+        )}
+        <div className="flex-1" />
+        {onMoveDown && canMoveDown && (
+          <button
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMoveDown?.() }}
+            className="p-1.5 rounded-lg bg-[var(--color-surface-elevated)] hover:bg-[var(--color-border)] text-[var(--color-text-muted)] hover:text-white text-xs transition-all duration-[var(--transition-fast)] hover:scale-110 active:scale-95"
+            title="Bajar"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   )

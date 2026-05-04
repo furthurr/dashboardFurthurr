@@ -7,10 +7,10 @@ interface BoardColumnProps {
   label: string
   tasks: TaskWithAssignees[]
   onTaskClick?: (task: TaskWithAssignees) => void
-  onMoveTask?: (taskId: string, direction: 'left' | 'right') => void
+  onMoveTaskVertical?: (taskId: string, direction: 'up' | 'down') => void
 }
 
-export function BoardColumn({ id, label, tasks, onTaskClick, onMoveTask }: BoardColumnProps) {
+export function BoardColumn({ id, label, tasks, onTaskClick, onMoveTaskVertical }: BoardColumnProps) {
   const { setNodeRef } = useDroppable({ id })
 
   return (
@@ -25,13 +25,15 @@ export function BoardColumn({ id, label, tasks, onTaskClick, onMoveTask }: Board
           </div>
         </div>
         <div className="p-3 space-y-2 min-h-[200px]">
-          {tasks.map((task) => (
+          {tasks.map((task, index) => (
             <SortableTaskCard
               key={task.id}
               task={task}
               onClick={() => onTaskClick?.(task)}
-              onMoveLeft={() => onMoveTask?.(task.id, 'left')}
-              onMoveRight={() => onMoveTask?.(task.id, 'right')}
+              onMoveUp={() => onMoveTaskVertical?.(task.id, 'up')}
+              onMoveDown={() => onMoveTaskVertical?.(task.id, 'down')}
+              canMoveUp={index > 0}
+              canMoveDown={index < tasks.length - 1}
             />
           ))}
         </div>
