@@ -6,13 +6,28 @@ import { TaskCard } from './TaskCard'
 interface SortableTaskCardProps {
   task: TaskWithAssignees
   onClick?: () => void
+  onMoveLeft?: () => void
+  onMoveRight?: () => void
   onMoveUp?: () => void
   onMoveDown?: () => void
+  canMoveLeft?: boolean
+  canMoveRight?: boolean
   canMoveUp?: boolean
   canMoveDown?: boolean
 }
 
-export function SortableTaskCard({ task, onClick, onMoveUp, onMoveDown, canMoveUp, canMoveDown }: SortableTaskCardProps) {
+export function SortableTaskCard({
+  task,
+  onClick,
+  onMoveLeft,
+  onMoveRight,
+  onMoveUp,
+  onMoveDown,
+  canMoveLeft,
+  canMoveRight,
+  canMoveUp,
+  canMoveDown,
+}: SortableTaskCardProps) {
   const {
     attributes,
     listeners,
@@ -36,8 +51,12 @@ export function SortableTaskCard({ task, onClick, onMoveUp, onMoveDown, canMoveU
       <TaskCard
         task={task}
         isDragging={isDragging}
+        onMoveLeft={onMoveLeft}
+        onMoveRight={onMoveRight}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
+        canMoveLeft={canMoveLeft}
+        canMoveRight={canMoveRight}
         canMoveUp={canMoveUp}
         canMoveDown={canMoveDown}
       />

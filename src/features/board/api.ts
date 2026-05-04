@@ -142,34 +142,21 @@ export function useDeleteTask() {
   })
 }
 
-export function useSwapTaskPosition() {
+export function useUpdateTaskPositions() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({
-      taskId1,
-      position1,
-      taskId2,
-      position2,
-    }: {
-      taskId1: string
-      position1: number
-      taskId2: string
-      position2: number
-    }) => {
-      const { error: error1 } = await supabase
-        .from('tasks')
-        .update({ position: position1 })
-        .eq('id', taskId2)
+    mutationFn: async (updates: Array<{ taskId: string; position: number }>) => {
+      await Promise.all(
+        updates.map(async ({ taskId, position }) => {
+          const { error } = await supabase
+            .from('tasks')
+            .update({ position })
+            .eq('id', taskId)
 
-      if (error1) throw error1
-
-      const { error: error2 } = await supabase
-        .from('tasks')
-        .update({ position: position2 })
-        .eq('id', taskId1)
-
-      if (error2) throw error2
+          if (error) throw error
+        })
+      )
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })

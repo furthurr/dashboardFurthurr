@@ -16,7 +16,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { useTasks, useUpdateTaskStatus, useCreateTask, useDeleteTask, useUpdateTask, useSwapTaskPosition } from './api'
+import { useTasks, useUpdateTaskStatus, useCreateTask, useDeleteTask, useUpdateTask, useUpdateTaskPositions } from './api'
 import { useComments, useCreateComment, useDeleteComment } from './commentsApi'
 import { useAttachments, useUploadAttachment, useDeleteAttachment } from './attachmentsApi'
 import { BOARD_COLUMNS } from './constants'
@@ -35,7 +35,7 @@ export function BoardPage() {
   const createTask = useCreateTask()
   const deleteTask = useDeleteTask()
   const updateTask = useUpdateTask()
-  const swapTaskPosition = useSwapTaskPosition()
+  const updateTaskPositions = useUpdateTaskPositions()
   const [activeTask, setActiveTask] = useState<TaskWithAssignees | null>(null)
   const [optimisticTasks, setOptimisticTasks] = useState<TaskWithAssignees[] | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -86,7 +86,9 @@ export function BoardPage() {
 
   const tasksByColumn = BOARD_COLUMNS.reduce<Record<TaskStatus, typeof displayTasks>>(
     (acc, col) => {
-      acc[col.id] = displayTasks.filter((t) => t.status === col.id)
+      acc[col.id] = displayTasks
+        .filter((t) => t.status === col.id)
+        .sort((a, b) => a.position - b.position)
       return acc
     },
     {} as Record<TaskStatus, typeof displayTasks>
@@ -145,27 +147,65 @@ export function BoardPage() {
     }
   }
 
+  function handleMoveTask(taskId: string, direction: 'left' | 'right') {
+    const task = displayTasks.find((t) => t.id === taskId)
+    if (!task) return
+
+    const currentColumnIndex = BOARD_COLUMNS.findIndex((c) => c.id === task.status)
+    const newColumnIndex = direction === 'left' ? currentColumnIndex - 1 : currentColumnIndex + 1
+
+    if (newColumnIndex < 0 || newColumnIndex >= BOARD_COLUMNS.length) return
+
+    const newStatus = BOARD_COLUMNS[newColumnIndex].id
+    const tasksInNewColumn = displayTasks.filter((t) => t.status === newStatus)
+    const newPosition = tasksInNewColumn.length > 0 ? Math.max(...tasksInNewColumn.map((t) => t.position)) + 1 : 0
+
+    setOptimisticTasks((prev) => {
+      const updated = prev ?? displayTasks
+      return updated.map((t) =>
+        t.id === taskId ? { ...t, status: newStatus, position: newPosition } : t
+      )
+    })
+
+    updateTaskStatus.mutate(
+      { taskId, status: newStatus, position: newPosition },
+      {
+        onError: () => {
+          setOptimisticTasks(null)
+        },
+        onSuccess: () => {
+          setOptimisticTasks(null)
+        },
+      }
+    )
+  }
+
   function handleMoveTaskVertical(taskId: string, direction: 'up' | 'down') {
     const task = displayTasks.find((t) => t.id === taskId)
     if (!task) return
 
-    const tasksInColumn = displayTasks.filter((t) => t.status === task.status)
-    const sortedTasks = [...tasksInColumn].sort((a, b) => a.position - b.position)
+    const sortedTasks = [...tasksByColumn[task.status]]
     const currentIndex = sortedTasks.findIndex((t) => t.id === taskId)
 
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
 
     if (targetIndex < 0 || targetIndex >= sortedTasks.length) return
 
-    const taskAbove = sortedTasks[currentIndex]
-    const taskBelow = sortedTasks[targetIndex]
+    const reorderedTasks = [...sortedTasks]
+    const [movedTask] = reorderedTasks.splice(currentIndex, 1)
+    reorderedTasks.splice(targetIndex, 0, movedTask)
 
-    swapTaskPosition.mutate({
-      taskId1: taskAbove.id,
-      position1: taskBelow.position,
-      taskId2: taskBelow.id,
-      position2: taskAbove.position,
-    })
+    const updates = reorderedTasks
+      .map((reorderedTask, index) => ({
+        taskId: reorderedTask.id,
+        position: index,
+      }))
+      .filter(({ taskId, position }) => {
+        const originalTask = sortedTasks.find((t) => t.id === taskId)
+        return originalTask?.position !== position
+      })
+
+    if (updates.length > 0) updateTaskPositions.mutate(updates)
   }
 
   return (
@@ -241,6 +281,7 @@ export function BoardPage() {
                       setSelectedTask(task)
                       setIsDetailOpen(true)
                     }}
+                    onMoveTask={handleMoveTask}
                     onMoveTaskVertical={handleMoveTaskVertical}
                   />
                 </SortableContext>

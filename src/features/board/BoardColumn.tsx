@@ -1,17 +1,20 @@
 import { useDroppable } from '@dnd-kit/core'
 import { type TaskStatus, type TaskWithAssignees } from '@/types'
 import { SortableTaskCard } from './SortableTaskCard'
+import { BOARD_COLUMNS } from './constants'
 
 interface BoardColumnProps {
   id: TaskStatus
   label: string
   tasks: TaskWithAssignees[]
   onTaskClick?: (task: TaskWithAssignees) => void
+  onMoveTask?: (taskId: string, direction: 'left' | 'right') => void
   onMoveTaskVertical?: (taskId: string, direction: 'up' | 'down') => void
 }
 
-export function BoardColumn({ id, label, tasks, onTaskClick, onMoveTaskVertical }: BoardColumnProps) {
+export function BoardColumn({ id, label, tasks, onTaskClick, onMoveTask, onMoveTaskVertical }: BoardColumnProps) {
   const { setNodeRef } = useDroppable({ id })
+  const columnIndex = BOARD_COLUMNS.findIndex((col) => col.id === id)
 
   return (
     <div ref={setNodeRef} className="flex-shrink-0 w-72" data-column-id={id}>
@@ -30,8 +33,12 @@ export function BoardColumn({ id, label, tasks, onTaskClick, onMoveTaskVertical 
               key={task.id}
               task={task}
               onClick={() => onTaskClick?.(task)}
+              onMoveLeft={() => onMoveTask?.(task.id, 'left')}
+              onMoveRight={() => onMoveTask?.(task.id, 'right')}
               onMoveUp={() => onMoveTaskVertical?.(task.id, 'up')}
               onMoveDown={() => onMoveTaskVertical?.(task.id, 'down')}
+              canMoveLeft={columnIndex > 0}
+              canMoveRight={columnIndex < BOARD_COLUMNS.length - 1}
               canMoveUp={index > 0}
               canMoveDown={index < tasks.length - 1}
             />
