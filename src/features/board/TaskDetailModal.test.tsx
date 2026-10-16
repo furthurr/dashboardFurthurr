@@ -1,0 +1,241 @@
+import { act, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
+import { TaskDetailModal } from './TaskDetailModal'
+import type { TaskWithAssignees } from '@/types'
+
+const task: TaskWithAssignees = {
+  id: 'task-1', title: 'Revisar diseño', description: 'Descripción original',
+  status: 'backlog', priority: 'normal', special_notes: null, created_by: 'user-1',
+  position: 0, created_at: '2026-10-16', updated_at: '2026-10-16', assignees: [],
+}
+const base = { task, comments: [], attachments: [], isOpen: true, onClose: vi.fn() }
+
+describe('Detalle de tarea', () => {
+  it.each(['', '   '])('deshabilita guardar con título en blanco (%j)', async (title) => {
+    const user = userEvent.setup()
+    const onSave = vi.fn()
+    render(<TaskDetailModal {...base} onSave={onSave} />)
+    await user.clear(screen.getByLabelText('Título'))
+    if (title) await user.type(screen.getByLabelText('Título'), title)
+    const save = screen.getByRole('button', { name: /guardar cambios/i })
+    expect(save).toBeDisabled()
+    await user.click(save)
+    expect(onSave).not.toHaveBeenCalled()
+  })
+
+  it('conserva el formulario abierto y el borrador si falla el guardado', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    render(<TaskDetailModal {...base} onClose={onClose} onSave={vi.fn().mockRejectedValue(new Error('Sin conexión'))} />)
+    await user.clear(screen.getByLabelText('Título'))
+    await user.type(screen.getByLabelText('Título'), 'Borrador nuevo')
+    await user.click(screen.getByRole('button', { name: /guardar cambios/i }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo guardar/i)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Título')).toHaveValue('Borrador nuevo')
+  })
+
+  it('espera el éxito y bloquea doble envío antes de cerrar', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    let resolve!: () => void
+    const onSave = vi.fn(() => new Promise<void>((done) => { resolve = done }))
+    render(<TaskDetailModal {...base} onClose={onClose} onSave={onSave} />)
+    await user.click(screen.getByRole('button', { name: /guardar cambios/i }))
+    expect(screen.getByRole('button', { name: /guardando/i })).toBeDisabled()
+    expect(onClose).not.toHaveBeenCalled()
+    resolve()
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce())
+    expect(onSave).toHaveBeenCalledOnce()
+  })
+
+  it('reinicia valores y pestaña al reabrir la misma tarea', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn()
+    const onClose = vi.fn()
+    const { rerender } = render(<TaskDetailModal {...base} onSave={onSave} onClose={onClose} />)
+    expect(screen.getByLabelText('Título')).toBeEnabled()
+    await user.type(screen.getByLabelText('Título'), ' descartado')
+    expect(screen.getByLabelText('Título')).toHaveValue(`${task.title} descartado`)
+    await user.click(screen.getByRole('tab', { name: /comentarios/i }))
+    await user.click(screen.getByRole('button', { name: 'Cerrar' }))
+    expect(onClose).toHaveBeenCalledOnce()
+    rerender(<TaskDetailModal {...base} onSave={onSave} onClose={onClose} isOpen={false} />)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    rerender(<TaskDetailModal {...base} onSave={onSave} onClose={onClose} />)
+    expect(screen.getByLabelText('Título')).toHaveValue(task.title)
+    expect(screen.getByRole('tab', { name: 'Detalles' })).toHaveAttribute('aria-selected', 'true')
+    expect(onSave).not.toHaveBeenCalled()
+  })
+
+  it('pide confirmación para eliminar, conserva la tarea ante fallo y cierra tras reintentar con éxito', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    let resolve!: () => void
+    const onDelete = vi.fn()
+      .mockRejectedValueOnce(new Error('Sin conexión'))
+      .mockImplementationOnce(() => new Promise<void>((done) => { resolve = done }))
+    render(<TaskDetailModal {...base} onClose={onClose} onDelete={onDelete} />)
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar tarea' }))
+    const confirmation = screen.getByRole('group', { name: 'Confirmar eliminación' })
+    expect(confirmation).toHaveTextContent('¿Eliminar esta tarea?')
+    expect(onDelete).not.toHaveBeenCalled()
+    await user.click(within(confirmation).getByRole('button', { name: 'Cancelar eliminación' }))
+    expect(screen.queryByRole('group', { name: 'Confirmar eliminación' })).not.toBeInTheDocument()
+    expect(onDelete).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar tarea' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, eliminar' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo eliminar/i)
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog')).toBeVisible()
+    expect(screen.getByLabelText('Título')).toHaveValue(task.title)
+    expect(screen.getByRole('group', { name: 'Confirmar eliminación' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Sí, eliminar' }))
+    expect(screen.getByRole('button', { name: 'Eliminando…' })).toBeDisabled()
+    expect(onClose).not.toHaveBeenCalled()
+    await act(async () => { resolve() })
+    expect(onDelete).toHaveBeenCalledTimes(2)
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('group', { name: 'Confirmar eliminación' })).not.toBeInTheDocument()
+  })
+
+  it('ofrece diálogo nombrado, pestañas con flechas y cierre exterior sin cerrar al pulsar dentro', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    render(<TaskDetailModal {...base} onClose={onClose} />)
+    const dialog = screen.getByRole('dialog', { name: /detalle de tarea/i })
+    await user.click(dialog)
+    expect(onClose).not.toHaveBeenCalled()
+    screen.getByRole('tab', { name: 'Detalles' }).focus()
+    await user.keyboard('{ArrowRight}')
+    expect(screen.getByRole('tab', { name: /comentarios/i })).toHaveFocus()
+    expect(screen.getByRole('tabpanel')).toBeVisible()
+    await user.click(dialog.parentElement!)
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('conserva comentario ante fallo y comunica error sin vaciarlo', async () => {
+    const user = userEvent.setup()
+    render(<TaskDetailModal {...base} onAddComment={vi.fn().mockRejectedValue(new Error('Fallo'))} />)
+    await user.click(screen.getByRole('tab', { name: /comentarios/i }))
+    await user.type(screen.getByPlaceholderText(/escribe un comentario/i), 'Mi actualización')
+    await user.click(screen.getByRole('button', { name: 'Enviar' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo enviar/i)
+    expect(screen.getByPlaceholderText(/escribe un comentario/i)).toHaveValue('Mi actualización')
+  })
+
+  it('bloquea el doble envío de comentario pendiente y solo lo vacía tras éxito', async () => {
+    const user = userEvent.setup()
+    let resolve!: () => void
+    const onAddComment = vi.fn(() => new Promise<void>((done) => { resolve = done }))
+    render(<TaskDetailModal {...base} onAddComment={onAddComment} />)
+    await user.click(screen.getByRole('tab', { name: /comentarios/i }))
+    const input = screen.getByRole('textbox', { name: 'Nuevo comentario' })
+    await user.type(input, 'Mi actualización')
+    await user.dblClick(screen.getByRole('button', { name: 'Enviar' }))
+    const sending = screen.getByRole('button', { name: 'Enviando…' })
+    expect(sending).toBeDisabled()
+    expect(input).toBeDisabled()
+    expect(input).toHaveValue('Mi actualización')
+    await user.click(sending)
+    expect(onAddComment).toHaveBeenCalledExactlyOnceWith('Mi actualización')
+
+    await act(async () => { resolve() })
+    expect(input).toHaveValue('')
+    expect(input).toBeEnabled()
+    expect(screen.getByRole('status')).toHaveTextContent('Comentario enviado.')
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeDisabled()
+    expect(onAddComment).toHaveBeenCalledOnce()
+  })
+
+  it('permite alcanzar el input por teclado y rechaza archivos superiores a 5 MB sin subirlos', async () => {
+    const user = userEvent.setup()
+    const onUploadAttachment = vi.fn()
+    render(<TaskDetailModal {...base} onUploadAttachment={onUploadAttachment} />)
+    await user.click(screen.getByRole('tab', { name: /adjuntos/i }))
+    await user.tab()
+    const input = screen.getByLabelText('Añadir archivo · máximo 5 MB')
+    expect(input).toHaveFocus()
+    expect(input).toBeEnabled()
+    const oversized = new File(['contenido'], 'grande.pdf', { type: 'application/pdf' })
+    Object.defineProperty(oversized, 'size', { value: 5 * 1024 * 1024 + 1 })
+    await user.upload(input, oversized)
+    expect(screen.getByRole('alert')).toHaveTextContent('El archivo debe ser de 5 MB o menos.')
+    expect(input).toHaveValue('')
+    expect((input as HTMLInputElement).files).toHaveLength(0)
+    const upload = screen.getByRole('button', { name: 'Subir adjunto' })
+    expect(upload).toBeDisabled()
+    await user.click(upload)
+    expect(onUploadAttachment).not.toHaveBeenCalled()
+
+    const valid = new File(['contenido'], 'valido.pdf', { type: 'application/pdf' })
+    Object.defineProperty(valid, 'size', { value: 5 * 1024 * 1024 })
+    await user.upload(input, valid)
+    expect((input as HTMLInputElement).files?.[0]).toBe(valid)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(upload).toBeEnabled()
+    expect(onUploadAttachment).not.toHaveBeenCalled()
+  })
+
+  it('retiene el archivo al fallar y permite reintentar sin seleccionarlo de nuevo; solo el éxito lo limpia', async () => {
+    const user = userEvent.setup()
+    let resolve!: () => void
+    const onUploadAttachment = vi.fn()
+      .mockRejectedValueOnce(new Error('Sin conexión'))
+      .mockImplementationOnce(() => new Promise<void>((done) => { resolve = done }))
+    render(<TaskDetailModal {...base} onUploadAttachment={onUploadAttachment} />)
+    await user.click(screen.getByRole('tab', { name: /adjuntos/i }))
+    const input = screen.getByLabelText('Añadir archivo · máximo 5 MB') as HTMLInputElement
+    const file = new File(['contenido'], 'informe.pdf', { type: 'application/pdf' })
+    await user.upload(input, file)
+    await user.click(screen.getByRole('button', { name: 'Subir adjunto' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo subir el archivo/i)
+    expect(input.files?.[0]).toBe(file)
+    expect(input).not.toHaveValue('')
+    expect(input).toBeEnabled()
+    expect(onUploadAttachment).toHaveBeenNthCalledWith(1, file)
+
+    await user.click(screen.getByRole('button', { name: 'Subir adjunto' }))
+    expect(onUploadAttachment).toHaveBeenNthCalledWith(2, file)
+    expect(screen.getByRole('button', { name: 'Subiendo…' })).toBeDisabled()
+    expect(input).toBeDisabled()
+    expect(input.files?.[0]).toBe(file)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await act(async () => { resolve() })
+    expect(input.files).toHaveLength(0)
+    expect(input).toHaveValue('')
+    expect(input).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Subir adjunto' })).toBeDisabled()
+    expect(screen.getByRole('status')).toHaveTextContent('Archivo adjuntado.')
+    expect(onUploadAttachment).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    { tab: /comentarios/i, loading: 'commentsLoading', error: 'commentsError', pending: 'Cargando comentarios…', failure: 'No se pudieron cargar los comentarios.', empty: 'Aún no hay comentarios' },
+    { tab: /adjuntos/i, loading: 'attachmentsLoading', error: 'attachmentsError', pending: 'Cargando adjuntos…', failure: 'No se pudieron cargar los adjuntos.', empty: 'Aún no hay archivos adjuntos' },
+  ] as const)('muestra carga y error de la query $loading sin presentarlos como una lista vacía', async ({ tab, loading, error, pending, failure, empty }) => {
+    const user = userEvent.setup()
+    const { rerender } = render(<TaskDetailModal {...base} {...{ [loading]: true }} />)
+    await user.click(screen.getByRole('tab', { name: tab }))
+    const panel = within(screen.getByRole('tabpanel'))
+    expect(panel.getByRole('status')).toHaveTextContent(pending)
+    expect(panel.queryByText(empty)).not.toBeInTheDocument()
+    expect(panel.queryByRole('alert')).not.toBeInTheDocument()
+
+    rerender(<TaskDetailModal {...base} {...{ [error]: true }} />)
+    expect(panel.getByRole('alert')).toHaveTextContent(failure)
+    expect(panel.getByRole('alert')).toHaveTextContent('Vuelve a abrir la tarea para reintentar.')
+    expect(panel.queryByRole('status')).not.toBeInTheDocument()
+    expect(panel.queryByText(empty)).not.toBeInTheDocument()
+
+    rerender(<TaskDetailModal {...base} />)
+    expect(panel.queryByRole('alert')).not.toBeInTheDocument()
+    expect(panel.getByText(empty)).toBeVisible()
+  })
+})

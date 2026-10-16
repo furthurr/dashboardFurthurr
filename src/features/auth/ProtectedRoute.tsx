@@ -11,9 +11,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#3b82f6] border-t-transparent rounded-full animate-spin" />
-      </div>
+      <main className="auth-shell" aria-busy="true">
+        <p role="status" className="ui-feedback">Cargando sesión…</p>
+      </main>
     )
   }
 

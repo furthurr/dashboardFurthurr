@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   DndContext,
@@ -30,7 +30,7 @@ import { useAuth } from '@/features/auth/AuthContext'
 export function BoardPage() {
   const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
-  const { data: tasks = [], isLoading, error } = useTasks()
+  const { data: tasks = [], isLoading, error, refetch } = useTasks()
   const updateTaskStatus = useUpdateTaskStatus()
   const createTask = useCreateTask()
   const deleteTask = useDeleteTask()
@@ -42,12 +42,17 @@ export function BoardPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<TaskWithAssignees | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
+  const [moveError, setMoveError] = useState<string | null>(null)
+  const [movementPending, setMovementPending] = useState(false)
+  const pendingRef = useRef(false)
+  const movementBusy = movementPending || updateTaskStatus.isPending || updateTaskPositions.isPending
 
   const isAdmin = profile?.role === 'admin'
 
   const selectedTaskId = selectedTask?.id ?? null
-  const { data: comments = [] } = useComments(selectedTaskId)
-  const { data: attachments = [] } = useAttachments(selectedTaskId)
+  const { data: comments = [], isLoading: commentsLoading, error: commentsError } = useComments(selectedTaskId)
+  const { data: attachments = [], isLoading: attachmentsLoading, error: attachmentsError } = useAttachments(selectedTaskId)
   const createComment = useCreateComment()
   const deleteComment = useDeleteComment()
   const uploadAttachment = useUploadAttachment()
@@ -66,19 +71,20 @@ export function BoardPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#3b82f6] border-t-transparent rounded-full animate-spin" />
-      </div>
+      <main className="board-shell grid place-items-center p-6" aria-busy="true">
+        <p role="status" className="ui-feedback">Cargando tareas…</p>
+      </main>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
-          <p className="text-sm text-red-400">Error cargando tareas</p>
+      <main className="board-shell grid place-items-center p-6">
+        <div className="space-y-4">
+          <p role="alert" className="ui-feedback ui-feedback--error">Error cargando tareas. Inténtalo de nuevo.</p>
+          <button type="button" className="ui-button" onClick={() => { void refetch() }}>Reintentar</button>
         </div>
-      </div>
+      </main>
     )
   }
 
@@ -94,7 +100,26 @@ export function BoardPage() {
     {} as Record<TaskStatus, typeof displayTasks>
   )
 
+  async function performMovement(action: () => Promise<unknown>) {
+    if (pendingRef.current || movementBusy) return
+    pendingRef.current = true
+    setMovementPending(true)
+    setMoveError(null)
+    setNotice('')
+    try {
+      await action()
+      setNotice('Tarea movida correctamente.')
+    } catch {
+      setMoveError('No se pudo mover la tarea. Inténtalo de nuevo.')
+    } finally {
+      setOptimisticTasks(null)
+      pendingRef.current = false
+      setMovementPending(false)
+    }
+  }
+
   function handleDragStart(event: DragStartEvent) {
+    if (pendingRef.current || movementBusy) return
     const { active } = event
     const task = displayTasks.find((t) => t.id === active.id)
     if (task) setActiveTask(task)
@@ -104,10 +129,15 @@ export function BoardPage() {
     const { active, over } = event
     setActiveTask(null)
 
-    if (!over) return
+    if (pendingRef.current || movementBusy) return
+    if (!over) {
+      setNotice('Movimiento cancelado.')
+      return
+    }
 
     const taskId = active.id as string
     const overId = over.id as string
+    if (taskId === overId) return
 
     const task = displayTasks.find((t) => t.id === taskId)
     if (!task) return
@@ -133,21 +163,13 @@ export function BoardPage() {
         )
       })
 
-      updateTaskStatus.mutate(
-        { taskId, status: newStatus, position: newPosition },
-        {
-          onError: () => {
-            setOptimisticTasks(null)
-          },
-          onSuccess: () => {
-            setOptimisticTasks(null)
-          },
-        }
-      )
+      const status = newStatus
+      void performMovement(() => updateTaskStatus.mutateAsync({ taskId, status, position: newPosition }))
     }
   }
 
   function handleMoveTask(taskId: string, direction: 'left' | 'right') {
+    if (pendingRef.current || movementBusy) return
     const task = displayTasks.find((t) => t.id === taskId)
     if (!task) return
 
@@ -167,20 +189,11 @@ export function BoardPage() {
       )
     })
 
-    updateTaskStatus.mutate(
-      { taskId, status: newStatus, position: newPosition },
-      {
-        onError: () => {
-          setOptimisticTasks(null)
-        },
-        onSuccess: () => {
-          setOptimisticTasks(null)
-        },
-      }
-    )
+    void performMovement(() => updateTaskStatus.mutateAsync({ taskId, status: newStatus, position: newPosition }))
   }
 
   function handleMoveTaskVertical(taskId: string, direction: 'up' | 'down') {
+    if (pendingRef.current || movementBusy) return
     const task = displayTasks.find((t) => t.id === taskId)
     if (!task) return
 
@@ -205,7 +218,7 @@ export function BoardPage() {
         return originalTask?.position !== position
       })
 
-    if (updates.length > 0) updateTaskPositions.mutate(updates)
+    if (updates.length > 0) void performMovement(() => updateTaskPositions.mutateAsync(updates))
   }
 
   return (
@@ -214,61 +227,50 @@ export function BoardPage() {
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      onDragCancel={() => {
+        setActiveTask(null)
+        setMoveError(null)
+        setNotice('Movimiento cancelado.')
+      }}
     >
-      <div className="min-h-screen bg-[#1a1a1a]">
-        <header className="bg-[var(--color-surface-elevated)] border-b border-[var(--color-border)] px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-secondary)] flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-white">Dashboard Furthurr</h1>
-                <p className="text-xs text-[var(--color-text-muted)]">Tablero Kanban</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              {user && (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)]">
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center">
-                    <span className="text-xs text-white font-medium">{user.email?.charAt(0).toUpperCase()}</span>
-                  </div>
-                  <span className="text-sm text-[var(--color-text-muted)] hidden sm:inline">{user.email}</span>
-                </div>
-              )}
-              {isAdmin && (
-                <button
-                  onClick={() => navigate('/register')}
-                  className="px-4 py-2 bg-gradient-to-r from-[var(--color-accent)] to-[#10b981] hover:opacity-90 text-white text-sm font-medium rounded-lg transition-all duration-[var(--transition-fast)] hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[var(--color-accent)]/20 flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                  </svg>
-                  Alta de Usuario
-                </button>
-              )}
-              <button
-                onClick={() => signOut()}
-                className="px-4 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-border)] text-white text-sm font-medium rounded-lg transition-all duration-[var(--transition-fast)] hover:scale-[1.02] active:scale-[0.98]"
-              >
-                Cerrar Sesión
-              </button>
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="px-4 py-2 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] hover:opacity-90 text-white text-sm font-medium rounded-lg transition-all duration-[var(--transition-fast)] hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[var(--color-primary)]/20"
-              >
-                + Nueva Tarea
-              </button>
-            </div>
+      <main className="board-shell max-w-full overflow-x-clip">
+        <header className="board-header">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-[var(--color-text-muted)]">Dashboard Furthurr</p>
+            <h1>Tablero de equipo</h1>
+            <p className="text-sm text-[var(--color-text-muted)]">Organiza las tareas y sigue el trabajo del equipo.</p>
+          </div>
+          <div className="flex max-w-full flex-wrap items-center gap-2">
+            {user && <span className="max-w-48 truncate text-sm text-[var(--color-text-muted)]" title={user.email}>{user.email}</span>}
+            {isAdmin && <button type="button" className="ui-button" onClick={() => navigate('/register')}>Alta de Usuario</button>}
+            <button type="button" className="ui-button" onClick={() => signOut()}>Cerrar Sesión</button>
           </div>
         </header>
 
-        <div className="p-4 overflow-x-auto">
-          <div className="flex gap-4">
+        <div className="board-toolbar">
+          <dl aria-label="Resumen de tareas" className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+            <div><dt className="text-[var(--color-text-muted)]">Total</dt><dd className="font-semibold">{displayTasks.length}</dd></div>
+            {BOARD_COLUMNS.map((col) => <div key={col.id}><dt className="text-[var(--color-text-muted)]">{col.label}</dt><dd className="font-semibold">{tasksByColumn[col.id].length}</dd></div>)}
+          </dl>
+          <button type="button" className="ui-button ui-button--primary" onClick={() => setIsModalOpen(true)}>+ Nueva Tarea</button>
+        </div>
+        <div className="px-4 sm:px-8">
+          {moveError && <p role="alert" className="ui-feedback ui-feedback--error mb-4">{moveError}</p>}
+          <p role="status" aria-label="Estado del tablero" className={notice ? 'ui-feedback ui-feedback--success mb-4' : 'sr-only'}>{notice}</p>
+        </div>
+
+        <section className="board-columns" aria-label="Columnas del tablero" tabIndex={0} aria-busy={movementBusy}
+          onPointerDownCapture={(event) => {
+            if (pendingRef.current || movementBusy) event.stopPropagation()
+          }}
+          onKeyDownCapture={(event) => {
+            if ((pendingRef.current || movementBusy) && (event.key === ' ' || event.key === 'Enter')) {
+              event.preventDefault()
+              event.stopPropagation()
+            }
+          }}>
             {BOARD_COLUMNS.map((col) => (
-              <div key={col.id} className="flex-shrink-0 w-72">
+              <fieldset key={col.id} disabled={movementBusy} className="m-0 min-w-0 shrink-0 border-0 p-0">
                 <SortableContext
                   items={tasksByColumn[col.id].map((t) => t.id)}
                   strategy={verticalListSortingStrategy}
@@ -285,10 +287,9 @@ export function BoardPage() {
                     onMoveTaskVertical={handleMoveTaskVertical}
                   />
                 </SortableContext>
-              </div>
+              </fieldset>
             ))}
-          </div>
-        </div>
+        </section>
 
         <DragOverlay>
           {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
@@ -310,13 +311,14 @@ export function BoardPage() {
                 onSuccess: () => {
                   setIsModalOpen(false)
                   setCreateError(null)
+                  setNotice('Tarea creada correctamente.')
                 },
                 onError: (err: { message?: string; code?: string }) => {
                   const message = err?.message || err?.code || 'Error desconocido'
                   if (message.includes('42501') || message.includes('row-level security')) {
                     setCreateError('No tienes permisos para crear tareas. Contacta a un administrador.')
                   } else {
-                    setCreateError(`Error: ${message}`)
+                    setCreateError('No se pudo crear la tarea. Inténtalo de nuevo.')
                   }
                 },
               }
@@ -330,45 +332,45 @@ export function BoardPage() {
           task={selectedTask}
           comments={comments}
           attachments={attachments}
+          commentsLoading={commentsLoading}
+          attachmentsLoading={attachmentsLoading}
+          commentsError={Boolean(commentsError)}
+          attachmentsError={Boolean(attachmentsError)}
           isOpen={isDetailOpen}
           onClose={() => {
             setIsDetailOpen(false)
             setSelectedTask(null)
           }}
-          onSave={(data) => {
-            if (!selectedTask) return
-            updateTask.mutate({ taskId: selectedTask.id, ...data })
-          }}
-          onDelete={selectedTask ? () => {
-            deleteTask.mutate(selectedTask.id, {
-              onSuccess: () => {
-                setIsDetailOpen(false)
-                setSelectedTask(null)
-              },
+          onSave={selectedTask ? (data) => {
+            setNotice('')
+            return updateTask.mutateAsync({ taskId: selectedTask.id, ...data }).then(() => {
+              setNotice('Tarea guardada correctamente.')
             })
           } : undefined}
-          onAddComment={(body) => {
-            if (!selectedTask || !user) return
-            createComment.mutate({ taskId: selectedTask.id, authorId: user.id, body })
-          }}
+          onDelete={selectedTask ? () => {
+            setNotice('')
+            return deleteTask.mutateAsync(selectedTask.id).then(() => {
+              setNotice('Tarea eliminada correctamente.')
+            })
+          } : undefined}
+          onAddComment={selectedTask && user ? (body) =>
+            createComment.mutateAsync({ taskId: selectedTask.id, authorId: user.id, body })
+          : undefined}
           onDeleteComment={(commentId) => {
-            deleteComment.mutate({ commentId })
+            return deleteComment.mutateAsync({ commentId })
           }}
-          onUploadAttachment={(file) => {
-            if (!selectedTask || !user) return
-            uploadAttachment.mutate({ taskId: selectedTask.id, uploadedBy: user.id, file })
-          }}
+          onUploadAttachment={selectedTask && user ? (file) =>
+            uploadAttachment.mutateAsync({ taskId: selectedTask.id, uploadedBy: user.id, file })
+          : undefined}
           onDeleteAttachment={(attachmentId) => {
-            if (!selectedTask) return
             const attachment = attachments.find((a) => a.id === attachmentId)
-            if (attachment) {
-              deleteAttachment.mutate({ attachmentId, fileUrl: attachment.file_url })
-            }
+            if (!attachment) return Promise.reject(new Error('Adjunto no disponible'))
+            return deleteAttachment.mutateAsync({ attachmentId, fileUrl: attachment.file_url })
           }}
           canDeleteComments={user?.id === selectedTask?.created_by || false}
           canDeleteAttachments={user?.id === selectedTask?.created_by || false}
         />
-      </div>
+      </main>
     </DndContext>
   )
 }

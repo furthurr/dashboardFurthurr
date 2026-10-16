@@ -9,6 +9,10 @@ npm run lint     # eslint .
 npm run preview  # preview del build
 ```
 
+## Verify Before Commit
+
+Después de `npm run build`, CI hace `npm ci` (no `npm install`). Siempre genera el build走后 antes de commitear para detectar errores de TypeScript.
+
 ## Architecture
 
 - **SPA estática** desplegada en GitHub Pages
@@ -64,3 +68,19 @@ src/
 ## Supabase Schema
 
 El schema completo está en `supabase-schema.sql` (ejecutado en SQL Editor de Supabase). NO recrear tablas manualmente — editar el SQL y re-ejecutar si hay cambios.
+
+<!-- ai-agents-kit:documentation:start -->
+## Mapa de documentación del proyecto
+
+- [`README.md`](README.md) es la entrada humana: configuración, ejecución, rutas y enlaces.
+- [`specs/`](specs/README.md) es la fuente de verdad de requisitos e intención de producto; actualiza la spec correspondiente antes de implementar una funcionalidad.
+- `.sdd/` (si existe) pertenece al workflow SDD externo a este orquestador; `specs/` conserva la fuente de requisitos del producto.
+- [`supabase-schema.sql`](supabase-schema.sql) es la fuente de verdad local del schema Postgres. Contrástalo con `specs/04-modelo-datos.md` y `specs/05-auth-roles-permisos.md`.
+- [`.architecture/`](.architecture/README.md) documenta la arquitectura implementada y sus ADRs.
+- [`.data/`](.data/README.md) cataloga contratos, modelos y persistencia observados; no sustituye la spec ni el SQL.
+- [`.design/`](.design/README.md) inventaría tokens y componentes visuales; `specs/06-ui-ux-diseno.md` conserva la intención UX.
+- [`.navigator/`](.navigator/ai-context.md) y [`module-map.json`](.navigator/module-map.json) son índices auxiliares de orientación; verifica siempre decisiones en código y contratos.
+- [`arquitectura.md`](arquitectura.md) es un acceso legado a la arquitectura canónica, no una segunda fuente.
+
+Para la estructura de ejecución actual consulta el mapa de módulos y el código; el árbol de carpetas descrito en la sección `Folder Structure` de este archivo puede ser anterior a la implementación vigente.
+<!-- ai-agents-kit:documentation:end -->

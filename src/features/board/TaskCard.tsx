@@ -1,9 +1,12 @@
+import { type ReactNode } from 'react'
 import { type TaskWithAssignees } from '@/types'
 import { PRIORITY_COLORS } from './constants'
 
 interface TaskCardProps {
   task: TaskWithAssignees
   isDragging?: boolean
+  onClick?: () => void
+  dragHandle?: ReactNode
   onMoveLeft?: () => void
   onMoveRight?: () => void
   onMoveUp?: () => void
@@ -17,6 +20,8 @@ interface TaskCardProps {
 export function TaskCard({
   task,
   isDragging,
+  onClick,
+  dragHandle,
   onMoveLeft,
   onMoveRight,
   onMoveUp,
@@ -29,33 +34,47 @@ export function TaskCard({
   return (
     <div
       className={`
-        bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3
-        ${isDragging ? 'opacity-50 scale-105 shadow-xl shadow-[var(--color-primary)]/10' : 'hover:border-[var(--color-primary)]/50 hover:shadow-lg hover:shadow-[var(--color-primary)]/5'}
-        transition-all duration-[var(--transition-normal)]
+        ui-list-card p-3
+        ${isDragging ? 'opacity-50' : 'hover:border-[var(--color-border-strong)]'}
+        transition-colors duration-150 ease-out
       `}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-medium text-white line-clamp-2 flex-1">{task.title}</h3>
-        <span
-          className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1 animate-pulse"
-          style={{ backgroundColor: PRIORITY_COLORS[task.priority] }}
-          title={task.priority}
-        />
+        <h3 className="min-w-0 flex-1 text-sm font-semibold text-[var(--color-text)] [overflow-wrap:anywhere]">
+          {onClick ? (
+            <button
+              type="button"
+              onClick={onClick}
+              aria-label={`Abrir tarea: ${task.title}`}
+              className="ui-button w-full justify-start border-transparent bg-transparent px-1 text-left hover:text-[var(--color-link)]"
+            >
+              <span className="line-clamp-2">{task.title}</span>
+            </button>
+          ) : task.title}
+        </h3>
+        {dragHandle}
       </div>
 
+      <span
+        className="mt-2 inline-flex rounded-[var(--radius-sm)] border border-current px-2 py-0.5 text-xs font-medium"
+        style={{ color: PRIORITY_COLORS[task.priority] }}
+      >
+        Prioridad {task.priority}
+      </span>
+
       {task.description && (
-        <p className="mt-2 text-xs text-[var(--color-text-muted)] line-clamp-2">{task.description}</p>
+        <p className="mt-2 text-xs text-[var(--color-text-muted)] line-clamp-2 [overflow-wrap:anywhere]">{task.description}</p>
       )}
 
       {task.assignees.length > 0 && (
         <div className="mt-3 flex -space-x-2">
-          {task.assignees.slice(0, 3).map((assignee, i) => (
+          {task.assignees.slice(0, 3).map((assignee, index) => (
             <div
-              key={i}
-              className="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-secondary)] border-2 border-[var(--color-surface)] flex items-center justify-center shadow-md"
+              key={`${assignee.full_name}-${index}`}
+              className="ui-avatar border-2 border-[var(--color-surface)]"
               title={assignee.full_name}
             >
-              <span className="text-xs text-white font-medium">
+              <span>
                 {assignee.full_name.charAt(0).toUpperCase()}
               </span>
             </div>
@@ -69,34 +88,49 @@ export function TaskCard({
       )}
 
       {task.special_notes && (
-        <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-400 bg-amber-400/10 rounded px-2 py-1.5 border border-amber-400/20">
-          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+        <div className="mt-2 flex items-start gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-2 py-1.5 text-xs text-[var(--color-warning)] [overflow-wrap:anywhere]">
+          <svg aria-hidden="true" className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
             <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm1 11H9v-2h2v2zm0-4H9V5h2v4z"/>
           </svg>
           {task.special_notes}
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-between gap-2">
+      {(task.comment_count !== undefined || task.attachment_count !== undefined) && (
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-text-muted)]">
+          {task.comment_count !== undefined && (
+            <span>{task.comment_count} {task.comment_count === 1 ? 'comentario' : 'comentarios'}</span>
+          )}
+          {task.attachment_count !== undefined && (
+            <span>{task.attachment_count} {task.attachment_count === 1 ? 'adjunto' : 'adjuntos'}</span>
+          )}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           {onMoveUp && canMoveUp && (
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMoveUp() }}
-              className="p-1.5 rounded-lg bg-[var(--color-surface-elevated)] hover:bg-[var(--color-border)] text-[var(--color-text-muted)] hover:text-white text-xs transition-all duration-[var(--transition-fast)] hover:scale-110 active:scale-95"
+              className="ui-button ui-button--sm px-2"
+              aria-label="Subir dentro de la lista"
               title="Subir dentro de la lista"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
               </svg>
             </button>
           )}
           {onMoveDown && canMoveDown && (
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMoveDown() }}
-              className="p-1.5 rounded-lg bg-[var(--color-surface-elevated)] hover:bg-[var(--color-border)] text-[var(--color-text-muted)] hover:text-white text-xs transition-all duration-[var(--transition-fast)] hover:scale-110 active:scale-95"
+              className="ui-button ui-button--sm px-2"
+              aria-label="Bajar dentro de la lista"
               title="Bajar dentro de la lista"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
@@ -106,22 +140,26 @@ export function TaskCard({
         <div className="flex items-center gap-1.5">
           {onMoveLeft && canMoveLeft && (
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMoveLeft() }}
-              className="p-1.5 rounded-lg bg-[var(--color-surface-elevated)] hover:bg-[var(--color-border)] text-[var(--color-text-muted)] hover:text-white text-xs transition-all duration-[var(--transition-fast)] hover:scale-110 active:scale-95"
+              className="ui-button ui-button--sm px-2"
+              aria-label="Mover a la lista anterior"
               title="Mover a la lista anterior"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
           )}
           {onMoveRight && canMoveRight && (
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMoveRight() }}
-              className="p-1.5 rounded-lg bg-[var(--color-surface-elevated)] hover:bg-[var(--color-border)] text-[var(--color-text-muted)] hover:text-white text-xs transition-all duration-[var(--transition-fast)] hover:scale-110 active:scale-95"
+              className="ui-button ui-button--sm px-2"
+              aria-label="Mover a la lista siguiente"
               title="Mover a la lista siguiente"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>

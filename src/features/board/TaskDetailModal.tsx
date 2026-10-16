@@ -1,307 +1,201 @@
-import { useState } from 'react'
-import { type TaskWithAssignees, type TaskStatus, type TaskPriority, type CommentWithAuthor, type TaskAttachment } from '@/types'
-import { BOARD_COLUMNS } from './constants'
-import { PRIORITY_COLORS } from './constants'
+import { useId, useRef, useState } from 'react'
+import type { TaskWithAssignees, TaskStatus, TaskPriority, CommentWithAuthor, TaskAttachment } from '@/types'
+import { Dialog } from '@/shared/ui/Dialog'
+import { BOARD_COLUMNS, PRIORITY_COLORS } from './constants'
 import { CommentsList } from './CommentsList'
 import { AttachmentsList } from './AttachmentsList'
 
+type Operation = void | Promise<unknown>
 interface TaskDetailModalProps {
   task: TaskWithAssignees | null
   comments: CommentWithAuthor[]
   attachments: TaskAttachment[]
   isOpen: boolean
   onClose: () => void
-  onSave?: (data: { title: string; description: string; status: TaskStatus; priority: TaskPriority }) => void
-  onDelete?: () => void
-  onAddComment?: (body: string) => void
-  onDeleteComment?: (commentId: string) => void
-  onUploadAttachment?: (file: File) => void
-  onDeleteAttachment?: (attachmentId: string) => void
+  onSave?: (data: { title: string; description: string; status: TaskStatus; priority: TaskPriority }) => Operation
+  onDelete?: () => Operation
+  onAddComment?: (body: string) => Operation
+  onDeleteComment?: (commentId: string) => Operation
+  onUploadAttachment?: (file: File) => Operation
+  onDeleteAttachment?: (attachmentId: string) => Operation
   canDeleteComments?: boolean
   canDeleteAttachments?: boolean
+  commentsLoading?: boolean
+  attachmentsLoading?: boolean
+  commentsError?: boolean
+  attachmentsError?: boolean
 }
 
-export function TaskDetailModal({
-  task,
-  comments,
-  attachments,
-  isOpen,
-  onClose,
-  onSave,
-  onDelete,
-  onAddComment,
-  onDeleteComment,
-  onUploadAttachment,
-  onDeleteAttachment,
-  canDeleteComments,
-  canDeleteAttachments,
-}: TaskDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'attachments'>('details')
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+// Unmounting on close also discards draft, tab and delete-confirmation state.
+export function TaskDetailModal(props: TaskDetailModalProps) {
+  if (!props.isOpen || !props.task) return null
+  return <TaskDetailContent key={props.task.id} {...props} task={props.task} />
+}
 
-  const [title, setTitle] = useState(task?.title || '')
-  const [description, setDescription] = useState(task?.description || '')
-  const [status, setStatus] = useState<TaskStatus>(task?.status || 'backlog')
-  const [priority, setPriority] = useState<TaskPriority>(task?.priority || 'normal')
-  const [newComment, setNewComment] = useState('')
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+const tabs = ['details', 'comments', 'attachments'] as const
+type Tab = typeof tabs[number]
 
-  if (!isOpen || !task) return null
+function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDelete,
+  onAddComment, onDeleteComment, onUploadAttachment, onDeleteAttachment,
+  canDeleteComments, canDeleteAttachments, commentsLoading, attachmentsLoading,
+  commentsError, attachmentsError,
+}: TaskDetailModalProps & { task: TaskWithAssignees }) {
+  const id = useId()
+  const [activeTab, setActiveTab] = useState<Tab>('details')
+  const [title, setTitle] = useState(task.title)
+  const [description, setDescription] = useState(task.description ?? '')
+  const [status, setStatus] = useState(task.status)
+  const [priority, setPriority] = useState(task.priority)
+  const [comment, setComment] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [pending, setPending] = useState<string | null>(null)
+  const pendingRef = useRef(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: 'task' | 'comment' | 'attachment'; id?: string } | null>(null)
+  const busy = pending !== null
 
-  const handleOpenTask = () => {
-    if (editingTaskId !== task.id) {
-      setEditingTaskId(task.id)
-      setTitle(task.title || '')
-      setDescription(task.description || '')
-      setStatus(task.status || 'backlog')
-      setPriority(task.priority || 'normal')
-      setNewComment('')
-      setActiveTab('details')
+  async function perform(name: string, action: () => Operation, failure: string, success = '') {
+    if (pendingRef.current) return false
+    pendingRef.current = true
+    setPending(name)
+    setError(null)
+    setNotice('')
+    try {
+      await action()
+      setNotice(success)
+      return true
+    } catch {
+      // Hooks own network errors; show a safe, actionable message in context.
+      setError(`${failure} Tus datos se conservan. Inténtalo de nuevo.`)
+      return false
+    } finally {
+      pendingRef.current = false
+      setPending(null)
     }
   }
 
-  handleOpenTask()
+  async function save() {
+    if (!title.trim() || !onSave) return
+    if (await perform('save', () => onSave({ title: title.trim(), description, status, priority }), 'No se pudo guardar.')) onClose()
+  }
 
-  const handleAddComment = () => {
-    if (newComment.trim() && onAddComment) {
-      onAddComment(newComment.trim())
-      setNewComment('')
+  async function sendComment() {
+    if (!comment.trim() || !onAddComment) return
+    if (await perform('comment', () => onAddComment(comment.trim()), 'No se pudo enviar el comentario.', 'Comentario enviado.')) setComment('')
+  }
+
+  async function removeConfirmed() {
+    if (!confirmDelete) return
+    const { kind, id: itemId } = confirmDelete
+    const action = kind === 'task' ? onDelete : kind === 'comment'
+      ? () => onDeleteComment?.(itemId!) : () => onDeleteAttachment?.(itemId!)
+    if (!action) return
+    if (await perform('delete', action, 'No se pudo eliminar.', 'Elemento eliminado.')) {
+      setConfirmDelete(null)
+      if (kind === 'task') onClose()
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-[#242424] border border-[#333333] rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="flex items-start justify-between p-6 border-b border-[#333333]">
-          <h2 className="text-lg font-semibold text-white pr-4">Detalle de Tarea</h2>
-          <button
-            onClick={onClose}
-            className="text-[#888888] hover:text-white transition flex-shrink-0"
-          >
-            ✕
+    <Dialog title="Detalle de tarea" onClose={onClose} busy={busy}>
+      <div role="tablist" aria-label="Contenido de la tarea" className="task-tabs">
+        {tabs.map((tab, index) => (
+          <button key={tab} type="button" role="tab" id={`${id}-${tab}-tab`}
+            aria-controls={`${id}-${tab}-panel`} aria-selected={activeTab === tab}
+            tabIndex={activeTab === tab ? 0 : -1}
+            onClick={() => setActiveTab(tab)}
+            onKeyDown={(event) => {
+              const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length
+                : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length
+                : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null
+              if (next === null) return
+              event.preventDefault()
+              setActiveTab(tabs[next])
+              document.getElementById(`${id}-${tabs[next]}-tab`)?.focus()
+            }}>
+            {tab === 'details' ? 'Detalles' : tab === 'comments' ? `Comentarios (${comments.length})` : `Adjuntos (${attachments.length})`}
           </button>
-        </div>
-
-        <div className="flex border-b border-[#333333]">
-          <button
-            onClick={() => setActiveTab('details')}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition ${
-              activeTab === 'details'
-                ? 'text-white border-b-2 border-[#3b82f6]'
-                : 'text-[#888888] hover:text-white'
-            }`}
-          >
-            Detalles
-          </button>
-          <button
-            onClick={() => setActiveTab('comments')}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition ${
-              activeTab === 'comments'
-                ? 'text-white border-b-2 border-[#3b82f6]'
-                : 'text-[#888888] hover:text-white'
-            }`}
-          >
-            Comentarios ({comments.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('attachments')}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition ${
-              activeTab === 'attachments'
-                ? 'text-white border-b-2 border-[#3b82f6]'
-                : 'text-[#888888] hover:text-white'
-            }`}
-          >
-            Adjuntos ({attachments.length})
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === 'details' && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="detail-title" className="block text-sm font-medium text-[#cccccc]">
-                  Título
-                </label>
-                <input
-                  id="detail-title"
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-4 py-3 bg-[#1a1a1a] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent transition"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="detail-description" className="block text-sm font-medium text-[#cccccc]">
-                  Descripción
-                </label>
-                <textarea
-                  id="detail-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                  className="w-full px-4 py-3 bg-[#1a1a1a] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent transition resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label htmlFor="detail-status" className="block text-sm font-medium text-[#cccccc]">
-                    Estado
-                  </label>
-                  <select
-                    id="detail-status"
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                    className="w-full px-4 py-3 bg-[#1a1a1a] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent transition"
-                  >
-                    {BOARD_COLUMNS.map((col) => (
-                      <option key={col.id} value={col.id}>
-                        {col.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="detail-priority" className="block text-sm font-medium text-[#cccccc]">
-                    Prioridad
-                  </label>
-                  <select
-                    id="detail-priority"
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                    className="w-full px-4 py-3 bg-[#1a1a1a] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent transition"
-                  >
-                    {Object.keys(PRIORITY_COLORS).map((key) => (
-                      <option key={key} value={key}>
-                        {key.charAt(0).toUpperCase() + key.slice(1)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {task.special_notes && (
-                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3">
-                  <p className="text-sm text-amber-400">{task.special_notes}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'comments' && (
-            <div className="space-y-4">
-              {onAddComment && (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Escribe un comentario..."
-                    className="flex-1 px-4 py-2 bg-[#1a1a1a] border border-[#333333] rounded-lg text-white text-sm placeholder-[#555555] focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent transition"
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-                  />
-                  <button
-                    onClick={handleAddComment}
-                    disabled={!newComment.trim()}
-                    className="px-4 py-2 bg-[#3b82f6] hover:bg-[#2563eb] disabled:bg-[#3b82f6]/50 text-white text-sm font-medium rounded-lg transition"
-                  >
-                    Enviar
-                  </button>
-                </div>
-              )}
-              <CommentsList
-                comments={comments}
-                onDeleteComment={onDeleteComment}
-                canDelete={canDeleteComments}
-              />
-            </div>
-          )}
-
-          {activeTab === 'attachments' && (
-            <div className="space-y-4">
-              {onUploadAttachment && (
-                <div>
-                  <input
-                    type="file"
-                    id="file-upload"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        if (file.size > 5 * 1024 * 1024) {
-                          alert('El archivo debe ser menor a 5 MB')
-                          return
-                        }
-                        onUploadAttachment(file)
-                        e.target.value = ''
-                      }
-                    }}
-                    className="hidden"
-                  />
-                  <label
-                    htmlFor="file-upload"
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-[#1a1a1a] border border-dashed border-[#333333] rounded-lg text-sm text-[#888888] hover:border-[#3b82f6] hover:text-[#3b82f6] cursor-pointer transition"
-                  >
-                    📎 Subir adjunto (máx. 5 MB)
-                  </label>
-                </div>
-              )}
-              <AttachmentsList
-                attachments={attachments}
-                onDeleteAttachment={onDeleteAttachment}
-                canDelete={canDeleteAttachments}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-3 p-6 border-t border-[#333333]">
-          {onDelete && (showDeleteConfirm ? (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-[#cccccc]">¿Eliminar tarea?</span>
-              <button
-                onClick={() => {
-                  setShowDeleteConfirm(false)
-                  onDelete()
-                }}
-                className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition"
-              >
-                Sí
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-3 py-1.5 bg-[#333333] hover:bg-[#444444] text-white text-xs font-medium rounded-lg transition"
-              >
-                No
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium rounded-lg transition text-sm"
-            >
-              Eliminar
-            </button>
-          ))}
-          <div className="flex-1" />
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-[#333333] hover:bg-[#444444] text-white font-medium rounded-lg transition text-sm"
-          >
-            Cerrar
-          </button>
-          <button
-            onClick={() => {
-              onSave?.({ title, description, status, priority })
-              onClose()
-            }}
-            className="px-4 py-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white font-medium rounded-lg transition text-sm"
-          >
-            Guardar Cambios
-          </button>
-        </div>
+        ))}
       </div>
-    </div>
+      <div className="dialog-body space-y-5">
+        {error && <p role="alert" className="ui-feedback ui-feedback--error">{error}</p>}
+        <p role="status" className={notice ? 'ui-feedback ui-feedback--success' : 'sr-only'}>{notice}</p>
+        <section role="tabpanel" id={`${id}-details-panel`} aria-labelledby={`${id}-details-tab`} hidden={activeTab !== 'details'}>
+          <form id={`${id}-form`} onSubmit={(event) => { event.preventDefault(); void save() }}>
+            <fieldset disabled={busy || !onSave} className="space-y-5">
+              <div><label htmlFor={`${id}-title`} className="ui-label">Título</label>
+                <input id={`${id}-title`} className="ui-field" value={title} required onChange={(event) => setTitle(event.target.value)} /></div>
+              <div><label htmlFor={`${id}-description`} className="ui-label">Descripción</label>
+                <textarea id={`${id}-description`} className="ui-field" rows={4} value={description} placeholder="Añade contexto para el equipo…" onChange={(event) => setDescription(event.target.value)} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div><label htmlFor={`${id}-status`} className="ui-label">Estado</label>
+                  <select id={`${id}-status`} className="ui-field" value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)}>
+                    {BOARD_COLUMNS.map((col) => <option key={col.id} value={col.id}>{col.label}</option>)}
+                  </select></div>
+                <div><label htmlFor={`${id}-priority`} className="ui-label">Prioridad</label>
+                  <select id={`${id}-priority`} className="ui-field" value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}>
+                    {Object.keys(PRIORITY_COLORS).map((key) => <option key={key} value={key}>{key.charAt(0).toUpperCase() + key.slice(1)}</option>)}
+                  </select></div>
+              </div>
+            </fieldset>
+          </form>
+          {task.assignees.length > 0 && <div className="mt-5"><p className="ui-label">Asignados</p><div className="flex flex-wrap gap-2">
+            {task.assignees.map((person, index) => <span key={`${person.full_name}-${index}`} className="ui-feedback py-1">{person.full_name}</span>)}
+          </div></div>}
+          {task.special_notes && <p className="ui-feedback mt-5 text-[var(--color-warning)]">{task.special_notes}</p>}
+        </section>
+        <section role="tabpanel" id={`${id}-comments-panel`} aria-labelledby={`${id}-comments-tab`} hidden={activeTab !== 'comments'} className="space-y-5">
+          {onAddComment && <form onSubmit={(event) => { event.preventDefault(); void sendComment() }}>
+            <label htmlFor={`${id}-comment`} className="ui-label">Nuevo comentario</label>
+            <div className="flex flex-wrap sm:flex-nowrap gap-2">
+              <input id={`${id}-comment`} className="ui-field" value={comment} disabled={busy} placeholder="Escribe un comentario…" onChange={(event) => setComment(event.target.value)} />
+              <button className="ui-button ui-button--primary" disabled={busy || !comment.trim()}>{pending === 'comment' ? 'Enviando…' : 'Enviar'}</button>
+            </div>
+          </form>}
+          {commentsLoading ? <p role="status">Cargando comentarios…</p> : commentsError ? <p role="alert" className="ui-feedback ui-feedback--error">No se pudieron cargar los comentarios. Vuelve a abrir la tarea para reintentar.</p>
+            : <CommentsList comments={comments} canDelete={canDeleteComments && !busy} onDeleteComment={onDeleteComment ? (itemId) => setConfirmDelete({ kind: 'comment', id: itemId }) : undefined} />}
+        </section>
+        <section role="tabpanel" id={`${id}-attachments-panel`} aria-labelledby={`${id}-attachments-tab`} hidden={activeTab !== 'attachments'} className="space-y-5">
+          {onUploadAttachment && <div className="space-y-3">
+            <label htmlFor={`${id}-file`} className="ui-label">Añadir archivo · máximo 5 MB</label>
+            <input ref={fileRef} type="file" id={`${id}-file`} className="ui-field file:mr-3 file:cursor-pointer" disabled={busy}
+              onChange={(event) => {
+                const next = event.target.files?.[0] ?? null
+                setError(null)
+                if (next && next.size > 5 * 1024 * 1024) {
+                  setError('El archivo debe ser de 5 MB o menos.')
+                  setFile(null)
+                  event.target.value = ''
+                } else setFile(next)
+              }} />
+            <button className="ui-button ui-button--secondary" disabled={!file || busy} onClick={async () => {
+              if (!file) return
+              if (await perform('upload', () => onUploadAttachment(file), 'No se pudo subir el archivo.', 'Archivo adjuntado.')) {
+                setFile(null)
+                if (fileRef.current) fileRef.current.value = ''
+              }
+            }}>{pending === 'upload' ? 'Subiendo…' : 'Subir adjunto'}</button>
+          </div>}
+          {attachmentsLoading ? <p role="status">Cargando adjuntos…</p> : attachmentsError ? <p role="alert" className="ui-feedback ui-feedback--error">No se pudieron cargar los adjuntos. Vuelve a abrir la tarea para reintentar.</p>
+            : <AttachmentsList attachments={attachments} canDelete={canDeleteAttachments && !busy} onDeleteAttachment={onDeleteAttachment ? (itemId) => setConfirmDelete({ kind: 'attachment', id: itemId }) : undefined} />}
+        </section>
+        {confirmDelete && <div className="ui-feedback ui-feedback--error space-y-3" role="group" aria-label="Confirmar eliminación">
+          <p>¿Eliminar {confirmDelete.kind === 'task' ? 'esta tarea' : confirmDelete.kind === 'comment' ? 'este comentario' : 'este adjunto'}? Esta acción no se puede deshacer.</p>
+          <div className="flex flex-wrap gap-2">
+            <button className="ui-button ui-button--danger" disabled={busy} onClick={() => { void removeConfirmed() }}>{pending === 'delete' ? 'Eliminando…' : 'Sí, eliminar'}</button>
+            <button className="ui-button" disabled={busy} onClick={() => setConfirmDelete(null)}>Cancelar eliminación</button>
+          </div>
+        </div>}
+      </div>
+      <footer className="dialog-footer">
+        {onDelete && <button className="ui-button ui-button--danger sm:mr-auto" disabled={busy} onClick={() => setConfirmDelete({ kind: 'task' })}>Eliminar tarea</button>}
+        <button className="ui-button ui-button--secondary" disabled={busy} onClick={onClose}>Cerrar</button>
+        {onSave && <button type="submit" form={`${id}-form`} className="ui-button ui-button--primary" disabled={busy || !title.trim()}>
+          {pending === 'save' ? 'Guardando…' : 'Guardar cambios'}
+        </button>}
+      </footer>
+    </Dialog>
   )
 }

@@ -2,6 +2,17 @@
 
 Estado: `borrador`
 
+## Mejora integral implementada — pendiente de aceptación
+
+El alcance y el plan de mejora transversal fueron aprobados. La implementación y su evidencia se registran en [la spec SDD-Tiny](../.sdd/specs/mejora-integral-ui/spec.md); queda pendiente de aceptación de cierre en Gate 4. Este vínculo no sustituye los requisitos de este documento.
+
+- Identidad oscura grafito/índigo, controles y feedback compartidos entre acceso, registro, tablero y modales.
+- Cabecera adaptable, Kanban con scroll propio y detalle con cuerpo desplazable y acciones visibles.
+- Apertura de tarjetas mediante botón; asa de arrastre independiente y controles de movimiento con nombres accesibles.
+- Diálogos con gestión de foco, Escape y cierre exterior; pestañas accesibles por flechas, Home y End.
+- Guardado, comentarios y adjuntos conservan contenido ante errores; estados pendientes impiden envíos duplicados. El cierre se bloquea durante una operación para no perder su resultado.
+- Confirmación antes de eliminar tareas, comentarios o adjuntos, conservando los permisos existentes.
+
 ## Referencia Principal
 
 Usar `design-md/airtable` como referencia visual principal.
@@ -48,6 +59,8 @@ Debe mostrar:
 - Anotaciones especiales.
 - Adjuntos.
 - Comentarios.
+
+El modal de detalle se cierra al hacer clic fuera del panel, igual que al usar el botón de cierre o Escape, salvo mientras una operación esté en curso.
 
 ## Responsive
 

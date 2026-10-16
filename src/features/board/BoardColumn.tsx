@@ -13,21 +13,28 @@ interface BoardColumnProps {
 }
 
 export function BoardColumn({ id, label, tasks, onTaskClick, onMoveTask, onMoveTaskVertical }: BoardColumnProps) {
-  const { setNodeRef } = useDroppable({ id })
+  const { setNodeRef, isOver } = useDroppable({ id })
   const columnIndex = BOARD_COLUMNS.findIndex((col) => col.id === id)
 
   return (
-    <div ref={setNodeRef} className="flex-shrink-0 w-72" data-column-id={id}>
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-[var(--color-border)] bg-gradient-to-r from-[var(--color-surface-elevated)] to-[var(--color-surface)]">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-white">{label}</h2>
-            <span className="text-xs font-medium text-[var(--color-text-muted)] bg-[var(--color-surface-elevated)] px-2.5 py-1 rounded-full border border-[var(--color-border)]">
-              {tasks.length}
-            </span>
-          </div>
-        </div>
-        <div className="p-3 space-y-2 min-h-[200px]">
+    <section ref={setNodeRef} className="board-column" data-column-id={id} data-drag-over={isOver} aria-labelledby={`column-${id}`}>
+      <div className="board-column-header">
+        <h2 id={`column-${id}`}>{label}</h2>
+        <span className="board-column-count" aria-label={`${tasks.length} tareas`}>
+          {tasks.length}
+        </span>
+      </div>
+      <div className="board-column-body">
+          {tasks.length === 0 && (
+            <div className="ui-empty my-auto">
+              <svg aria-hidden="true" className="ui-icon" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+                <rect x="4" y="4" width="16" height="16" rx="3" />
+                <path strokeLinecap="round" d="M8 9h8M8 13h5" />
+              </svg>
+              <strong>Sin tareas en esta etapa</strong>
+              <p>Arrastra una tarea aquí o usa sus controles para moverla.</p>
+            </div>
+          )}
           {tasks.map((task, index) => (
             <SortableTaskCard
               key={task.id}
@@ -43,8 +50,7 @@ export function BoardColumn({ id, label, tasks, onTaskClick, onMoveTask, onMoveT
               canMoveDown={index < tasks.length - 1}
             />
           ))}
-        </div>
       </div>
-    </div>
+    </section>
   )
 }

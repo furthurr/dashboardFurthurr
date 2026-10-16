@@ -1,0 +1,20 @@
+# Datos sensibles y PII
+
+Este inventario describe tipos/campos existentes; no contiene valores reales ni certifica controles del servicio Supabase. La implementación local no especifica cifrado propio ni política de retención. El cifrado administrado por el proveedor no se puede verificar solo desde el repositorio.
+
+| Campo/dato | Dónde aparece | Sensibilidad | Cifrado verificable en repo | Almacenamiento | Notas |
+| --- | --- | --- | --- | --- | --- |
+| Email | `profiles.email`, modelo `Profile` | PII alta | No verificable | PostgreSQL Supabase | Campo obligatorio (`supabase-schema.sql:21-30`, `src/types/index.ts:7-16`) |
+| Nombre completo y nickname | `profiles.full_name`, `profiles.nickname` | PII | No verificable | PostgreSQL Supabase | El nombre se deriva de metadata de Auth en el trigger (`supabase-schema.sql:142-154`) |
+| Avatar URL | `profiles.avatar_url`, bucket `avatars` | Identificador potencial | No verificable | PostgreSQL + Storage | Bucket declarado público (`supabase-schema.sql:348-351`) |
+| Identificadores de Auth/usuario | IDs de perfil, creador, autor y cargador | Dato identificable | No verificable | PostgreSQL/Supabase Auth | UUID asociados a actividad (`supabase-schema.sql:21-30`, `39-50`, `73-98`) |
+| Título, descripción y notas | `tasks.title`, `description`, `special_notes` | Contenido de usuario; potencialmente confidencial | No verificable | PostgreSQL Supabase | No hay clasificación de contenido en el repo |
+| Comentarios | `comments.body` | Contenido de usuario; potencialmente confidencial | No verificable | PostgreSQL Supabase | Relacionado a tarea y autor |
+| Adjuntos y metadata | `file_name`, `file_url`, `file_size`, `mime_type` y objeto | Potencialmente confidencial | No verificable | PostgreSQL + Storage | El bucket de tareas está declarado privado (`supabase-schema.sql:353-356`) |
+
+## Tratamiento observado
+
+- La app usa una publishable key, cuyo valor no se copia a documentación (`src/lib/supabase.ts:3-10`).
+- `AuthContext` escribe el error de carga de perfil en consola; el código observado no adjunta explícitamente el contenido del perfil al log (`src/features/auth/AuthContext.tsx:22-35`).
+- No se documentan requisitos de retención, exportación, borrado de cuenta ni clasificación de datos.
+- No se leyó ni transcribió `.env.local`; se omiten URLs/IDs de proyecto y cualquier valor de entorno.

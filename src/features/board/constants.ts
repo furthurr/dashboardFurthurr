@@ -9,8 +9,8 @@ export const BOARD_COLUMNS: { id: TaskStatus; label: string }[] = [
 ]
 
 export const PRIORITY_COLORS: Record<string, string> = {
-  urgente: '#ef4444',
-  alta: '#f97316',
-  normal: '#3b82f6',
-  baja: '#22c55e',
+  urgente: 'var(--color-priority-urgent)',
+  alta: 'var(--color-priority-high)',
+  normal: 'var(--color-priority-normal)',
+  baja: 'var(--color-priority-low)',
 }

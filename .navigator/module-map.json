@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-16T17:32:58Z",
+  "root": ".",
+  "modules": [
+    {
+      "id": "web-app",
+      "name": "Aplicación web",
+      "path": "src",
+      "responsibility": "Compone y ejecuta la SPA React con routing y providers globales.",
+      "kind": "app",
+      "tech": ["React", "TypeScript", "Vite"],
+      "entrypoints": ["src/main.tsx", "src/App.tsx"],
+      "depends_on": ["auth", "board", "global-styles"]
+    },
+    {
+      "id": "auth",
+      "name": "Autenticación",
+      "path": "src/features/auth",
+      "responsibility": "Gestiona login, registro, sesión, perfil y rutas protegidas.",
+      "kind": "feature",
+      "tech": ["React", "TypeScript", "Supabase Auth"],
+      "entrypoints": ["src/features/auth/AuthContext.tsx", "src/features/auth/ProtectedRoute.tsx"],
+      "depends_on": ["supabase-client", "shared-types"]
+    },
+    {
+      "id": "board",
+      "name": "Tablero Kanban",
+      "path": "src/features/board",
+      "responsibility": "Presenta y actualiza tareas, comentarios, adjuntos y orden de columnas.",
+      "kind": "feature",
+      "tech": ["React", "TypeScript", "TanStack Query", "dnd-kit"],
+      "entrypoints": ["src/features/board/BoardPage.tsx"],
+      "depends_on": ["auth", "supabase-client", "shared-types"]
+    },
+    {
+      "id": "supabase-client",
+      "name": "Cliente Supabase",
+      "path": "src/lib",
+      "responsibility": "Inicializa el cliente gestionado con variables de entorno requeridas.",
+      "kind": "lib",
+      "tech": ["TypeScript", "@supabase/supabase-js"],
+      "entrypoints": ["src/lib/supabase.ts"],
+      "depends_on": []
+    },
+    {
+      "id": "shared-types",
+      "name": "Tipos compartidos",
+      "path": "src/types",
+      "responsibility": "Declara tipos de perfil, tareas, comentarios, adjuntos y enums de aplicación.",
+      "kind": "lib",
+      "tech": ["TypeScript"],
+      "entrypoints": ["src/types/index.ts"],
+      "depends_on": []
+    },
+    {
+      "id": "global-styles",
+      "name": "Estilos globales",
+      "path": "src/index.css",
+      "responsibility": "Define Tailwind, paleta oscura, custom properties y reglas globales de foco/movimiento.",
+      "kind": "other",
+      "tech": ["CSS", "Tailwind CSS v4"],
+      "entrypoints": ["src/index.css"],
+      "depends_on": []
+    },
+    {
+      "id": "database-schema",
+      "name": "Schema Supabase",
+      "path": "supabase-schema.sql",
+      "responsibility": "Mantiene el schema Postgres local, RLS, Storage, vistas y grants de referencia.",
+      "kind": "other",
+      "tech": ["PostgreSQL", "SQL"],
+      "entrypoints": ["supabase-schema.sql"],
+      "depends_on": []
+    },
+    {
+      "id": "product-specs",
+      "name": "Especificaciones de producto",
+      "path": "specs",
+      "responsibility": "Define requisitos, permisos, UX, modelo previsto y progreso SDD.",
+      "kind": "other",
+      "tech": ["Markdown", "SDD"],
+      "entrypoints": ["specs/README.md"],
+      "depends_on": []
+    },
+    {
+      "id": "pages-deployment",
+      "name": "Despliegue GitHub Pages",
+      "path": ".github/workflows",
+      "responsibility": "Construye el frontend y publica dist en GitHub Pages desde GitHub Actions.",
+      "kind": "other",
+      "tech": ["GitHub Actions", "Node.js", "Vite"],
+      "entrypoints": [".github/workflows/deploy.yml"],
+      "depends_on": ["web-app"]
+    }
+  ]
+}

@@ -32,6 +32,7 @@ export function SortableTaskCard({
     attributes,
     listeners,
     setNodeRef,
+    setActivatorNodeRef,
     transform,
     isDragging,
   } = useSortable({ id: task.id })
@@ -44,13 +45,31 @@ export function SortableTaskCard({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      onClick={onClick}
     >
       <TaskCard
         task={task}
         isDragging={isDragging}
+        onClick={onClick}
+        dragHandle={
+          <button
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            type="button"
+            aria-label={`Arrastrar tarea: ${task.title}`}
+            title="Arrastrar tarea"
+            className="ui-button ui-button--sm shrink-0 touch-none cursor-grab px-2 active:cursor-grabbing"
+          >
+            <svg aria-hidden="true" className="ui-icon" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="9" cy="5" r="1.5" />
+              <circle cx="15" cy="5" r="1.5" />
+              <circle cx="9" cy="12" r="1.5" />
+              <circle cx="15" cy="12" r="1.5" />
+              <circle cx="9" cy="19" r="1.5" />
+              <circle cx="15" cy="19" r="1.5" />
+            </svg>
+          </button>
+        }
         onMoveLeft={onMoveLeft}
         onMoveRight={onMoveRight}
         onMoveUp={onMoveUp}
