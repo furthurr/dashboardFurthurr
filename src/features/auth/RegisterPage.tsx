@@ -110,8 +110,9 @@ export function RegisterPage() {
             disabled={isLoading}
             className="ui-button ui-button--primary w-full"
           >
-            <span role="status">{isLoading ? 'Creando cuenta…' : 'Crear cuenta'}</span>
+            {isLoading ? 'Creando cuenta…' : 'Crear cuenta'}
           </button>
+          <span role="status" className="sr-only">{isLoading ? 'Creando cuenta…' : ''}</span>
         </form>
 
         <div className="auth-footer">

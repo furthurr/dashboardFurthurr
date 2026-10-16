@@ -123,3 +123,11 @@ El usuario solicitó explícitamente commit de todos los cambios y push, seguido
 - Se detectó que `@testing-library/jest-dom` 7 exige Node >=22 y el workflow utiliza Node 20. Se fijó la versión compatible `6.9.1` (Node >=14), sin cambiar runtime ni CI.
 - Verificación repetida tras ajustar lockfile: `npm ci`, `npm run test -- --run` (33 correctas), `npm run build` y `npm run lint`: correctos. Avisos de bundle y dependencias conservados.
 - El remoto contiene un commit de licencia/autoría posterior a la base local; se preservará al integrar antes del push, sin force-push.
+
+### Corrección detectada al comprobar la publicación
+
+El commit `da6fca3` se publicó en main y GitHub Pages completó build/deploy correctamente (run `38950816893`). La comprobación pública con Chromium detectó un defecto adicional dentro de A1/A6: el botón de acceso aparecía en el árbol accesible sin nombre, con `status` como único hijo. La misma estructura existía en registro. Se separó el anuncio de estado del texto del botón, sin modificar autenticación ni apariencia.
+
+- Evidencia RED de navegador: el heading nuevo se encuentra y el botón existe visualmente, pero `getByRole('button', {name: 'Iniciar sesión'})` agota espera; snapshot accesible muestra botón sin nombre con hijo status.
+- `src/features/auth/AuthPages.test.tsx`: cuatro regresiones añadidas antes del fix; RED 4/4, GREEN después de separar anuncios. Comprueban nombre, ubicación independiente de status, pendiente y recuperación tras error con backend simulado.
+- Verificación repetida: `npm run test -- --run`: **37 pruebas correctas en 5 archivos**; `npm run build`, `npm run lint`, `git diff --check`: correctos. El aviso del bundle permanece. Esta corrección se publica en un commit nuevo, sin amend del anterior.

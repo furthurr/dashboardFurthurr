@@ -84,8 +84,9 @@ export function LoginPage() {
             disabled={isLoading}
             className="ui-button ui-button--primary w-full"
           >
-            <span role="status">{isLoading ? 'Iniciando sesión…' : 'Iniciar sesión'}</span>
+            {isLoading ? 'Iniciando sesión…' : 'Iniciar sesión'}
           </button>
+          <span role="status" className="sr-only">{isLoading ? 'Iniciando sesión…' : ''}</span>
         </form>
 
         <div className="auth-footer">
