@@ -2,6 +2,22 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
+## Actualización — notificaciones temporales, 2026-10-16
+
+Revisión focalizada de los cambios locales sobre `dfbf1be`; complementa el inventario del rediseño sin declarar una sincronización completa de sus referencias históricas.
+
+| Componente/patrón | Presentación, variantes y estados observados | Fuente |
+| --- | --- | --- |
+| `Toast` compartido | Confirmación verde flotante abajo a la derecha, ancho máximo 26rem y márgenes de seguridad; no desplaza el contenido ni intercepta clics fuera del aviso. Botón de cierre de 2,75rem con nombre «Cerrar notificación» | `src/shared/ui/Toast.tsx:19-40`, `src/index.css:127-132` |
+| Temporización y accesibilidad | Cierre a los 4 segundos; pausa con puntero o foco interior y nuevo plazo al salir. Región persistente `role=status` con contenido atómico; no mueve el foco al aparecer. Limpia el temporizador al cambiar el aviso o desmontar | `src/shared/ui/Toast.tsx:9-38` |
+| `useToast` | Mantiene un aviso por consumidor; sustituye el anterior y reinicia el plazo incluso al repetir texto. Mensaje vacío y cierre manual limpian el aviso | `src/shared/ui/useToast.ts:3-10` |
+| Integración | El tablero notifica movimientos/cancelación y creación/guardado/eliminación de tareas. El detalle monta su propio toast dentro del diálogo para comentarios y adjuntos. Los errores permanecen en contexto | `src/features/board/BoardPage.tsx`, `src/features/board/TaskDetailModal.tsx` |
+| Envío de comentarios | Botón compacto con SVG de envío o espera, sin texto visible; nombre accesible y título «Enviar»/«Enviando…», deshabilitado en curso o sin contenido; permanece junto al campo | `src/features/board/TaskDetailModal.tsx:151-168` |
+
+Requisito funcional: [notificaciones temporales](../specs/06-ui-ux-diseno.md#notificaciones-temporales).
+
+Verificación ejecutada: `npm run test -- --run` (39 pruebas correctas), `npm run build` y `npm run lint`. `src/shared/ui/Toast.test.tsx` verifica cierre automático, reinicio al repetir, pausa con puntero/foco y cierre manual. Las pruebas DOM no sustituyen una revisión visual en navegador ni una prueba con lector de pantalla. El build advierte del tamaño del chunk principal, sin impedir su generación.
+
 ## Estado vigente — rediseño local, 2026-10-16
 
 Revisión estática del árbol de trabajo sin commit. Tokens y clases compartidas proceden de `src/index.css:4-169`; no se verificó su apariencia en navegador.

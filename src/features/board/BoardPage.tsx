@@ -26,6 +26,8 @@ import { CreateTaskModal } from './CreateTaskModal'
 import { TaskDetailModal } from './TaskDetailModal'
 import { type TaskStatus, type TaskWithAssignees } from '@/types'
 import { useAuth } from '@/features/auth/AuthContext'
+import { Toast } from '@/shared/ui/Toast'
+import { useToast } from '@/shared/ui/useToast'
 
 export function BoardPage() {
   const { user, profile, signOut } = useAuth()
@@ -42,7 +44,7 @@ export function BoardPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<TaskWithAssignees | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
-  const [notice, setNotice] = useState('')
+  const { notice, setNotice, dismissNotice } = useToast()
   const [moveError, setMoveError] = useState<string | null>(null)
   const [movementPending, setMovementPending] = useState(false)
   const pendingRef = useRef(false)
@@ -256,8 +258,8 @@ export function BoardPage() {
         </div>
         <div className="px-4 sm:px-8">
           {moveError && <p role="alert" className="ui-feedback ui-feedback--error mb-4">{moveError}</p>}
-          <p role="status" aria-label="Estado del tablero" className={notice ? 'ui-feedback ui-feedback--success mb-4' : 'sr-only'}>{notice}</p>
         </div>
+        <Toast notice={notice} onClose={dismissNotice} label="Estado del tablero" />
 
         <section className="board-columns" aria-label="Columnas del tablero" tabIndex={0} aria-busy={movementBusy}
           onPointerDownCapture={(event) => {

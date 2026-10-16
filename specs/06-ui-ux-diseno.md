@@ -62,6 +62,8 @@ Debe mostrar:
 
 El modal de detalle se cierra al hacer clic fuera del panel, igual que al usar el botón de cierre o Escape, salvo mientras una operación esté en curso.
 
+El envío de comentarios usa un botón compacto con icono de envío, sin texto visible que pueda cortarse. Permanece junto al campo también en móvil, con nombre accesible y ayuda «Enviar» («Enviando…» durante el envío), y se deshabilita mientras se procesa o el comentario está vacío.
+
 ## Responsive
 
 - Desktop: columnas horizontales con scroll lateral si es necesario.
@@ -72,3 +74,11 @@ El modal de detalle se cierra al hacer clic fuera del panel, igual que al usar e
 - Colores con contraste suficiente.
 - Estados no deben depender solo del color.
 - Botones y acciones con textos claros.
+
+## Notificaciones temporales
+
+- Las confirmaciones de tareas, comentarios y adjuntos y los avisos de movimiento cancelado se muestran como toasts flotantes en la esquina inferior derecha, sin desplazar el contenido.
+- Se cierran automáticamente tras 4 segundos y permiten cierre manual con un botón accesible. Al pasar el puntero o mantener el foco dentro, el cierre se pausa; al salir se conceden otros 4 segundos de lectura.
+- Cada nueva notificación sustituye la anterior y reinicia el tiempo, incluso si repite el mismo texto.
+- Mantienen la paleta de feedback existente, se adaptan al ancho del móvil y anuncian su contenido mediante una región de estado sin mover el foco.
+- Los errores de operaciones y validación conservan su feedback contextual persistente.

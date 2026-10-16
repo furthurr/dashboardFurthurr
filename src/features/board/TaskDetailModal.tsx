@@ -1,6 +1,8 @@
 import { useId, useRef, useState } from 'react'
 import type { TaskWithAssignees, TaskStatus, TaskPriority, CommentWithAuthor, TaskAttachment } from '@/types'
 import { Dialog } from '@/shared/ui/Dialog'
+import { Toast } from '@/shared/ui/Toast'
+import { useToast } from '@/shared/ui/useToast'
 import { BOARD_COLUMNS, PRIORITY_COLORS } from './constants'
 import { CommentsList } from './CommentsList'
 import { AttachmentsList } from './AttachmentsList'
@@ -52,7 +54,7 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
   const [pending, setPending] = useState<string | null>(null)
   const pendingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState('')
+  const { notice, setNotice, dismissNotice } = useToast()
   const [confirmDelete, setConfirmDelete] = useState<{ kind: 'task' | 'comment' | 'attachment'; id?: string } | null>(null)
   const busy = pending !== null
 
@@ -100,6 +102,7 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
 
   return (
     <Dialog title="Detalle de tarea" onClose={onClose} busy={busy}>
+      <Toast notice={notice} onClose={dismissNotice} />
       <div role="tablist" aria-label="Contenido de la tarea" className="task-tabs">
         {tabs.map((tab, index) => (
           <button key={tab} type="button" role="tab" id={`${id}-${tab}-tab`}
@@ -121,7 +124,6 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
       </div>
       <div className="dialog-body space-y-5">
         {error && <p role="alert" className="ui-feedback ui-feedback--error">{error}</p>}
-        <p role="status" className={notice ? 'ui-feedback ui-feedback--success' : 'sr-only'}>{notice}</p>
         <section role="tabpanel" id={`${id}-details-panel`} aria-labelledby={`${id}-details-tab`} hidden={activeTab !== 'details'}>
           <form id={`${id}-form`} onSubmit={(event) => { event.preventDefault(); void save() }}>
             <fieldset disabled={busy || !onSave} className="space-y-5">
@@ -149,9 +151,18 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
         <section role="tabpanel" id={`${id}-comments-panel`} aria-labelledby={`${id}-comments-tab`} hidden={activeTab !== 'comments'} className="space-y-5">
           {onAddComment && <form onSubmit={(event) => { event.preventDefault(); void sendComment() }}>
             <label htmlFor={`${id}-comment`} className="ui-label">Nuevo comentario</label>
-            <div className="flex flex-wrap sm:flex-nowrap gap-2">
+            <div className="flex gap-2">
               <input id={`${id}-comment`} className="ui-field" value={comment} disabled={busy} placeholder="Escribe un comentario…" onChange={(event) => setComment(event.target.value)} />
-              <button className="ui-button ui-button--primary" disabled={busy || !comment.trim()}>{pending === 'comment' ? 'Enviando…' : 'Enviar'}</button>
+              <button type="submit" className="ui-button ui-button--primary w-11 shrink-0 px-0"
+                aria-label={pending === 'comment' ? 'Enviando…' : 'Enviar'}
+                title={pending === 'comment' ? 'Enviando…' : 'Enviar'}
+                aria-busy={pending === 'comment'} disabled={busy || !comment.trim()}>
+                <svg aria-hidden="true" className="ui-icon" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                  {pending === 'comment'
+                    ? <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>
+                    : <><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></>}
+                </svg>
+              </button>
             </div>
           </form>}
           {commentsLoading ? <p role="status">Cargando comentarios…</p> : commentsError ? <p role="alert" className="ui-feedback ui-feedback--error">No se pudieron cargar los comentarios. Vuelve a abrir la tarea para reintentar.</p>
