@@ -2,6 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TaskWithAssignees } from '@/types'
+import type { TaskImagePreview } from './attachmentsApi'
 import { SortableTaskCard } from './SortableTaskCard'
 
 const sortable = vi.hoisted(() => ({
@@ -106,5 +107,32 @@ describe('TaskCard: apertura y movimiento independientes', () => {
     rerender(<SortableTaskCard task={task} />)
     expect(screen.queryByText(/\d+ comentarios/)).toBeNull()
     expect(screen.queryByText(/\d+ adjuntos/)).toBeNull()
+  })
+
+  it('muestra la descripción completa conservando saltos de línea', () => {
+    const description = 'Primera línea\n\nSegunda línea con contexto adicional'
+    render(<SortableTaskCard task={{ ...task, description }} />)
+
+    const renderedDescription = screen.getByText((_, element) => element?.tagName === 'P' && element.textContent === description)
+    expect(renderedDescription).toHaveClass('whitespace-pre-wrap')
+    expect(renderedDescription).not.toHaveClass('line-clamp-2')
+  })
+
+  it('abre la imagen ampliada desde una miniatura sin abrir el detalle de la tarea', async () => {
+    const user = userEvent.setup()
+    const onClick = vi.fn()
+    const image: TaskImagePreview = {
+      id: 'image-1', fileName: 'boceto.png', signedUrl: 'https://example.test/boceto.png',
+    }
+    render(<SortableTaskCard task={task} images={[image]} onClick={onClick} />)
+
+    await user.click(screen.getByRole('button', { name: 'Ampliar imagen: boceto.png' }))
+    const dialog = screen.getByRole('dialog', { name: 'boceto.png' })
+    expect(dialog).toBeVisible()
+    expect(screen.getByRole('img', { name: 'boceto.png' })).toHaveAttribute('src', image.signedUrl)
+    expect(onClick).not.toHaveBeenCalled()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

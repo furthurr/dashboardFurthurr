@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Dialog } from '@/shared/ui/Dialog'
 import { type TaskStatus, type TaskPriority } from '@/types'
 import { BOARD_COLUMNS } from './constants'
@@ -12,6 +12,7 @@ interface CreateTaskModalProps {
     description?: string
     status: TaskStatus
     priority: TaskPriority
+    files: File[]
   }) => void
   isLoading: boolean
   errorMessage?: string | null
@@ -22,14 +23,33 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, isLoading, errorMes
   const [description, setDescription] = useState('')
   const [status, setStatus] = useState<TaskStatus>('backlog')
   const [priority, setPriority] = useState<TaskPriority>('normal')
+  const [files, setFiles] = useState<File[]>([])
+  const [fileError, setFileError] = useState<string | null>(null)
   const formId = useId()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   if (!isOpen) return null
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (isLoading || !title.trim()) return
-    onSubmit({ title: title.trim(), description: description.trim() || undefined, status, priority })
+    onSubmit({ title: title.trim(), description: description.trim() || undefined, status, priority, files })
+  }
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.currentTarget.files ?? [])
+    if (selectedFiles.length === 0) return
+
+    const maxFileSize = 5 * 1024 * 1024
+    const validFiles = selectedFiles.filter((file) => file.size <= maxFileSize)
+    const oversizedFiles = selectedFiles.filter((file) => file.size > maxFileSize)
+
+    if (validFiles.length > 0) setFiles((current) => [...current, ...validFiles])
+    setFileError(oversizedFiles.length > 0
+      ? `No se añadieron archivos superiores a 5 MB: ${oversizedFiles.map((file) => file.name).join(', ')}.`
+      : null)
+    // Permite volver a elegir el mismo archivo si se quitó de la lista.
+    event.currentTarget.value = ''
   }
 
   return (
@@ -69,6 +89,58 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, isLoading, errorMes
             className="ui-field resize-none"
             placeholder="Descripción opcional"
           />
+        </div>
+
+        <div className="space-y-3">
+          <p id={`${formId}-files-hint`} className="ui-label">Archivos adjuntos · máximo 5 MB por archivo</p>
+          <input
+            ref={fileInputRef}
+            id={`${formId}-files`}
+            type="file"
+            multiple
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
+            disabled={isLoading}
+            onChange={handleFileChange}
+          />
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="ui-button ui-button--secondary"
+              aria-describedby={`${formId}-files-hint`}
+              disabled={isLoading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Seleccionar archivos
+            </button>
+            {files.length === 0 && <span className="text-sm text-[var(--color-text-muted)]">Ningún archivo seleccionado</span>}
+          </div>
+          {fileError && <p id={`${formId}-files-error`} role="alert" className="ui-feedback ui-feedback--error">{fileError}</p>}
+          {files.length > 0 && (
+            <ul aria-label="Archivos seleccionados para adjuntar" className="space-y-2">
+              {files.map((file, index) => (
+                <li key={`${file.name}-${file.size}-${file.lastModified}-${index}`} className="ui-list-card flex flex-wrap items-center gap-3 p-3">
+                  <span className="min-w-0 flex-1 break-all text-sm text-[var(--color-text)]">{file.name}</span>
+                  <span className="shrink-0 text-xs text-[var(--color-text-muted)]">
+                    {file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`}
+                  </span>
+                  <button
+                    type="button"
+                    className="ui-button ui-button--danger ui-button--sm"
+                    aria-label={`Quitar ${file.name}`}
+                    disabled={isLoading}
+                    onClick={() => {
+                      setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))
+                      setFileError(null)
+                    }}
+                  >
+                    Quitar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -127,7 +199,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, isLoading, errorMes
           disabled={isLoading || !title.trim()}
           className="ui-button ui-button--primary"
         >
-          {isLoading ? 'Creando...' : 'Crear Tarea'}
+          {isLoading ? 'Creando tarea y adjuntos…' : 'Crear Tarea'}
         </button>
       </footer>
     </Dialog>

@@ -63,3 +63,5 @@ Estado: `borrador`
 - Las anotaciones especiales aceptan texto y links.
 - Los archivos binarios no deben exceder 5 MB.
 - Los adjuntos deben quedar relacionados a una tarea.
+- Durante el alta de una tarea se pueden seleccionar varios archivos opcionales; cada archivo válido se adjunta a la tarea recién creada.
+- Si la tarea se crea pero falla alguna subida, la tarea permanece creada y se informa qué archivos no se adjuntaron; la subida fallida puede intentarse de nuevo desde el detalle de esa tarea.

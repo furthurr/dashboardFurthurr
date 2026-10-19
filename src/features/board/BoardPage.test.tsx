@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => {
   return {
     tasks: vi.fn(), refetch: vi.fn(), update: mutation(), status: mutation(), positions: mutation(),
     create: mutation(), remove: mutation(), comment: mutation(), deleteComment: mutation(),
-    upload: mutation(), deleteAttachment: mutation(),
+    upload: mutation(), deleteAttachment: mutation(), taskImages: vi.fn(),
   }
 })
 
@@ -25,6 +25,7 @@ vi.mock('./commentsApi', () => ({
 }))
 vi.mock('./attachmentsApi', () => ({
   useAttachments: () => ({ data: [], isLoading: false, error: null }),
+  useTaskImagePreviews: mocks.taskImages,
   useUploadAttachment: () => mocks.upload, useDeleteAttachment: () => mocks.deleteAttachment,
 }))
 vi.mock('@/features/auth/AuthContext', () => ({
@@ -43,6 +44,7 @@ beforeEach(() => {
   mocks.update.mutateAsync.mockResolvedValue(undefined)
   mocks.status.mutateAsync.mockResolvedValue(undefined)
   mocks.tasks.mockReturnValue({ data: [task], isLoading: false, error: null, refetch: mocks.refetch })
+  mocks.taskImages.mockReturnValue({ data: {} })
 })
 
 describe('Integración del tablero', () => {
@@ -53,6 +55,100 @@ describe('Integración del tablero', () => {
     await user.keyboard(' ')
     await user.keyboard(' ')
     expect(mocks.status.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('muestra en los cards las miniaturas recibidas para cada tarea y abre su imagen', async () => {
+    const user = userEvent.setup()
+    mocks.taskImages.mockReturnValue({ data: {
+      [task.id]: [{ id: 'image-1', fileName: 'referencia.png', signedUrl: 'https://example.test/referencia.png' }],
+    } })
+    renderBoard()
+
+    await user.click(screen.getByRole('button', { name: 'Ampliar imagen: referencia.png' }))
+    expect(screen.getByRole('dialog', { name: 'referencia.png' })).toBeVisible()
+    expect(screen.getByRole('img', { name: 'referencia.png' })).toHaveAttribute('src', 'https://example.test/referencia.png')
+  })
+
+  it('crea la tarea antes de subir los archivos seleccionados y los asocia a su id', async () => {
+    const user = userEvent.setup()
+    const createdTask = { ...task, id: 'new-task-id', title: 'Tarea con archivos' }
+    let resolveCreate!: (value: TaskWithAssignees) => void
+    mocks.create.mutateAsync.mockReturnValueOnce(new Promise<TaskWithAssignees>((resolve) => { resolveCreate = resolve }))
+    const { container } = renderBoard()
+
+    await user.click(screen.getByRole('button', { name: /nueva tarea/i }))
+    await user.type(screen.getByLabelText(/título/i), 'Tarea con archivos')
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    const firstFile = new File(['uno'], 'brief.pdf', { type: 'application/pdf' })
+    const secondFile = new File(['dos'], 'captura.png', { type: 'image/png' })
+    await user.upload(fileInput, [firstFile, secondFile])
+    await user.click(screen.getByRole('button', { name: 'Crear Tarea' }))
+
+    expect(mocks.create.mutateAsync).toHaveBeenCalledExactlyOnceWith({
+      title: 'Tarea con archivos', description: undefined, status: 'backlog', priority: 'normal', createdBy: 'user-1',
+    })
+    expect(mocks.upload.mutateAsync).not.toHaveBeenCalled()
+
+    await act(async () => { resolveCreate(createdTask) })
+    await waitFor(() => expect(mocks.upload.mutateAsync).toHaveBeenNthCalledWith(1, {
+      taskId: 'new-task-id', uploadedBy: 'user-1', file: firstFile,
+    }))
+    expect(mocks.upload.mutateAsync).toHaveBeenNthCalledWith(2, {
+      taskId: 'new-task-id', uploadedBy: 'user-1', file: secondFile,
+    })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('status', { name: 'Estado del tablero' })).toHaveTextContent('Tarea creada correctamente.')
+  })
+
+  it('mantiene la tarea si falla alguna subida y anuncia los archivos que se pueden añadir desde el detalle', async () => {
+    const user = userEvent.setup()
+    mocks.create.mutateAsync.mockResolvedValueOnce({ ...task, id: 'created-with-upload-error' })
+    mocks.upload.mutateAsync
+      .mockRejectedValueOnce(new Error('detalle privado del servidor'))
+      .mockResolvedValueOnce(undefined)
+    const { container } = renderBoard()
+
+    await user.click(screen.getByRole('button', { name: /nueva tarea/i }))
+    await user.type(screen.getByLabelText(/título/i), 'Tarea parcialmente adjuntada')
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    const failedFile = new File(['uno'], 'fallido.pdf', { type: 'application/pdf' })
+    const successfulFile = new File(['dos'], 'correcto.png', { type: 'image/png' })
+    await user.upload(fileInput, [failedFile, successfulFile])
+    await user.click(screen.getByRole('button', { name: 'Crear Tarea' }))
+
+    const warning = await screen.findByRole('alert')
+    expect(warning).toHaveTextContent('Tarea creada')
+    expect(warning).toHaveTextContent('fallido.pdf')
+    expect(warning).toHaveTextContent('detalle de la tarea')
+    expect(warning).not.toHaveTextContent('detalle privado del servidor')
+    expect(mocks.create.mutateAsync).toHaveBeenCalledOnce()
+    expect(mocks.upload.mutateAsync).toHaveBeenCalledTimes(2)
+    expect(mocks.upload.mutateAsync).toHaveBeenNthCalledWith(1, {
+      taskId: 'created-with-upload-error', uploadedBy: 'user-1', file: failedFile,
+    })
+    expect(mocks.upload.mutateAsync).toHaveBeenNthCalledWith(2, {
+      taskId: 'created-with-upload-error', uploadedBy: 'user-1', file: successfulFile,
+    })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('no intenta subir adjuntos ni cierra el formulario si falla la creación de la tarea', async () => {
+    const user = userEvent.setup()
+    mocks.create.mutateAsync.mockRejectedValueOnce(new Error('detalle privado del servidor'))
+    const { container } = renderBoard()
+
+    await user.click(screen.getByRole('button', { name: /nueva tarea/i }))
+    await user.type(screen.getByLabelText(/título/i), 'No creada')
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    await user.upload(fileInput, new File(['contenido'], 'archivo.pdf', { type: 'application/pdf' }))
+    await user.click(screen.getByRole('button', { name: 'Crear Tarea' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo crear la tarea')
+    expect(screen.getByRole('dialog')).toBeVisible()
+    expect(screen.getByLabelText(/título/i)).toHaveValue('No creada')
+    expect(screen.getByRole('list', { name: 'Archivos seleccionados para adjuntar' })).toHaveTextContent('archivo.pdf')
+    expect(mocks.upload.mutateAsync).not.toHaveBeenCalled()
+    expect(screen.queryByText('detalle privado del servidor')).not.toBeInTheDocument()
   })
 
   it('propaga el fallo del guardado y conserva el detalle y su borrador', async () => {

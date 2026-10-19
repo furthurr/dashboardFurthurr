@@ -18,13 +18,13 @@ import {
 } from '@dnd-kit/sortable'
 import { useTasks, useUpdateTaskStatus, useCreateTask, useDeleteTask, useUpdateTask, useUpdateTaskPositions } from './api'
 import { useComments, useCreateComment, useDeleteComment } from './commentsApi'
-import { useAttachments, useUploadAttachment, useDeleteAttachment } from './attachmentsApi'
+import { useAttachments, useTaskImagePreviews, useUploadAttachment, useDeleteAttachment } from './attachmentsApi'
 import { BOARD_COLUMNS } from './constants'
 import { BoardColumn } from './BoardColumn'
 import { TaskCard } from './TaskCard'
 import { CreateTaskModal } from './CreateTaskModal'
 import { TaskDetailModal } from './TaskDetailModal'
-import { type TaskStatus, type TaskWithAssignees } from '@/types'
+import { type TaskPriority, type TaskStatus, type TaskWithAssignees } from '@/types'
 import { useAuth } from '@/features/auth/AuthContext'
 import { Toast } from '@/shared/ui/Toast'
 import { useToast } from '@/shared/ui/useToast'
@@ -33,6 +33,7 @@ export function BoardPage() {
   const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
   const { data: tasks = [], isLoading, error, refetch } = useTasks()
+  const { data: taskImages = {} } = useTaskImagePreviews(tasks.map((task) => task.id))
   const updateTaskStatus = useUpdateTaskStatus()
   const createTask = useCreateTask()
   const deleteTask = useDeleteTask()
@@ -44,10 +45,13 @@ export function BoardPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<TaskWithAssignees | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [createWarning, setCreateWarning] = useState<string | null>(null)
+  const [isCreateSubmitting, setIsCreateSubmitting] = useState(false)
   const { notice, setNotice, dismissNotice } = useToast()
   const [moveError, setMoveError] = useState<string | null>(null)
   const [movementPending, setMovementPending] = useState(false)
   const pendingRef = useRef(false)
+  const createPendingRef = useRef(false)
   const movementBusy = movementPending || updateTaskStatus.isPending || updateTaskPositions.isPending
 
   const isAdmin = profile?.role === 'admin'
@@ -223,6 +227,61 @@ export function BoardPage() {
     if (updates.length > 0) void performMovement(() => updateTaskPositions.mutateAsync(updates))
   }
 
+  async function handleCreateTask(data: {
+    title: string
+    description?: string
+    status: TaskStatus
+    priority: TaskPriority
+    files: File[]
+  }) {
+    if (!user || createPendingRef.current) return
+
+    createPendingRef.current = true
+    setIsCreateSubmitting(true)
+    setCreateError(null)
+    setCreateWarning(null)
+    setNotice('')
+
+    try {
+      const { files, ...taskData } = data
+      const createdTask = await createTask.mutateAsync({ ...taskData, createdBy: user.id })
+      const failedFiles: string[] = []
+
+      // La tarea debe existir antes de subir archivos porque sus metadatos requieren task_id.
+      for (const file of files) {
+        try {
+          await uploadAttachment.mutateAsync({ taskId: createdTask.id, uploadedBy: user.id, file })
+        } catch {
+          failedFiles.push(file.name)
+        }
+      }
+
+      setIsModalOpen(false)
+      setCreateError(null)
+
+      if (failedFiles.length > 0) {
+        const count = failedFiles.length
+        const message = count === 1
+          ? `Tarea creada, pero no se pudo adjuntar 1 archivo: ${failedFiles[0]}. Puedes añadirlo desde el detalle de la tarea.`
+          : `Tarea creada, pero no se pudieron adjuntar ${count} archivos: ${failedFiles.join(', ')}. Puedes añadirlos desde el detalle de la tarea.`
+        setCreateWarning(message)
+      } else {
+        setNotice('Tarea creada correctamente.')
+      }
+    } catch (err) {
+      const error = err as { message?: string; code?: string }
+      const message = `${error?.message ?? ''} ${error?.code ?? ''}`.toLowerCase()
+      if (message.includes('42501') || message.includes('row-level security')) {
+        setCreateError('No tienes permisos para crear tareas. Contacta a un administrador.')
+      } else {
+        setCreateError('No se pudo crear la tarea. Inténtalo de nuevo.')
+      }
+    } finally {
+      createPendingRef.current = false
+      setIsCreateSubmitting(false)
+    }
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -258,6 +317,12 @@ export function BoardPage() {
         </div>
         <div className="px-4 sm:px-8">
           {moveError && <p role="alert" className="ui-feedback ui-feedback--error mb-4">{moveError}</p>}
+          {createWarning && <div role="alert" className="ui-feedback ui-feedback--error mb-4 flex flex-wrap items-start justify-between gap-3">
+            <p className="min-w-0 flex-1">{createWarning}</p>
+            <button type="button" className="ui-button ui-button--secondary ui-button--sm" onClick={() => setCreateWarning(null)}>
+              Cerrar aviso
+            </button>
+          </div>}
         </div>
         <Toast notice={notice} onClose={dismissNotice} label="Estado del tablero" />
 
@@ -281,6 +346,7 @@ export function BoardPage() {
                     id={col.id}
                     label={col.label}
                     tasks={tasksByColumn[col.id]}
+                    taskImages={taskImages}
                     onTaskClick={(task) => {
                       setSelectedTask(task)
                       setIsDetailOpen(true)
@@ -294,7 +360,7 @@ export function BoardPage() {
         </section>
 
         <DragOverlay>
-          {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
+          {activeTask ? <TaskCard task={activeTask} images={taskImages[activeTask.id]} isDragging /> : null}
         </DragOverlay>
 
         <CreateTaskModal
@@ -304,29 +370,8 @@ export function BoardPage() {
             setIsModalOpen(false)
             setCreateError(null)
           }}
-          onSubmit={(data) => {
-            if (!user) return
-            setCreateError(null)
-            createTask.mutate(
-              { ...data, createdBy: user.id },
-              {
-                onSuccess: () => {
-                  setIsModalOpen(false)
-                  setCreateError(null)
-                  setNotice('Tarea creada correctamente.')
-                },
-                onError: (err: { message?: string; code?: string }) => {
-                  const message = err?.message || err?.code || 'Error desconocido'
-                  if (message.includes('42501') || message.includes('row-level security')) {
-                    setCreateError('No tienes permisos para crear tareas. Contacta a un administrador.')
-                  } else {
-                    setCreateError('No se pudo crear la tarea. Inténtalo de nuevo.')
-                  }
-                },
-              }
-            )
-          }}
-          isLoading={createTask.isPending}
+          onSubmit={handleCreateTask}
+          isLoading={isCreateSubmitting || createTask.isPending || uploadAttachment.isPending}
           errorMessage={createError}
         />
 

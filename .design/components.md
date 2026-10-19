@@ -18,9 +18,21 @@ Requisito funcional: [notificaciones temporales](../specs/06-ui-ux-diseno.md#not
 
 Verificación ejecutada: `npm run test -- --run` (39 pruebas correctas), `npm run build` y `npm run lint`. `src/shared/ui/Toast.test.tsx` verifica cierre automático, reinicio al repetir, pausa con puntero/foco y cierre manual. Las pruebas DOM no sustituyen una revisión visual en navegador ni una prueba con lector de pantalla. El build advierte del tamaño del chunk principal, sin impedir su generación.
 
-## Estado vigente — rediseño local, 2026-10-16
+## Actualización focalizada — adjuntos en alta de tarea, 2026-10-19
 
-Revisión estática del árbol de trabajo sin commit. Tokens y clases compartidas proceden de `src/index.css:4-169`; no se verificó su apariencia en navegador.
+Revisión estática de los cambios locales de creación de tareas con archivos. Complementa el inventario del rediseño del 2026-10-16; no representa un baseline Git completo ni una validación visual en navegador.
+
+| Componente/patrón | Presentación, variantes y estados observados | Fuente |
+| --- | --- | --- |
+| `CreateTaskModal` — selección de adjuntos | Botón visible «Seleccionar archivos» abre un selector múltiple. Cada archivo debe pesar como máximo 5 MB; los que exceden el límite se rechazan con `role=alert` sin quitar los válidos. La lista anuncia los nombres, muestra el tamaño y permite quitar cada archivo. Reutiliza `ui-button`, `ui-list-card` y `ui-feedback--error`; no añade tokens visuales | `src/features/board/CreateTaskModal.tsx:39-53`, `src/features/board/CreateTaskModal.tsx:94-143`, `src/index.css:75-135` |
+| Envío de alta con adjuntos | La tarea se crea antes de subir los archivos. Durante ambas operaciones el diálogo impide nuevos envíos y cierres; el botón de creación informa «Creando tarea y adjuntos…». Si todo se completa, el tablero confirma el alta; ante fallos parciales conserva la tarea y muestra una alerta descartable con los nombres de los archivos no adjuntados | `src/features/board/CreateTaskModal.tsx:56-57`, `src/features/board/CreateTaskModal.tsx:186-203`, `src/features/board/BoardPage.tsx:230-283`, `src/features/board/BoardPage.tsx:318-325`, `src/features/board/BoardPage.tsx:366-375` |
+| Accesibilidad y recuperación | El botón selector describe el límite de tamaño, la lista tiene nombre accesible, los errores se anuncian como alertas y el diálogo queda ocupado durante el envío. Si falla la creación, se conservan el borrador y los archivos seleccionados; si falla una subida tras crear la tarea, se indica añadir el archivo desde el detalle | `src/features/board/CreateTaskModal.tsx:94-143`, `src/features/board/BoardPage.tsx:237-281`, `src/features/board/BoardPage.tsx:318-325` |
+
+Verificación de la implementación local: `npm run test -- --run` (48 pruebas correctas), `npm run build` y `npm run lint`. El build termina con una advertencia de chunk principal superior a 500 kB. No se hizo comprobación visual de la UI ni prueba con lector de pantalla.
+
+## Revisión estática — rediseño local, 2026-10-16
+
+Revisión estática histórica del árbol de trabajo sin commit. Tokens y clases compartidas proceden de `src/index.css:4-169`; no se verificó su apariencia en navegador. La revisión focalizada del 2026-10-19 anterior complementa el estado de `CreateTaskModal`.
 
 | Componente/patrón | Presentación, variantes y estados observados | Fuente |
 | --- | --- | --- |
@@ -43,7 +55,7 @@ Revisión estática del árbol de trabajo sin commit. Tokens y clases compartida
 
 ## Pruebas disponibles y límites
 
-Pruebas presentes en el árbol local; **no ejecutadas en esta revisión documental**. Runner disponible `npm run test -- --run` (`package.json:6-11`), entorno jsdom (`vitest.config.ts:5-8`). Referencias representativas por nombre exacto:
+Runner disponible `npm run test -- --run` (`package.json:6-11`), entorno jsdom (`vitest.config.ts:5-8`). La suite se ejecutó el 2026-10-19; las referencias siguientes son representativas, no una cobertura completa de la UI:
 
 | Archivo | Test disponible | Evidencia que cubre |
 | --- | --- | --- |
@@ -51,14 +63,18 @@ Pruebas presentes en el árbol local; **no ejecutadas en esta revisión document
 | `src/features/board/CreateTaskModal.test.tsx:23` | `bloquea el scroll y restaura el foco y overflow originales al cerrar con Escape` | Ciclo de foco/scroll y Escape |
 | `src/features/board/CreateTaskModal.test.tsx:39` | `contiene Tab y Shift+Tab y permite recorrer campos interiores` | Recorrido y contención de teclado |
 | `src/features/board/CreateTaskModal.test.tsx:80` | `bloquea todos los cierres, campos y nuevos envíos durante pending` | Estado pendiente |
+| `src/features/board/CreateTaskModal.test.tsx:132` | `permite adjuntar varios archivos, rechaza los mayores a 5 MB y permite quitar los seleccionados` | Selector múltiple, validación local y eliminación de una selección |
 | `src/features/board/TaskDetailModal.test.tsx:27` | `conserva el formulario abierto y el borrador si falla el guardado` | Recuperación de error |
 | `src/features/board/TaskDetailModal.test.tsx:108` | `ofrece diálogo nombrado, pestañas con flechas y cierre exterior sin cerrar al pulsar dentro` | Semántica, tabs e interacción de fondo |
-| `src/features/board/TaskDetailModal.test.tsx:157` | `permite alcanzar el input por teclado y rechaza archivos superiores a 5 MB sin subirlos` | Acceso al archivo y límite local |
+| `src/features/board/TaskDetailModal.test.tsx:157` | `permite abrir el selector con teclado, rechaza archivos superiores a 5 MB y sube automáticamente los válidos` | Acceso al selector, límite local y subida automática |
 | `src/features/board/TaskCard.test.tsx:35` | `abre con Enter y Espacio desde el título sin activar los listeners de drag` | Apertura independiente |
 | `src/features/board/TaskCard.test.tsx:51` | `mueve en las cuatro direcciones con ratón y teclado sin abrir ni iniciar drag` | Acciones de movimiento separadas |
 | `src/features/board/TaskCard.test.tsx:100` | `muestra prioridad textual y contadores disponibles, incluido cero` | Información no dependiente solo de color |
-| `src/features/board/BoardPage.test.tsx:78` | `muestra un error seguro al mover y restaura la tarea` | Error/recuperación del tablero |
-| `src/features/board/BoardPage.test.tsx:105` | `ofrece reintentar la consulta fallida` | Reintento de carga |
+| `src/features/board/BoardPage.test.tsx:72` | `crea la tarea antes de subir los archivos seleccionados y los asocia a su id` | Secuencia y asociación a la tarea creada |
+| `src/features/board/BoardPage.test.tsx:103` | `mantiene la tarea si falla alguna subida y anuncia los archivos que se pueden añadir desde el detalle` | Recuperación ante fallos parciales |
+| `src/features/board/BoardPage.test.tsx:135` | `no intenta subir adjuntos ni cierra el formulario si falla la creación de la tarea` | No subir ante fallo de creación; conserva borrador/selección |
+| `src/features/board/BoardPage.test.tsx:183` | `muestra un error seguro al mover y restaura la tarea` | Error/recuperación del tablero |
+| `src/features/board/BoardPage.test.tsx:210` | `ofrece reintentar la consulta fallida` | Reintento de carga |
 
 Estos tests DOM no acreditan renderizado, contraste WCAG, carga real de fuente, layout/overflow a distintos viewports o zoom, drag geométrico real, reduced motion efectivo ni compatibilidad con lectores de pantalla. No se revisaron pruebas dedicadas de auth; las suites citadas no certifican esa pantalla. No se declara validación visual ni accesibilidad integral.
 

@@ -88,6 +88,14 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
     if (await perform('comment', () => onAddComment(comment.trim()), 'No se pudo enviar el comentario.', 'Comentario enviado.')) setComment('')
   }
 
+  async function uploadAttachment(nextFile: File) {
+    const upload = onUploadAttachment
+    if (!upload) return
+    const succeeded = await perform('upload', () => upload(nextFile), 'No se pudo subir el archivo.', 'Archivo adjuntado.')
+    if (succeeded) setFile(null)
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
   async function removeConfirmed() {
     if (!confirmDelete) return
     const { kind, id: itemId } = confirmDelete
@@ -170,8 +178,8 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
         </section>
         <section role="tabpanel" id={`${id}-attachments-panel`} aria-labelledby={`${id}-attachments-tab`} hidden={activeTab !== 'attachments'} className="space-y-5">
           {onUploadAttachment && <div className="space-y-3">
-            <label htmlFor={`${id}-file`} className="ui-label">Añadir archivo · máximo 5 MB</label>
-            <input ref={fileRef} type="file" id={`${id}-file`} className="ui-field file:mr-3 file:cursor-pointer" disabled={busy}
+            <p id={`${id}-file-hint`} className="ui-label">Añadir archivo · máximo 5 MB</p>
+            <input ref={fileRef} type="file" id={`${id}-file`} className="sr-only" tabIndex={-1} aria-hidden="true" disabled={busy}
               onChange={(event) => {
                 const next = event.target.files?.[0] ?? null
                 setError(null)
@@ -179,15 +187,18 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
                   setError('El archivo debe ser de 5 MB o menos.')
                   setFile(null)
                   event.target.value = ''
-                } else setFile(next)
+                } else if (next) {
+                  setFile(next)
+                  void uploadAttachment(next)
+                } else setFile(null)
               }} />
-            <button className="ui-button ui-button--secondary" disabled={!file || busy} onClick={async () => {
-              if (!file) return
-              if (await perform('upload', () => onUploadAttachment(file), 'No se pudo subir el archivo.', 'Archivo adjuntado.')) {
-                setFile(null)
-                if (fileRef.current) fileRef.current.value = ''
-              }
-            }}>{pending === 'upload' ? 'Subiendo…' : 'Subir adjunto'}</button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" className="ui-button ui-button--secondary" aria-describedby={`${id}-file-hint`}
+                disabled={busy} onClick={() => fileRef.current?.click()}>Seleccionar archivo</button>
+              <span className="min-w-0 max-w-full truncate text-sm text-[var(--color-text-muted)]" aria-live="polite" aria-atomic="true">
+                {pending === 'upload' && file ? `Subiendo ${file.name}…` : file?.name ?? 'Ningún archivo seleccionado'}
+              </span>
+            </div>
           </div>}
           {attachmentsLoading ? <p role="status">Cargando adjuntos…</p> : attachmentsError ? <p role="alert" className="ui-feedback ui-feedback--error">No se pudieron cargar los adjuntos. Vuelve a abrir la tarea para reintentar.</p>
             : <AttachmentsList attachments={attachments} canDelete={canDeleteAttachments && !busy} onDeleteAttachment={onDeleteAttachment ? (itemId) => setConfirmDelete({ kind: 'attachment', id: itemId }) : undefined} />}

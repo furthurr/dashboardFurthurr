@@ -6,9 +6,10 @@ Documentación canónica de lo visual. Léela antes de añadir pantallas, compon
 
 - Tecnología detectada: React + TypeScript, Tailwind CSS v4 y CSS custom properties.
 - Commit base revisado: `81335b92bc1962a47c9c3bb963271c3667bc7b63` (2026-05-04); no incorpora los cambios locales.
-- Última actualización documental: 2026-10-16.
+- Última actualización documental: 2026-10-19 (revisión focalizada de creación de tareas con adjuntos).
 - Estado: **pendiente de baseline Git**. Hay cambios locales de UI y documentación; esta revisión describe el árbol de trabajo sin commit. No declara HEAD sincronizado ni sustituye el commit base revisado.
 - Revisión focalizada de notificaciones: cambios locales sobre `dfbf1be` (2026-10-16), documentados en [componentes](components.md#actualización--notificaciones-temporales-2026-10-16). No sustituye el baseline del inventario completo.
+- Revisión focalizada de adjuntos durante el alta de tareas (2026-10-19): selector múltiple, límite por archivo, estados de envío y fallos parciales documentados en [componentes](components.md). Se documenta el árbol de trabajo; no se registra un baseline Git nuevo.
 
 ## Contexto para IA
 
@@ -18,7 +19,7 @@ Documentación canónica de lo visual. Léela antes de añadir pantallas, compon
 - **Tipografía y tema:** Plus Jakarta Sans con fallback de sistema, `color-scheme: dark`; no selector ni paleta clara en el CSS revisado (`src/index.css:1-5`, `src/index.css:52-71`).
 - **Componentes:** auth usa panel y controles compartidos; tablero con resumen, columnas desplazables y estados explícitos; `Dialog` compartido aporta nombre, foco, Escape y bloqueo de scroll; detalle añade tabs con navegación por teclado (`src/features/auth/LoginPage.tsx:30-95`, `src/features/board/BoardPage.tsx:235-295`, `src/shared/ui/Dialog.tsx:21-98`, `src/features/board/TaskDetailModal.tsx:101-199`).
 - **Estandarización y límites:** prioridades consumen variables CSS (`src/features/board/constants.ts:11-16`); persisten utilities locales, SVG inline y algunos valores directos. Las correcciones observadas y deuda residual están en [deuda UI](ui-tech-debt.md). No se realizó validación visual, medición de contraste ni prueba con lector de pantalla.
-- **Pruebas disponibles:** Vitest/jsdom (`vitest.config.ts:5-8`); nombres, rutas y límites en [componentes](components.md#pruebas-disponibles-y-límites). No ejecutadas en esta revisión documental.
+- **Pruebas disponibles:** Vitest/jsdom (`vitest.config.ts:5-8`); nombres, rutas y límites en [componentes](components.md#pruebas-disponibles-y-límites). Revisión focalizada del 2026-10-19: 48 pruebas correctas, build y lint correctos; sin nueva verificación visual en navegador ni con lector de pantalla.
 
 ### Evidencia posterior a la revisión estática
 

@@ -114,7 +114,7 @@ describe('Crear tarea: diálogo', () => {
     expect(submit.form).toBe(screen.getByLabelText(/título/i).closest('form'))
     expect(submit.closest('form')).toBeNull()
     await user.click(submit)
-    expect(onSubmit).toHaveBeenCalledExactlyOnceWith({ title: 'Nueva tarea', description: 'Detalles', status: 'backlog', priority: 'normal' })
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith({ title: 'Nueva tarea', description: 'Detalles', status: 'backlog', priority: 'normal', files: [] })
     rerender(<CreateTaskModal {...base} errorMessage="No se pudo crear" />)
     expect(screen.getByRole('alert')).toHaveTextContent('No se pudo crear')
     expect(screen.getByLabelText(/título/i)).toHaveValue('  Nueva tarea  ')
@@ -127,6 +127,32 @@ describe('Crear tarea: diálogo', () => {
     fireEvent.change(input, { target: { value: '   ' } })
     fireEvent.submit(input.closest('form')!)
     expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('permite adjuntar varios archivos, rechaza los mayores a 5 MB y permite quitar los seleccionados', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    const { container } = render(<CreateTaskModal {...base} onSubmit={onSubmit} />)
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    const first = new File(['contenido'], 'brief.pdf', { type: 'application/pdf' })
+    const second = new File(['contenido'], 'referencia.png', { type: 'image/png' })
+    const oversized = new File(['contenido'], 'grande.zip', { type: 'application/zip' })
+    Object.defineProperty(oversized, 'size', { value: 5 * 1024 * 1024 + 1 })
+
+    await user.upload(fileInput, [first, second, oversized])
+    expect(fileInput).toHaveAttribute('multiple')
+    expect(screen.getByRole('alert')).toHaveTextContent('grande.zip')
+    expect(screen.getByRole('list', { name: 'Archivos seleccionados para adjuntar' })).toHaveTextContent('brief.pdf')
+    expect(screen.getByRole('list', { name: 'Archivos seleccionados para adjuntar' })).toHaveTextContent('referencia.png')
+    expect(screen.getByRole('list', { name: 'Archivos seleccionados para adjuntar' })).not.toHaveTextContent('grande.zip')
+
+    await user.click(screen.getByRole('button', { name: 'Quitar brief.pdf' }))
+    await user.type(screen.getByLabelText(/título/i), 'Con archivos')
+    await user.click(screen.getByRole('button', { name: 'Crear Tarea' }))
+
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith({
+      title: 'Con archivos', description: undefined, status: 'backlog', priority: 'normal', files: [second],
+    })
   })
 
   it('tolera desmontar el origen del foco antes de cerrar', () => {

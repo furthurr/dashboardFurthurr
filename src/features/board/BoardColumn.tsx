@@ -1,5 +1,6 @@
 import { useDroppable } from '@dnd-kit/core'
 import { type TaskStatus, type TaskWithAssignees } from '@/types'
+import { type TaskImagePreview } from './attachmentsApi'
 import { SortableTaskCard } from './SortableTaskCard'
 import { BOARD_COLUMNS } from './constants'
 
@@ -7,12 +8,13 @@ interface BoardColumnProps {
   id: TaskStatus
   label: string
   tasks: TaskWithAssignees[]
+  taskImages?: Record<string, TaskImagePreview[]>
   onTaskClick?: (task: TaskWithAssignees) => void
   onMoveTask?: (taskId: string, direction: 'left' | 'right') => void
   onMoveTaskVertical?: (taskId: string, direction: 'up' | 'down') => void
 }
 
-export function BoardColumn({ id, label, tasks, onTaskClick, onMoveTask, onMoveTaskVertical }: BoardColumnProps) {
+export function BoardColumn({ id, label, tasks, taskImages = {}, onTaskClick, onMoveTask, onMoveTaskVertical }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id })
   const columnIndex = BOARD_COLUMNS.findIndex((col) => col.id === id)
 
@@ -39,6 +41,7 @@ export function BoardColumn({ id, label, tasks, onTaskClick, onMoveTask, onMoveT
             <SortableTaskCard
               key={task.id}
               task={task}
+              images={taskImages[task.id]}
               onClick={() => onTaskClick?.(task)}
               onMoveLeft={() => onMoveTask?.(task.id, 'left')}
               onMoveRight={() => onMoveTask?.(task.id, 'right')}

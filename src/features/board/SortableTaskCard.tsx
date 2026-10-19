@@ -1,10 +1,12 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { type TaskWithAssignees } from '@/types'
+import { type TaskImagePreview } from './attachmentsApi'
 import { TaskCard } from './TaskCard'
 
 interface SortableTaskCardProps {
   task: TaskWithAssignees
+  images?: TaskImagePreview[]
   onClick?: () => void
   onMoveLeft?: () => void
   onMoveRight?: () => void
@@ -18,6 +20,7 @@ interface SortableTaskCardProps {
 
 export function SortableTaskCard({
   task,
+  images,
   onClick,
   onMoveLeft,
   onMoveRight,
@@ -48,6 +51,7 @@ export function SortableTaskCard({
     >
       <TaskCard
         task={task}
+        images={images}
         isDragging={isDragging}
         onClick={onClick}
         dragHandle={

@@ -42,6 +42,8 @@ Objetivo visual:
 Cada card debe mostrar como mínimo:
 
 - Título.
+- Descripción completa, con altura adaptable al contenido y conservando sus saltos de línea.
+- Miniaturas de los adjuntos de imagen; al seleccionarlas, mostrar la imagen ampliada en un diálogo.
 - Prioridad.
 - Avatares de asignados.
 - Indicador de comentarios.
@@ -59,8 +61,17 @@ Debe mostrar:
 - Anotaciones especiales.
 - Adjuntos.
 - Comentarios.
+- El control para añadir adjuntos se presenta como un botón visible «Seleccionar archivo», muestra el nombre elegido e indica el límite de 5 MB.
+- Al elegir un archivo válido se inicia la subida automáticamente, sin un botón adicional de envío; durante la carga se informa su estado y, si falla, se conserva el archivo para reintentar volviéndolo a seleccionar.
 
 El modal de detalle se cierra al hacer clic fuera del panel, igual que al usar el botón de cierre o Escape, salvo mientras una operación esté en curso.
+
+## Alta De Tarea
+
+- El formulario permite seleccionar varios archivos opcionales y muestra los nombres seleccionados antes de crear la tarea.
+- Cada archivo debe ser de 5 MB o menos; los que superan el límite se rechazan sin descartar los archivos válidos ya seleccionados.
+- Tras crear la tarea se suben los archivos y se asocian a ella. Mientras se crean la tarea y sus adjuntos, el formulario impide envíos duplicados y cierres que puedan interrumpir el resultado.
+- Si la tarea se crea pero alguna subida falla, se conserva la tarea, se informa qué archivos fallaron y se indica que pueden añadirse desde el detalle.
 
 El envío de comentarios usa un botón compacto con icono de envío, sin texto visible que pueda cortarse. Permanece junto al campo también en móvil, con nombre accesible y ayuda «Enviar» («Enviando…» durante el envío), y se deshabilita mientras se procesa o el comentario está vacío.
 
