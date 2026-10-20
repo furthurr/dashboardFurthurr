@@ -12,6 +12,56 @@ const task: TaskWithAssignees = {
 const base = { task, comments: [], attachments: [], isOpen: true, onClose: vi.fn() }
 
 describe('Detalle de tarea', () => {
+  it('precarga responsables, permite desasignarlos todos sin permiso de editar campos y mantiene el detalle abierto', async () => {
+    const user = userEvent.setup()
+    const person = { id: 'a', full_name: 'Ana', email: 'ana@example.test', avatar_url: null, role: 'usuario' as const, is_active: true }
+    const onSaveAssignees = vi.fn().mockResolvedValue([])
+    const onClose = vi.fn()
+    render(<TaskDetailModal {...base} task={{ ...task, assignees: [person] }} onClose={onClose} onSaveAssignees={onSaveAssignees} assigneeOptions={{ users: [person] }} />)
+    expect(screen.getByLabelText('Título')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Desasignar a Ana' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Desasignar a Ana' }))
+    await user.click(screen.getByRole('button', { name: 'Guardar asignaciones' }))
+    expect(onSaveAssignees).toHaveBeenCalledExactlyOnceWith([])
+    expect(await screen.findByRole('status')).toHaveTextContent('Asignaciones guardadas.')
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Guardar asignaciones' })).toBeDisabled()
+  })
+  it('no guarda otros campos ni descarta la selección ante un fallo de asignaciones', async () => {
+    const user = userEvent.setup()
+    const person = { id: 'a', full_name: 'Ana', email: 'ana@example.test', avatar_url: null, role: 'usuario' as const, is_active: true }
+    const onSave = vi.fn()
+    const onSaveAssignees = vi.fn().mockRejectedValueOnce(new Error('Información privada')).mockResolvedValueOnce([])
+    render(<TaskDetailModal {...base} onSave={onSave} onSaveAssignees={onSaveAssignees} assigneeOptions={{ users: [person] }} />)
+    await user.type(screen.getByLabelText('Título'), ' borrador')
+    await user.selectOptions(screen.getByLabelText('Asignar usuario'), 'all')
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Guardar asignaciones' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron guardar las asignaciones')
+    expect(screen.queryByText('Información privada')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Desasignar a Ana' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Título')).toHaveValue(`${task.title} borrador`)
+    await user.click(screen.getByRole('button', { name: 'Guardar asignaciones' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled())
+    expect(onSave).not.toHaveBeenCalled()
+  })
+  it('bloquea doble envío y cierres mientras guarda asignaciones', async () => {
+    const user = userEvent.setup()
+    let resolve!: () => void
+    const person = { id: 'a', full_name: 'Ana', email: 'ana@example.test', avatar_url: null, role: 'usuario' as const, is_active: true }
+    const onSaveAssignees = vi.fn(() => new Promise<void>((done) => { resolve = done }))
+    const onClose = vi.fn()
+    render(<TaskDetailModal {...base} onClose={onClose} onSaveAssignees={onSaveAssignees} assigneeOptions={{ users: [person] }} />)
+    await user.selectOptions(screen.getByLabelText('Asignar usuario'), 'a')
+    await user.dblClick(screen.getByRole('button', { name: 'Guardar asignaciones' }))
+    expect(onSaveAssignees).toHaveBeenCalledExactlyOnceWith(['a'])
+    expect(screen.getByRole('button', { name: 'Desasignar a Ana' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeDisabled()
+    await user.keyboard('{Escape}')
+    expect(onClose).not.toHaveBeenCalled()
+    await act(async () => resolve())
+    expect(screen.getByRole('button', { name: 'Guardar asignaciones' })).toBeDisabled()
+  })
   it.each(['', '   '])('deshabilita guardar con título en blanco (%j)', async (title) => {
     const user = userEvent.setup()
     const onSave = vi.fn()

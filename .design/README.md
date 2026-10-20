@@ -6,20 +6,25 @@ Documentación canónica de lo visual. Léela antes de añadir pantallas, compon
 
 - Tecnología detectada: React + TypeScript, Tailwind CSS v4 y CSS custom properties.
 - Commit base revisado: `81335b92bc1962a47c9c3bb963271c3667bc7b63` (2026-05-04); no incorpora los cambios locales.
-- Última actualización documental: 2026-10-19 (revisión focalizada de creación de tareas con adjuntos).
+- Última actualización documental: 2026-10-20 (cuentas y asignación múltiple de responsables).
 - Estado: **pendiente de baseline Git**. Hay cambios locales de UI y documentación; esta revisión describe el árbol de trabajo sin commit. No declara HEAD sincronizado ni sustituye el commit base revisado.
+- HEAD observado: `1d3069d904bc9e1dc6a7363d3967ad4c2709dace`; no contiene los cambios locales documentados y no se registra como commit de sincronización.
+- Cambios concurrentes `ProfilePage`/`AccountMenu` localizados al cierre: solo se corrige la orientación de acceso a Usuarios; el inventario/validación completo de perfil y menú queda pendiente.
 - Revisión focalizada de notificaciones: cambios locales sobre `dfbf1be` (2026-10-16), documentados en [componentes](components.md#actualización--notificaciones-temporales-2026-10-16). No sustituye el baseline del inventario completo.
 - Revisión focalizada de adjuntos durante el alta de tareas (2026-10-19): selector múltiple, límite por archivo, estados de envío y fallos parciales documentados en [componentes](components.md). Se documenta el árbol de trabajo; no se registra un baseline Git nuevo.
 
 ## Contexto para IA
 
+- **Estado actual:** `/users` reemplaza el alta aislada: administración solo para admin activo con listado, alta, nombre, contraseña y activación. `/register` redirige a esa ruta; `RegisterPage` ya no existe (`src/App.tsx:24-37`, `src/features/users/UsersPage.tsx:10-133`).
+- **Acceso concurrente observado:** el tablero ahora monta `AccountMenu`; «Usuarios» está dentro del menú para administradores, no como botón directo junto al correo. El menú añade `/profile`, fuera de la revisión de comportamiento (`src/shared/ui/AccountMenu.tsx:20-35`).
+- **Responsables:** `AssigneePicker` compartido en creación y detalle: búsqueda, casillas múltiples y chips retirables; conserva asignados inactivos sin ofrecerlos como nuevas opciones. En detalle, «Guardar asignaciones» es independiente, disponible para todas las cuentas activas, incluidos invitados (`src/features/board/AssigneePicker.tsx:17-52`, `src/features/board/TaskDetailModal.tsx:87-97`, `:167-176`).
 - **Notificaciones temporales (2026-10-16):** `Toast` y `useToast` en `src/shared/ui/` sustituyen las confirmaciones inline del tablero y del detalle por avisos flotantes con cierre a los 4 segundos, pausa con puntero/foco y cierre manual. Consumen los tokens de éxito, sombra, espaciado y radio existentes mediante `.ui-toast-*` (`src/index.css:129-132`). Errores conservados en contexto; spec en `specs/06-ui-ux-diseno.md`. Build y lint correctos, 39 pruebas aprobadas incluida temporización con relojes simulados; sin nueva validación visual en navegador.
 - **Revisión de dominio (2026-10-16):** inventario del rediseño local por lectura estática; las secciones históricas conservan las observaciones anteriores, no describen el estado vigente.
 - **Tokens y patrones:** paleta índigo/oscura, colores semánticos, spacing, tamaños de texto, radios, sombra y transiciones en `src/index.css:4-50`. Clases compartidas `ui-*`, `auth-*`, `dialog-*`, `task-tabs` y `board-*` en `src/index.css:74-169`.
 - **Tipografía y tema:** Plus Jakarta Sans con fallback de sistema, `color-scheme: dark`; no selector ni paleta clara en el CSS revisado (`src/index.css:1-5`, `src/index.css:52-71`).
-- **Componentes:** auth usa panel y controles compartidos; tablero con resumen, columnas desplazables y estados explícitos; `Dialog` compartido aporta nombre, foco, Escape y bloqueo de scroll; detalle añade tabs con navegación por teclado (`src/features/auth/LoginPage.tsx:30-95`, `src/features/board/BoardPage.tsx:235-295`, `src/shared/ui/Dialog.tsx:21-98`, `src/features/board/TaskDetailModal.tsx:101-199`).
-- **Estandarización y límites:** prioridades consumen variables CSS (`src/features/board/constants.ts:11-16`); persisten utilities locales, SVG inline y algunos valores directos. Las correcciones observadas y deuda residual están en [deuda UI](ui-tech-debt.md). No se realizó validación visual, medición de contraste ni prueba con lector de pantalla.
-- **Pruebas disponibles:** Vitest/jsdom (`vitest.config.ts:5-8`); nombres, rutas y límites en [componentes](components.md#pruebas-disponibles-y-límites). Revisión focalizada del 2026-10-19: 48 pruebas correctas, build y lint correctos; sin nueva verificación visual en navegador ni con lector de pantalla.
+- **Componentes:** login conserva `auth-*`; administración reutiliza `board-header`, `ui-feedback`, `Dialog` y formularios compartidos; selector consume `ui-field`, `ui-list-card`, `ui-button`, bordes/radios existentes y checkbox nativo. No se introdujeron tokens, tema ni tipografía nuevos en esta feature (`src/features/users/UsersPage.tsx:18-65`, `:105-132`, `src/features/board/AssigneePicker.tsx:26-50`).
+- **Estandarización y límites:** persisten utilities locales/SVG y la deuda ya registrada. Las comprobaciones visuales previas no equivalen a una auditoría de contraste ni uso con lector de pantalla; no se ejecutó otra auditoría durante esta sincronización.
+- **Pruebas y evidencia:** 79 pruebas Vitest y build/lint correctos registrados durante la implementación. Chromium comprobó creación/detalle/asignaciones a 360/768/1440 px con backend simulado y capturas temporales revisadas, sin overflow del documento y con diálogos dentro del viewport. No acredita todo el flujo de administración visual ni pruebas E2E con cuentas reales; ver [componentes](components.md).
 
 ### Evidencia posterior a la revisión estática
 

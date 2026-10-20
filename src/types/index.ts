@@ -11,6 +11,7 @@ export interface Profile {
   avatar_url: string | null
   nickname: string | null
   role: UserRole
+  is_active: boolean
   created_at: string
   updated_at: string
 }
@@ -28,8 +29,10 @@ export interface Task {
   updated_at: string
 }
 
+export type AssigneeProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url' | 'role' | 'is_active'>
+
 export interface TaskWithAssignees extends Task {
-  assignees: Profile[]
+  assignees: AssigneeProfile[]
   comment_count?: number
   attachment_count?: number
 }

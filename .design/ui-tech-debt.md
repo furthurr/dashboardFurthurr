@@ -2,6 +2,12 @@
 
 Hallazgos visuales/documentales detectados en los componentes y estilos revisados. No se modificó UI ni se ejecutó una auditoría automatizada de accesibilidad.
 
+## Revisión focalizada — 2026-10-20
+
+Administración y responsables reutilizan `Dialog` y clases/tokens existentes; el selector añade controles nativos, estados explícitos y borrado contextual (`src/features/users/UsersPage.tsx:105-132`, `src/features/board/AssigneePicker.tsx:26-50`). No se introducen findings de accesibilidad no verificados ni se cierran deudas por ausencia de errores en tests.
+
+La evidencia previa de implementación incluye 79 pruebas y comprobación de creación/detalle/asignaciones en Chromium a 360/768/1440 px con mocks. Amplía la evidencia de U-01 en esos flujos, pero no certifica lector de pantalla, contraste integral ni todos los diálogos administrativos. Las limitaciones y fuentes actuales se registran en [componentes](components.md); R-01/R-02 y el historial inferior se conservan.
+
 ## Revisión vigente — rediseño local, 2026-10-16
 
 Estado basado en lectura del código sin commit. «Corregida en código» describe evidencia de implementación, no validación visual ni cierre de una auditoría de accesibilidad. Las filas originales se conservan abajo como historial, con sus referencias antiguas.

@@ -6,6 +6,7 @@ import { useToast } from '@/shared/ui/useToast'
 import { BOARD_COLUMNS, PRIORITY_COLORS } from './constants'
 import { CommentsList } from './CommentsList'
 import { AttachmentsList } from './AttachmentsList'
+import { AssigneePicker, type AssigneeOptions } from './AssigneePicker'
 
 type Operation = void | Promise<unknown>
 interface TaskDetailModalProps {
@@ -26,6 +27,8 @@ interface TaskDetailModalProps {
   attachmentsLoading?: boolean
   commentsError?: boolean
   attachmentsError?: boolean
+  onSaveAssignees?: (ids: string[]) => Operation
+  assigneeOptions?: AssigneeOptions
 }
 
 // Unmounting on close also discards draft, tab and delete-confirmation state.
@@ -40,7 +43,7 @@ type Tab = typeof tabs[number]
 function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDelete,
   onAddComment, onDeleteComment, onUploadAttachment, onDeleteAttachment,
   canDeleteComments, canDeleteAttachments, commentsLoading, attachmentsLoading,
-  commentsError, attachmentsError,
+  commentsError, attachmentsError, onSaveAssignees, assigneeOptions,
 }: TaskDetailModalProps & { task: TaskWithAssignees }) {
   const id = useId()
   const [activeTab, setActiveTab] = useState<Tab>('details')
@@ -48,6 +51,9 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
   const [description, setDescription] = useState(task.description ?? '')
   const [status, setStatus] = useState(task.status)
   const [priority, setPriority] = useState(task.priority)
+  const [assigneeIds, setAssigneeIds] = useState(task.assignees.map((person) => person.id))
+  const [savedAssigneeIds, setSavedAssigneeIds] = useState(assigneeIds)
+  const assignmentsDirty = assigneeIds.length !== savedAssigneeIds.length || assigneeIds.some((personId) => !savedAssigneeIds.includes(personId))
   const [comment, setComment] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -79,8 +85,15 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
   }
 
   async function save() {
-    if (!title.trim() || !onSave) return
+    if (!title.trim() || !onSave || assignmentsDirty) return
     if (await perform('save', () => onSave({ title: title.trim(), description, status, priority }), 'No se pudo guardar.')) onClose()
+  }
+
+  async function saveAssignees() {
+    if (!onSaveAssignees || !assignmentsDirty) return
+    if (await perform('assignees', () => onSaveAssignees(assigneeIds), 'No se pudieron guardar las asignaciones.', 'Asignaciones guardadas.')) {
+      setSavedAssigneeIds([...assigneeIds])
+    }
   }
 
   async function sendComment() {
@@ -151,7 +164,14 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
               </div>
             </fieldset>
           </form>
-          {task.assignees.length > 0 && <div className="mt-5"><p className="ui-label">Asignados</p><div className="flex flex-wrap gap-2">
+          {onSaveAssignees ? <div className="mt-5 space-y-3">
+            <AssigneePicker {...assigneeOptions} initialAssignees={task.assignees} value={assigneeIds} onChange={setAssigneeIds} disabled={busy} />
+            <p className="text-sm text-[var(--color-text-muted)]">Las asignaciones se guardan por separado de los demás campos de la tarea.</p>
+            {assignmentsDirty && <p className="text-sm text-[var(--color-warning)]">Tienes cambios de asignación pendientes. Pulsa «Guardar asignaciones» antes de guardar los demás cambios.</p>}
+            <button type="button" className="ui-button ui-button--primary" disabled={busy || !assignmentsDirty} onClick={() => { void saveAssignees() }}>
+              {pending === 'assignees' ? 'Guardando asignaciones…' : 'Guardar asignaciones'}
+            </button>
+          </div> : task.assignees.length > 0 && <div className="mt-5"><p className="ui-label">Asignados</p><div className="flex flex-wrap gap-2">
             {task.assignees.map((person, index) => <span key={`${person.full_name}-${index}`} className="ui-feedback py-1">{person.full_name}</span>)}
           </div></div>}
           {task.special_notes && <p className="ui-feedback mt-5 text-[var(--color-warning)]">{task.special_notes}</p>}
@@ -214,7 +234,7 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
       <footer className="dialog-footer">
         {onDelete && <button className="ui-button ui-button--danger sm:mr-auto" disabled={busy} onClick={() => setConfirmDelete({ kind: 'task' })}>Eliminar tarea</button>}
         <button className="ui-button ui-button--secondary" disabled={busy} onClick={onClose}>Cerrar</button>
-        {onSave && <button type="submit" form={`${id}-form`} className="ui-button ui-button--primary" disabled={busy || !title.trim()}>
+        {onSave && <button type="submit" form={`${id}-form`} className="ui-button ui-button--primary" disabled={busy || !title.trim() || assignmentsDirty}>
           {pending === 'save' ? 'Guardando…' : 'Guardar cambios'}
         </button>}
       </footer>

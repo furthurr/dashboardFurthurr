@@ -3,6 +3,7 @@ import { Dialog } from '@/shared/ui/Dialog'
 import { type TaskStatus, type TaskPriority } from '@/types'
 import { BOARD_COLUMNS } from './constants'
 import { PRIORITY_COLORS } from './constants'
+import { AssigneePicker, type AssigneeOptions } from './AssigneePicker'
 
 interface CreateTaskModalProps {
   isOpen: boolean
@@ -13,17 +14,21 @@ interface CreateTaskModalProps {
     status: TaskStatus
     priority: TaskPriority
     files: File[]
+    assigneeIds: string[]
   }) => void
   isLoading: boolean
   errorMessage?: string | null
+  assigneeOptions?: AssigneeOptions
+  initialAssigneeIds?: string[]
 }
 
-export function CreateTaskModal({ isOpen, onClose, onSubmit, isLoading, errorMessage }: CreateTaskModalProps) {
+export function CreateTaskModal({ isOpen, onClose, onSubmit, isLoading, errorMessage, assigneeOptions, initialAssigneeIds = [] }: CreateTaskModalProps) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [status, setStatus] = useState<TaskStatus>('backlog')
   const [priority, setPriority] = useState<TaskPriority>('normal')
   const [files, setFiles] = useState<File[]>([])
+  const [assigneeIds, setAssigneeIds] = useState<string[]>(() => [...initialAssigneeIds])
   const [fileError, setFileError] = useState<string | null>(null)
   const formId = useId()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -33,7 +38,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, isLoading, errorMes
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (isLoading || !title.trim()) return
-    onSubmit({ title: title.trim(), description: description.trim() || undefined, status, priority, files })
+    onSubmit({ title: title.trim(), description: description.trim() || undefined, status, priority, files, assigneeIds })
   }
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,6 +95,8 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, isLoading, errorMes
             placeholder="Descripción opcional"
           />
         </div>
+
+        <AssigneePicker {...assigneeOptions} value={assigneeIds} onChange={setAssigneeIds} disabled={isLoading} />
 
         <div className="space-y-3">
           <p id={`${formId}-files-hint`} className="ui-label">Archivos adjuntos · máximo 5 MB por archivo</p>

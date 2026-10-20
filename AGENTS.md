@@ -76,6 +76,8 @@ El schema completo está en `supabase-schema.sql` (ejecutado en SQL Editor de Su
 - [`specs/`](specs/README.md) es la fuente de verdad de requisitos e intención de producto; actualiza la spec correspondiente antes de implementar una funcionalidad.
 - `.sdd/` (si existe) pertenece al workflow SDD externo a este orquestador; `specs/` conserva la fuente de requisitos del producto.
 - [`supabase-schema.sql`](supabase-schema.sql) es la fuente de verdad local del schema Postgres. Contrástalo con `specs/04-modelo-datos.md` y `specs/05-auth-roles-permisos.md`.
+- [`supabase/migrations/`](supabase/migrations/) contiene cambios incrementales para instalaciones existentes; [`supabase/README.md`](supabase/README.md) describe orden, despliegue de Edge Functions, configuración de Auth y pruebas SQL. El bootstrap completo no debe reejecutarse sobre una BD existente.
+- [`supabase/functions/admin-users/`](supabase/functions/admin-users/) contiene backend administrativo gestionado por Supabase; las asignaciones usan RPCs Postgres autenticadas. «Sin servidor propio» no significa ausencia de código servidor. Publicar la SPA en Pages no despliega esas funciones ni las migraciones; las claves privilegiadas nunca van al frontend.
 - [`.architecture/`](.architecture/README.md) documenta la arquitectura implementada y sus ADRs.
 - [`.data/`](.data/README.md) cataloga contratos, modelos y persistencia observados; no sustituye la spec ni el SQL.
 - [`.design/`](.design/README.md) inventaría tokens y componentes visuales; `specs/06-ui-ux-diseno.md` conserva la intención UX.
@@ -83,4 +85,6 @@ El schema completo está en `supabase-schema.sql` (ejecutado en SQL Editor de Su
 - [`arquitectura.md`](arquitectura.md) es un acceso legado a la arquitectura canónica, no una segunda fuente.
 
 Para la estructura de ejecución actual consulta el mapa de módulos y el código; el árbol de carpetas descrito en la sección `Folder Structure` de este archivo puede ser anterior a la implementación vigente.
+
+Las marcas de documentación deben distinguir el árbol de trabajo sin commit de un baseline Git verificable; no declarar sincronizado `HEAD` cuando hay cambios locales relevantes. `.sdd/` permanece fuera del mantenimiento de este orquestador.
 <!-- ai-agents-kit:documentation:end -->

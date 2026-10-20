@@ -22,6 +22,7 @@ Campos propuestos:
 - `avatar_url`: text, opcional.
 - `nickname`: text, opcional.
 - `role`: enum `admin`, `usuario`, `invitado`.
+- `is_active`: boolean obligatorio, `true` por defecto; permite desactivar el acceso sin borrar cuenta ni contenido. Solo la función administrativa puede cambiarlo desde la aplicación.
 - `created_at`: timestamp.
 - `updated_at`: timestamp.
 

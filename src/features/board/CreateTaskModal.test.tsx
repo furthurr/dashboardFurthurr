@@ -9,6 +9,25 @@ const base = { isOpen: true, onClose: vi.fn(), onSubmit: vi.fn(), isLoading: fal
 afterEach(() => { document.body.style.overflow = '' })
 
 describe('Crear tarea: diálogo', () => {
+  it('envía varios responsables seleccionados y conserva la selección al fallar', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    const users = [
+      { id: 'a', full_name: 'Ana', email: 'ana@example.test', avatar_url: null, role: 'usuario' as const, is_active: true },
+      { id: 'b', full_name: 'Bruno', email: 'bruno@example.test', avatar_url: null, role: 'invitado' as const, is_active: true },
+    ]
+    const { rerender } = render(<CreateTaskModal {...base} onSubmit={onSubmit} assigneeOptions={{ users }} />)
+    await user.type(screen.getByLabelText(/título/i), 'Compartida')
+    await user.selectOptions(screen.getByLabelText('Asignar usuario'), 'all')
+    await user.click(screen.getByRole('button', { name: 'Crear Tarea' }))
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ assigneeIds: ['a', 'b'] }))
+    rerender(<CreateTaskModal {...base} onSubmit={onSubmit} assigneeOptions={{ users }} errorMessage="No se pudo crear" />)
+    expect(screen.getByRole('button', { name: 'Desasignar a Ana' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Desasignar a Bruno' })).toBeInTheDocument()
+    rerender(<CreateTaskModal {...base} onSubmit={onSubmit} assigneeOptions={{ users }} isLoading />)
+    expect(screen.getByLabelText('Asignar usuario')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Desasignar a Bruno' })).toBeDisabled()
+  })
   it('solo monta el diálogo al abrir, lo nombra y enfoca el primer campo', () => {
     const { rerender } = render(<CreateTaskModal {...base} isOpen={false} />)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -114,7 +133,7 @@ describe('Crear tarea: diálogo', () => {
     expect(submit.form).toBe(screen.getByLabelText(/título/i).closest('form'))
     expect(submit.closest('form')).toBeNull()
     await user.click(submit)
-    expect(onSubmit).toHaveBeenCalledExactlyOnceWith({ title: 'Nueva tarea', description: 'Detalles', status: 'backlog', priority: 'normal', files: [] })
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith({ title: 'Nueva tarea', description: 'Detalles', status: 'backlog', priority: 'normal', files: [], assigneeIds: [] })
     rerender(<CreateTaskModal {...base} errorMessage="No se pudo crear" />)
     expect(screen.getByRole('alert')).toHaveTextContent('No se pudo crear')
     expect(screen.getByLabelText(/título/i)).toHaveValue('  Nueva tarea  ')
@@ -151,7 +170,7 @@ describe('Crear tarea: diálogo', () => {
     await user.click(screen.getByRole('button', { name: 'Crear Tarea' }))
 
     expect(onSubmit).toHaveBeenCalledExactlyOnceWith({
-      title: 'Con archivos', description: undefined, status: 'backlog', priority: 'normal', files: [second],
+      title: 'Con archivos', description: undefined, status: 'backlog', priority: 'normal', files: [second], assigneeIds: [],
     })
   })
 

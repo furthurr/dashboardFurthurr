@@ -4,7 +4,7 @@ Estado: `borrador`
 
 ## Autenticación
 
-- El usuario puede registrarse con correo y password.
+- Un administrador activo puede dar de alta usuarios con correo y contraseña desde «Usuarios», sin confirmación por correo.
 - El usuario puede iniciar sesión.
 - El usuario puede cerrar sesión.
 - El sistema mantiene sesión persistente.
@@ -16,6 +16,7 @@ Estado: `borrador`
 - Admin puede gestionar tareas, comentarios y usuarios.
 - Usuario puede gestionar tareas y comentarios según permisos definidos.
 - Invitado puede visualizar, pero no crear ni editar comentarios.
+- Administración de usuarios: listado, alta como `usuario`, edición del nombre completo, cambio de contraseña y activación/desactivación. Un administrador no puede desactivarse a sí mismo.
 
 ## Tareas
 
@@ -24,6 +25,7 @@ Estado: `borrador`
 - Cada tarea tiene estado.
 - Cada tarea tiene prioridad.
 - Cada tarea puede asignarse a una o varias personas.
+- Al crearla se pueden elegir cero, uno o varios usuarios activos mediante un desplegable por nombre/correo, con opción «Todos» y sin mostrar los ya asignados. Al abrir el detalle se precargan los responsables y se pueden añadir o desasignar con un guardado independiente, disponible para cualquier cuenta activa, incluidos invitados.
 - Cada tarea puede tener anotaciones especiales.
 - Cada tarea puede tener adjuntos de máximo 5 MB.
 

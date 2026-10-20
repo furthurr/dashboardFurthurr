@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => {
   return {
     tasks: vi.fn(), refetch: vi.fn(), update: mutation(), status: mutation(), positions: mutation(),
     create: mutation(), remove: mutation(), comment: mutation(), deleteComment: mutation(),
-    upload: mutation(), deleteAttachment: mutation(), taskImages: vi.fn(),
+    upload: mutation(), deleteAttachment: mutation(), taskImages: vi.fn(), assign: mutation(), users: vi.fn(), role: 'admin',
   }
 })
 
@@ -18,7 +18,9 @@ vi.mock('./api', () => ({
   useTasks: mocks.tasks, useUpdateTask: () => mocks.update,
   useUpdateTaskStatus: () => mocks.status, useUpdateTaskPositions: () => mocks.positions,
   useCreateTask: () => mocks.create, useDeleteTask: () => mocks.remove,
+  useSetTaskAssignees: () => mocks.assign,
 }))
+vi.mock('./assigneesApi', () => ({ useAssignableUsers: mocks.users }))
 vi.mock('./commentsApi', () => ({
   useComments: () => ({ data: [], isLoading: false, error: null }),
   useCreateComment: () => mocks.comment, useDeleteComment: () => mocks.deleteComment,
@@ -29,7 +31,7 @@ vi.mock('./attachmentsApi', () => ({
   useUploadAttachment: () => mocks.upload, useDeleteAttachment: () => mocks.deleteAttachment,
 }))
 vi.mock('@/features/auth/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1', email: 'equipo@example.test' }, profile: { role: 'admin' }, signOut: vi.fn() }),
+  useAuth: () => ({ user: { id: 'user-1', email: 'equipo@example.test' }, profile: { role: mocks.role }, signOut: vi.fn() }),
 }))
 
 const task: TaskWithAssignees = {
@@ -38,16 +40,154 @@ const task: TaskWithAssignees = {
   created_at: '2026-10-16', updated_at: '2026-10-16', assignees: [],
 }
 const renderBoard = () => render(<MemoryRouter><BoardPage /></MemoryRouter>)
+const ana = { id: 'ana', full_name: 'Ana', email: 'ana@example.test', avatar_url: null, role: 'usuario' as const, is_active: true }
+const bruno = { ...ana, id: 'bruno', full_name: 'Bruno', email: 'bruno@example.test' }
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.update.mutateAsync.mockResolvedValue(undefined)
+  mocks.assign.mutateAsync.mockResolvedValue([])
+  mocks.users.mockReturnValue({ data: [], isLoading: false, error: null, refetch: vi.fn() })
+  mocks.role = 'admin'
   mocks.status.mutateAsync.mockResolvedValue(undefined)
   mocks.tasks.mockReturnValue({ data: [task], isLoading: false, error: null, refetch: mocks.refetch })
   mocks.taskImages.mockReturnValue({ data: {} })
 })
 
 describe('Integración del tablero', () => {
+  it('filtra por cualquiera de las personas, sin duplicados, y recupera Todos al quitar la última', async () => {
+    const user = userEvent.setup()
+    mocks.users.mockReturnValue({ data: [ana, bruno], isLoading: false, error: null })
+    mocks.tasks.mockReturnValue({ data: [task,
+      { ...task, id: 'a', title: 'Solo Ana', assignees: [ana] },
+      { ...task, id: 'b', title: 'Solo Bruno', assignees: [bruno] },
+      { ...task, id: 'both', title: 'Compartida', assignees: [ana, bruno] },
+    ], isLoading: false })
+    renderBoard()
+    await user.click(screen.getByText('Filtrar usuarios: Todos'))
+    const filter = within(screen.getByRole('group', { name: 'Filtrar tareas por usuarios asignados' }))
+    expect(filter.getByRole('checkbox', { name: 'Todos' })).toBeChecked()
+    expect(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` })).toBeVisible()
+    await user.click(filter.getByRole('checkbox', { name: /Ana/ }))
+    expect(filter.getByRole('checkbox', { name: 'Todos' })).not.toBeChecked()
+    expect(screen.queryByRole('button', { name: `Abrir tarea: ${task.title}` })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Abrir tarea: Solo Bruno' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Abrir tarea: Solo Ana' })).toBeVisible()
+    expect(within(screen.getByLabelText('Resumen de tareas')).getByText('Total').parentElement).toHaveTextContent('Total2')
+    await user.click(filter.getByRole('checkbox', { name: /Bruno/ }))
+    expect(screen.getAllByRole('button', { name: 'Abrir tarea: Compartida' })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Abrir tarea: Solo Bruno' })).toBeVisible()
+    await user.click(filter.getByRole('checkbox', { name: /Ana/ }))
+    await user.click(filter.getByRole('checkbox', { name: /Bruno/ }))
+    expect(filter.getByRole('checkbox', { name: 'Todos' })).toBeChecked()
+    expect(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` })).toBeVisible()
+    await user.click(filter.getByRole('checkbox', { name: /Ana/ }))
+    await user.click(filter.getByRole('checkbox', { name: 'Todos' }))
+    expect(filter.getByRole('checkbox', { name: /Ana/ })).not.toBeChecked()
+  })
+
+  it('precarga el filtro al crear, conserva cambios ante error y restablece las asignaciones al reabrir', async () => {
+    const user = userEvent.setup()
+    mocks.users.mockReturnValue({ data: [ana, bruno], isLoading: false, error: null })
+    mocks.create.mutateAsync.mockRejectedValueOnce(new Error('fallo'))
+    renderBoard()
+    await user.click(screen.getByText('Filtrar usuarios: Todos'))
+    const filter = within(screen.getByRole('group', { name: 'Filtrar tareas por usuarios asignados' }))
+    await user.click(filter.getByRole('checkbox', { name: /Ana/ }))
+    expect(screen.getByText('No hay tareas asignadas a los usuarios seleccionados.')).toBeVisible()
+    await user.click(filter.getByRole('checkbox', { name: /Bruno/ }))
+    await user.click(screen.getByText('Filtrar usuarios: 2 seleccionados'))
+    await user.click(screen.getByRole('button', { name: /nueva tarea/i }))
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByRole('button', { name: 'Desasignar a Ana' })).toBeInTheDocument()
+    expect(dialog.getByRole('button', { name: 'Desasignar a Bruno' })).toBeInTheDocument()
+    await user.click(dialog.getByRole('button', { name: 'Desasignar a Bruno' }))
+    await user.type(dialog.getByLabelText(/título/i), 'Con filtro')
+    await user.click(dialog.getByRole('button', { name: 'Crear Tarea' }))
+    expect(mocks.create.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ assigneeIds: ['ana'] }))
+    expect(await dialog.findByRole('alert')).toHaveTextContent('No se pudo crear')
+    expect(dialog.getByRole('option', { name: /Bruno/ })).toBeInTheDocument()
+    await user.click(dialog.getByRole('button', { name: 'Cancelar' }))
+    await user.click(screen.getByRole('button', { name: /nueva tarea/i }))
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Desasignar a Bruno' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+    await user.click(screen.getByText('Filtrar usuarios: 2 seleccionados'))
+    await user.click(filter.getByRole('checkbox', { name: 'Todos' }))
+    await user.click(screen.getByRole('button', { name: /nueva tarea/i }))
+    expect(within(screen.getByRole('dialog')).getByRole('option', { name: /Ana/ })).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog')).getByRole('option', { name: /Bruno/ })).toBeInTheDocument()
+  })
+
+  it('calcula movimientos con las tareas ocultas y las conserva durante la actualización optimista', async () => {
+    const user = userEvent.setup()
+    let resolve!: () => void
+    mocks.status.mutateAsync.mockReturnValueOnce(new Promise<void>((done) => { resolve = done }))
+    mocks.users.mockReturnValue({ data: [ana], isLoading: false, error: null })
+    mocks.tasks.mockReturnValue({ data: [
+      { ...task, assignees: [ana] },
+      { ...task, id: 'hidden', title: 'Oculta', status: 'por_hacer', position: 8 },
+    ], isLoading: false })
+    renderBoard()
+    await user.click(screen.getByText('Filtrar usuarios: Todos'))
+    await user.click(screen.getByRole('checkbox', { name: /Ana/ }))
+    await user.click(screen.getByRole('button', { name: 'Mover a la lista siguiente' }))
+    expect(mocks.status.mutateAsync).toHaveBeenCalledWith({ taskId: task.id, status: 'por_hacer', position: 9 })
+    await user.click(screen.getByRole('checkbox', { name: 'Todos' }))
+    expect(screen.getByRole('button', { name: 'Abrir tarea: Oculta' })).toBeVisible()
+    await act(async () => resolve())
+  })
+
+  it('reordena las tareas visibles incluyendo las posiciones de las ocultas', async () => {
+    const user = userEvent.setup()
+    mocks.users.mockReturnValue({ data: [ana], isLoading: false, error: null })
+    mocks.tasks.mockReturnValue({ data: [
+      { ...task, assignees: [ana] },
+      { ...task, id: 'hidden', title: 'Oculta', position: 1 },
+      { ...task, id: 'last', title: 'Última', position: 2, assignees: [ana] },
+    ], isLoading: false })
+    renderBoard()
+    await user.click(screen.getByText('Filtrar usuarios: Todos'))
+    await user.click(screen.getByRole('checkbox', { name: /Ana/ }))
+    const firstCard = screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }).closest<HTMLDivElement>('.ui-list-card')!
+    await user.click(within(firstCard).getByRole('button', { name: /bajar/i }))
+    expect(mocks.positions.mutateAsync).toHaveBeenCalledWith([
+      { taskId: 'hidden', position: 0 }, { taskId: 'last', position: 1 }, { taskId: task.id, position: 2 },
+    ])
+  })
+
+  it('permite recuperar la lista de usuarios si falla sin restringir el tablero', async () => {
+    const user = userEvent.setup()
+    const retry = vi.fn()
+    mocks.users.mockReturnValue({ data: [], isLoading: false, error: new Error('fallo'), refetch: retry })
+    renderBoard()
+    await user.click(screen.getByText('Filtrar usuarios: Todos'))
+    const filter = within(screen.getByRole('group', { name: 'Filtrar tareas por usuarios asignados' }))
+    expect(filter.getByRole('checkbox', { name: 'Todos' })).toBeChecked()
+    expect(filter.getByRole('alert')).toHaveTextContent('No se pudieron cargar los usuarios del filtro.')
+    await user.click(filter.getByRole('button', { name: 'Reintentar' }))
+    expect(retry).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` })).toBeVisible()
+  })
+
+  it.each(['usuario', 'invitado'])('permite al rol %s asignar en tareas ajenas sin editar sus campos', async (role) => {
+    const user = userEvent.setup()
+    mocks.role = role
+    const person = { id: 'person', full_name: 'Persona asignada', email: 'person@example.test', avatar_url: null, role: 'usuario' as const, is_active: true }
+    mocks.users.mockReturnValue({ data: [person], isLoading: false, error: null, refetch: vi.fn() })
+    mocks.tasks.mockReturnValue({ data: [{ ...task, created_by: 'someone-else' }], isLoading: false, error: null, refetch: mocks.refetch })
+    mocks.assign.mutateAsync.mockResolvedValueOnce([person])
+    renderBoard()
+    await user.click(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }))
+    expect(screen.getByLabelText('Título')).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Eliminar tarea' })).not.toBeInTheDocument()
+    await user.selectOptions(within(screen.getByRole('dialog')).getByLabelText('Asignar usuario'), 'person')
+    await user.click(screen.getByRole('button', { name: 'Guardar asignaciones' }))
+    expect(mocks.assign.mutateAsync).toHaveBeenCalledExactlyOnceWith({ taskId: task.id, assigneeIds: ['person'] })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar asignaciones' })).toBeDisabled())
+    expect(mocks.update.mutateAsync).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog')).toBeVisible()
+  })
   it('no persiste un movimiento al soltar la tarjeta sobre sí misma', async () => {
     const user = userEvent.setup()
     renderBoard()
@@ -85,7 +225,7 @@ describe('Integración del tablero', () => {
     await user.click(screen.getByRole('button', { name: 'Crear Tarea' }))
 
     expect(mocks.create.mutateAsync).toHaveBeenCalledExactlyOnceWith({
-      title: 'Tarea con archivos', description: undefined, status: 'backlog', priority: 'normal', createdBy: 'user-1',
+      title: 'Tarea con archivos', description: undefined, status: 'backlog', priority: 'normal', createdBy: 'user-1', assigneeIds: [],
     })
     expect(mocks.upload.mutateAsync).not.toHaveBeenCalled()
 

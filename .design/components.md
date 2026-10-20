@@ -2,9 +2,41 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
+## Estado actual — cuentas y responsables, 2026-10-20
+
+Esta sección prevalece sobre el historial inferior para las áreas modificadas. Describe el árbol de trabajo sin commit; no altera tokens ni convierte las revisiones históricas en baseline Git. El antiguo `RegisterPage` fue eliminado y las referencias inferiores a él son **históricas**, no rutas/archivos actuales.
+
+| Componente/patrón | Propósito, variantes y estados | Fuente |
+| --- | --- | --- |
+| Cabecera / rutas | `/users` protegido por perfil activo + rol admin; `/register` redirige allí. Al cierre se detectó el cambio concurrente de cabecera a `AccountMenu`, con «Usuarios» dentro para admin. La nueva ruta `/profile` y el menú no tienen inventario/validación completo en esta revisión | `src/App.tsx:24-39`, `src/features/auth/ProtectedRoute.tsx:21-32`, `src/shared/ui/AccountMenu.tsx:20-35` |
+| `UsersPage` | Cabecera adaptable, enlace al tablero y alta; lista paginada de nombre/correo/rol/estado, marca «(tú)», acciones «Editar nombre», «Cambiar contraseña», «Activar/Desactivar». Carga, vacío, error/reintento y anterior/siguiente; desactivación propia deshabilitada con explicación | `src/features/users/UsersPage.tsx:18-65` |
+| `UserEditor` local | Reutiliza `Dialog`. Variantes create/rename/password/set-active; rename precarga nombre, no pide correo ni contraseña; activación muestra confirmación. Nombre 1–120, contraseña 8–128; envío bloquea campos/cierres y doble submit; error conserva borrador; éxito cierra y refresca lista | `src/features/users/UsersPage.tsx:70-132` |
+| Confirmaciones de usuarios | Región `role=status` en la página para cuenta/nombre/contraseña/estado; error `role=alert` en listado o diálogo. No se describe como toast temporizado: esta página mantiene aviso inline | `src/features/users/UsersPage.tsx:29-31`, `:57-64`, `:109-125` |
+| Acceso no disponible | Panel con alerta por cuenta inactiva o perfil no verificable y acción de cerrar sesión; no muestra el tablero protegido | `src/features/auth/ProtectedRoute.tsx:25-30` |
+| `AssigneePicker` compartido | Fieldset con leyenda «Usuarios asignados»; seleccionados en lista nombrada con «Quitar»/nombre accesible «Desasignar a …». Busca por nombre/correo sin distinguir mayúsculas. Grupo de casillas nativas con nombre y correo; lista con altura máxima y scroll; carga, error/reintento, vacío y sin coincidencias diferenciados | `src/features/board/AssigneePicker.tsx:17-52` |
+| Responsables inactivos | Asignación previa se muestra con «(inactivo)» y permite retirarla; no aparece como nueva opción. Sin selección muestra «Sin usuarios asignados» | `src/features/board/AssigneePicker.tsx:21-48` |
+| Creación con responsables | Selector mantiene IDs en el borrador y los envía con el resto de datos; usa el mismo estado de bloqueo de creación/adjuntos. Un fallo de creación conserva selección y archivos | `src/features/board/CreateTaskModal.tsx`, `src/features/board/CreateTaskModal.test.tsx` |
+| Detalle / guardado independiente | Precarga IDs y conserva borradores de campos/responsables por separado. «Guardar asignaciones» no cierra el detalle ni guarda título/estado. Cambios pendientes avisan y deshabilitan «Guardar cambios» para evitar descartarlos. Durante una operación bloquea selección/cierre/doble envío; ante error conserva selección; éxito muestra toast | `src/features/board/TaskDetailModal.tsx:54-97`, `:167-176` |
+| Permisos visuales en detalle | Usuario/invitado sobre tarea ajena puede guardar responsables aunque no reciba `onSave`/`onDelete` de campos. Sus campos quedan deshabilitados; los permisos efectivos siguen en SQL | `src/features/board/BoardPage.tsx`, `src/features/board/TaskDetailModal.tsx:149-176` |
+
+### Verificación de esta entrega y límites
+
+Evidencia de implementación previa en esta sesión, **no nuevos comandos ejecutados durante la sincronización documental**:
+
+- 79 pruebas Vitest, build y lint correctos; el bundle principal sigue avisando de tamaño superior a 500 kB.
+- `UsersPage.test.tsx`: edición de nombre precargada, rechazo de espacios, conservación/reintento/cancelación, alta, contraseña, estado, listado y protección de ruta.
+- `AssigneePicker.test.tsx`: búsqueda nombre/correo, multiselección, retirada completa, inactivos, carga/error/reintento y vacío.
+- `CreateTaskModal.test.tsx`: envío múltiple, retención ante fallo y bloqueo durante envío. `TaskDetailModal.test.tsx`: guardado independiente sin editar campos, fallos conservando borrador y bloqueo de doble envío/cierre.
+- `BoardPage.test.tsx`: usuario e invitado en tarea ajena no guardan otros campos ni eliminan tarea, pero sí gestionan responsables. La tarjeta reutiliza sus iniciales/avatares existentes (`src/features/board/TaskCard.tsx:96-115`).
+- Chromium a 360/768/1440 px con backend simulado: selección múltiple en creación/detalle, guardado independiente, retirada por invitado, sin errores de página ni desbordamiento del documento/diálogo; capturas temporales revisadas, no versionadas.
+
+Las pruebas DOM y visuales simuladas no certifican todo el flujo de administración en navegador, funcionamiento E2E con usuarios reales, contraste completo WCAG, otros navegadores ni lector de pantalla. Las pruebas SQL/Edge se describen en [datos](../.data/README.md), no son evidencia visual.
+
+Los resultados anteriores preceden a los cambios concurrentes de perfil/menú: no se reutilizan como validación de esos archivos ni de la nueva combinación completa del árbol de trabajo.
+
 ## Actualización — notificaciones temporales, 2026-10-16
 
-Revisión focalizada de los cambios locales sobre `dfbf1be`; complementa el inventario del rediseño sin declarar una sincronización completa de sus referencias históricas.
+Revisión histórica de los cambios locales sobre `dfbf1be`; sus referencias de línea y resultados se conservan como evidencia de esa entrega, no del estado actual completo.
 
 | Componente/patrón | Presentación, variantes y estados observados | Fuente |
 | --- | --- | --- |
@@ -55,7 +87,7 @@ Revisión estática histórica del árbol de trabajo sin commit. Tokens y clases
 
 ## Pruebas disponibles y límites
 
-Runner disponible `npm run test -- --run` (`package.json:6-11`), entorno jsdom (`vitest.config.ts:5-8`). La suite se ejecutó el 2026-10-19; las referencias siguientes son representativas, no una cobertura completa de la UI:
+Runner disponible `npm run test -- --run` (`package.json:6-11`), entorno jsdom (`vitest.config.ts:5-8`). La tabla siguiente es el registro histórico del 2026-10-19, no una cobertura actual completa; las líneas pueden haber cambiado al añadir pruebas:
 
 | Archivo | Test disponible | Evidencia que cubre |
 | --- | --- | --- |

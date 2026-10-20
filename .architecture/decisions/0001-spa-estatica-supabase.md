@@ -11,6 +11,10 @@ El producto se publica como SPA estática en GitHub Pages y las instrucciones de
 
 Mantener una SPA React/Vite estática en GitHub Pages y usar Supabase como servicio gestionado para Auth, PostgreSQL y Storage. El frontend usa `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`; las políticas RLS en Supabase son la frontera de autorización de datos.
 
+### Extensión observada — 2026-10-20
+
+La SPA permanece estática, pero el repositorio ahora incluye código backend desplegable en Supabase: `admin-users` para operaciones administrativas y funciones Postgres para creación/asignación transaccional de tareas. «Sin servidor propio» no debe interpretarse como «sin código servidor». La autorización combina RLS/grants con comprobaciones explícitas en estas funciones; nunca se coloca la clave privilegiada en el navegador (`supabase/functions/admin-users/index.ts:20-28`, `supabase/migrations/202610200001_task_assignments.sql:7-76`). Esta nota describe implementación local sin commit, no una fecha de adopción histórica ni un nuevo baseline.
+
 ## Alternativas consideradas
 
 - Servidor propio o SSR: no adoptado; requeriría infraestructura de servidor que no forma parte del despliegue estático configurado.
@@ -19,6 +23,7 @@ Mantener una SPA React/Vite estática en GitHub Pages y usar Supabase como servi
 
 - Positivas: despliegue estático compatible con GitHub Pages y backend gestionado sin mantener un servidor propio.
 - Negativas / trade-offs: las operaciones cliente dependen de Supabase y la corrección de permisos requiere políticas RLS; las variables de entorno deben estar disponibles durante el build.
+- Las migraciones, la función Edge y la configuración de Auth requieren despliegue separado de GitHub Pages; ver [`supabase/README.md`](../../supabase/README.md). No se requiere un servidor independiente ni se adopta SSR.
 
 ## Evidencia
 

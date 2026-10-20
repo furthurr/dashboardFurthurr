@@ -4,20 +4,22 @@ Documentación canónica de datos y contratos consumidos por la aplicación. Lé
 
 ## Estado de sincronización
 
-- Tecnología detectada: cliente TypeScript `@supabase/supabase-js` con Supabase Auth, PostgREST, PostgreSQL y Storage.
+- Tecnología detectada: cliente TypeScript `@supabase/supabase-js`, Auth/PostgREST/PostgreSQL/Storage, Edge Function `admin-users` y RPCs de tareas/asignaciones.
 - Modo: `full`.
 - ¿BD interna?: No. La persistencia es PostgreSQL gestionado externamente por Supabase; el schema de referencia está en `supabase-schema.sql`.
 - Commit base revisado: `81335b92bc1962a47c9c3bb963271c3667bc7b63` (2026-05-04), no representa cambios locales posteriores.
-- Última actualización documental: 2026-10-16.
-- Estado: **pendiente de baseline Git**. Se observaron modificaciones locales en `AGENTS.md`, `specs/06-ui-ux-diseno.md` y `src/features/board/TaskDetailModal.tsx`; la documentación refleja evidencia del árbol de trabajo y aún no está integrada en `HEAD`.
+- Última actualización documental: 2026-10-20, sincronización focalizada de cuentas y responsables de tareas.
+- HEAD observado: `1d3069d904bc9e1dc6a7363d3967ad4c2709dace`, **no** commit de sincronización. Estado: **pendiente de baseline Git**; se describe el árbol local con cambios de producto y archivos `supabase/` sin commit, conservando la referencia histórica anterior.
+- Aparecieron cambios concurrentes de perfil/menú durante la revisión. Su contrato de autoedición y verificaciones quedan fuera de este alcance, centrado en administración y asignaciones; no se declara sincronizado todo el producto.
 
 ## Contexto para IA
 
-- **Qué consume:** la SPA usa el SDK de Supabase para autenticación, consultas y mutaciones de tablas Postgres y operaciones de Storage. No hay OpenAPI ni una capa HTTP propia en el repositorio; el catálogo describe operaciones lógicas observadas en el cliente.
-- **Auth:** `AuthProvider` recupera la sesión del SDK, escucha cambios y consulta el perfil. La autorización efectiva de tablas y objetos se aplica en las políticas declaradas por `supabase-schema.sql`; no inferir el formato de almacenamiento del token desde este repo.
-- **Modelos clave:** `Profile`, `Task`, `TaskAssignee`, `Comment`, `TaskAttachment` y las variantes con relaciones están en `src/types/index.ts`.
+- **Qué consume:** SDK para Auth/tablas/Storage, `functions.invoke('admin-users')` para administración y `rpc` para crear tarea con responsables o reemplazarlos. No se encontró OpenAPI; [el catálogo](01-endpoints.md) documenta los contratos observados.
+- **Auth:** `AuthProvider` verifica el perfil activo, lo refresca cada 30 s/al recuperar foco y limpia la caché ante cambio de identidad o pérdida de acceso. RLS/grants y verificaciones explícitas en Edge/RPC autorizan las operaciones; `is_active` no es revocación criptográfica de JWT (`src/features/auth/AuthContext.tsx:27-98`).
+- **Modelos clave:** `Profile.is_active`, `AssigneeProfile`, `TaskWithAssignees.assignees`, `ManagedUser` y acciones discriminadas de administración. El nombre editado se guarda en `profiles.full_name`, no sincroniza metadata de Auth (`src/types/index.ts:7-38`, `src/features/users/api.ts:4-9`).
 - **Fuentes de datos:** Supabase Auth, PostgreSQL administrado, Storage y caché de TanStack Query. No se encontró una base de datos local.
-- **Convenciones:** queries/mutaciones de TanStack Query; `staleTime` de cinco minutos y un reintento por defecto de query. Los errores del SDK se lanzan y, en general, no se convierten a un DTO común. No se observó paginación ni timeout explícitos.
+- **Convenciones:** TanStack Query, cinco minutos/un reintento por defecto; administración y usuarios asignables usan `staleTime: 0`. Listado administrativo de 50 por página y consulta de cuentas activas en lotes de 500. No hay timeout explícito ni contrato global de error; la Edge Function sí devuelve `{ error: string }`.
+- **Integridad y permisos:** creación atómica de tarea + responsables para admin/usuario activos; sustitución completa de responsables para cualquier cuenta activa, incluidos invitados. No hay escritura cliente directa a `task_assignees` ni ampliación de permisos sobre otros campos (`supabase/migrations/202610200001_task_assignments.sql:5-76`).
 - **Campos sensibles/PII:** perfiles incluyen email, nombre y avatar; tareas, comentarios y adjuntos contienen contenido aportado por usuarios e identificadores. No se documentan valores reales.
 - **Límite de esta documentación:** registra el contrato observado, no certifica la configuración desplegada de Supabase ni sustituye una auditoría de seguridad.
 
@@ -34,16 +36,20 @@ Documentación canónica de datos y contratos consumidos por la aplicación. Lé
 
 ## Fuentes de verdad
 
-- `supabase-schema.sql`: enums, tablas, relaciones, triggers, RLS, buckets, vistas y grants.
+- `supabase-schema.sql`: bootstrap de referencia; `supabase/migrations/`: cambios incrementales para instalaciones existentes. `supabase/README.md`: orden y operación; no reejecutar el bootstrap sobre una BD existente.
 - `src/types/index.ts`: tipos TypeScript usados por la app.
 - `src/lib/supabase.ts`: inicialización y nombres de variables necesarias.
-- `src/features/auth/` y `src/features/board/`: operaciones realmente consumidas.
+- `src/features/auth/`, `src/features/users/` y `src/features/board/`: operaciones cliente; `supabase/functions/admin-users/`: validación y acciones servidor.
 - `specs/04-modelo-datos.md` y `specs/05-auth-roles-permisos.md`: intención de producto y matriz prevista; contrastar con el SQL al cambiar el contrato.
 
 ## Discrepancias que deben conservarse visibles
 
 - El bucket `task-attachments` está declarado privado, mientras el cliente forma una URL pública con `getPublicUrl`; ver [deuda técnica](data-tech-debt.md).
 - Las claves foráneas de autor/cargador de comentarios y adjuntos combinan `ON DELETE SET NULL` con columnas `NOT NULL`; ver [deuda técnica](data-tech-debt.md).
-- Algunos tipos de relación se declaran como modelos completos pese a que las queries solo seleccionan una proyección parcial; ver [mapeo](03-mapping.md) y [deuda técnica](data-tech-debt.md).
+- Los responsables ahora usan una proyección explícita `AssigneeProfile`; la relación de autor de comentarios sigue tipada como `Profile` completo. D-03 queda parcialmente resuelta; ver [mapeo](03-mapping.md) y [deuda técnica](data-tech-debt.md).
 
 Estas observaciones son documentales; no se cambió el código ni el schema.
+
+## Evidencia y límites
+
+Se reutiliza evidencia previa de implementación en esta sesión: 79 pruebas Vitest, 9 Deno, build/lint correctos, pruebas SQL con `ROLLBACK` y comprobación HTTP de denegación anónima de RPC. Las migraciones y la Edge Function se registraron como desplegadas antes de esta sincronización. No se volvió a ejecutar SQL, migraciones ni configuración remota durante la operación documental; no es una auditoría de seguridad ni certificación continua del entorno.

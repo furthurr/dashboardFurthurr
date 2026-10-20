@@ -7,12 +7,24 @@ La aplicación valida que las variables de Supabase existan al inicializar el cl
 | `VITE_SUPABASE_URL` | URL del proyecto Supabase | Configurar en entorno local como `https://<project-ref>.supabase.co` | GitHub Actions la pasa al build desde el secreto homónimo (`.github/workflows/deploy.yml:33-37`) |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Clave publishable del cliente | Configurar en entorno local como `<publishable-key>` | GitHub Actions la pasa al build desde el secreto homónimo (`.github/workflows/deploy.yml:33-37`) |
 
+Solo servidor Edge, nunca en el build Vite:
+
+| Variable | Uso | Configuración |
+| --- | --- | --- |
+| `SUPABASE_URL` | Proyecto que usa `admin-users` | Entorno de funciones Supabase; `<project-url>` |
+| `SUPABASE_SERVICE_ROLE_KEY` | API administrativa/Auth y perfiles | Secreto del entorno servidor; `<server-secret>`, nunca `VITE_*` |
+
+Fuente: `supabase/functions/admin-users/index.ts:20-23`. Los placeholders no representan valores desplegados.
+
 ## Build/deploy observado
 
 - Instalación reproducible por `npm ci` y build mediante `npm run build` (`.github/workflows/deploy.yml:24-37`).
 - El build sube `dist` como artefacto de GitHub Pages (`.github/workflows/deploy.yml:39-53`).
 - El prefijo de hosting está fijado en `vite.config.ts:6-13`.
 - El repositorio no permite verificar si los secretos están configurados en GitHub ni qué proyecto Supabase corresponde a cada entorno.
+- El build de Pages no despliega Edge Functions, migraciones ni ajustes de Auth. Las instalaciones existentes aplican `202610190001_user_administration.sql` y `202610200001_task_assignments.sql` en orden; no se reejecuta el bootstrap completo (`supabase/README.md`).
+- `supabase/config.toml` declara `auth.enable_signup = false` y `functions.admin-users.verify_jwt = false`; el segundo ajuste requiere la validación explícita implementada dentro de la función. Se conserva la confirmación global de correo: el alta administrativa confirma cada cuenta con `email_confirm: true`.
+- Evidencia previa de esta sesión registra migraciones aplicadas y función desplegada; esta sincronización documental no accedió de nuevo al servicio ni acredita publicación de la nueva SPA en Pages.
 
 ## Higiene
 

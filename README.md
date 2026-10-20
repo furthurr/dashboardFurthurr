@@ -1,6 +1,6 @@
 # Dashboard Furthurr
 
-Dashboard web para organizar tareas en un tablero Kanban. Incluye autenticación con Supabase, columnas por estado, prioridades, visualización de asignaciones, comentarios y adjuntos. La aplicación es una SPA estática; no hay un servidor propio en este repositorio.
+Dashboard web para organizar tareas en un tablero Kanban. Incluye autenticación con Supabase, columnas por estado, prioridades, visualización de asignaciones, comentarios y adjuntos. La aplicación es una SPA estática; las operaciones administrativas de usuarios se ejecutan en una Edge Function de Supabase.
 
 ## Stack
 
@@ -44,14 +44,20 @@ En GitHub Actions se proporcionan mediante secretos con esos nombres. No uses `V
 
 El schema de referencia, incluidas tablas, RLS, Storage y vistas, está en [`supabase-schema.sql`](supabase-schema.sql). Según las instrucciones del proyecto, los cambios al schema se realizan allí y se aplican desde Supabase SQL Editor. Contrasta permisos con [`specs/05-auth-roles-permisos.md`](specs/05-auth-roles-permisos.md).
 
+**Administración de usuarios:** antes de publicar esta versión, aplica la migración de estado/permisos, despliega `admin-users` y deshabilita el registro público de Auth siguiendo [`supabase/README.md`](supabase/README.md). El build de GitHub Pages no despliega funciones ni SQL. Las altas administrativas quedan confirmadas y activas sin enviar un enlace por correo.
+
+**Responsables de tareas:** creación y detalle permiten asignar/desasignar varias personas mediante un desplegable por nombre/correo. Los ya asignados desaparecen de las opciones y «Todos» añade a todos los usuarios activos disponibles. Requiere también la migración `202610200001_task_assignments.sql` de la misma guía. Cualquier cuenta activa, incluidos invitados, puede guardar asignaciones en tareas ajenas sin obtener permiso para editar otros campos. La tarea y sus responsables iniciales se crean en una sola transacción. El tablero permite filtrar por personas y precarga esas personas al crear una tarea; con el filtro «Todos» se inicia sin asignados.
+
 ## Rutas y GitHub Pages
 
 La app usa `HashRouter` porque GitHub Pages no reescribe rutas SPA. La ruta raíz redirige al tablero. Rutas implementadas:
 
 - `/dashboardFurthurr/#/login`
-- `/dashboardFurthurr/#/register`
+- `/dashboardFurthurr/#/users` (requiere administrador activo)
+- `/dashboardFurthurr/#/profile` (perfil propio, requiere cuenta activa)
+- `/dashboardFurthurr/#/register` (compatibilidad: redirige a `/users`)
 - `/dashboardFurthurr/#/auth/callback`
-- `/dashboardFurthurr/#/board` (requiere sesión)
+- `/dashboardFurthurr/#/board` (requiere sesión y cuenta activa)
 
 Vite publica bajo `/dashboardFurthurr/`; conserva el prefijo `base` de `vite.config.ts` y el router hash alineados.
 
@@ -63,13 +69,15 @@ El workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) despl
 src/
   App.tsx                    Providers y rutas
   main.tsx                   Entrada React
-  features/auth/             Login, registro, sesión y ruta protegida
+  features/auth/             Login, sesión y rutas protegidas
+  features/users/            Administración de usuarios
   features/board/            Tablero, tareas, comentarios y adjuntos
   lib/supabase.ts             Cliente Supabase
   types/index.ts             Tipos compartidos
   index.css                  Estilos globales y tokens visuales
 specs/                       Especificaciones de producto (fuente de verdad SDD)
 supabase-schema.sql          Schema SQL de referencia
+supabase/                    Edge Function, migración y guía de despliegue
 ```
 
 Antes de implementar funcionalidad, actualiza o crea la especificación correspondiente en `specs/`. El progreso se sigue contra esas especificaciones.

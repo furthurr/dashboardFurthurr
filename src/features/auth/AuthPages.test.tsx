@@ -3,14 +3,12 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { LoginPage } from './LoginPage'
-import { RegisterPage } from './RegisterPage'
 
-const auth = vi.hoisted(() => ({ signInWithPassword: vi.fn(), signUp: vi.fn() }))
+const auth = vi.hoisted(() => ({ signInWithPassword: vi.fn() }))
 vi.mock('@/lib/supabase', () => ({ supabase: { auth } }))
 
 describe.each([
   { name: 'acceso', Component: LoginPage, action: 'Iniciar sesión', pending: 'Iniciando sesión…', method: 'signInWithPassword' as const },
-  { name: 'registro', Component: RegisterPage, action: 'Crear cuenta', pending: 'Creando cuenta…', method: 'signUp' as const },
 ])('Accesibilidad de $name', ({ Component, action, pending, method }) => {
   it('separa el anuncio de estado del contenido del botón para conservar su nombre', () => {
     render(<MemoryRouter><Component /></MemoryRouter>)

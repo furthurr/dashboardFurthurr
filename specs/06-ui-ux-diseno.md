@@ -32,10 +32,22 @@ Objetivo visual:
 ## Layout Principal
 
 - Barra superior con nombre del proyecto, usuario actual y acciones.
+- Creación y detalle incluyen «Usuarios asignados»: desplegable con nombre/correo y lista de seleccionados con acción de desasignar. Los ya asignados desaparecen de las opciones y vuelven al retirarlos. «Todos» agrega a todos los usuarios activos disponibles, sin duplicar ni quitar asignaciones existentes; no se ofrece cuando no quedan candidatos. Incluye carga, error/reintento y vacío; mantiene el borrador ante fallos. En el detalle hay «Guardar asignaciones» independiente y aviso de cambios pendientes para evitar descartarlos al guardar otros campos.
+- En la cabecera, las acciones de cuenta se agrupan en un botón que abre un panel lateral. Administradores: «Usuarios», «Perfil» y «Cerrar sesión»; usuarios e invitados: «Perfil» y «Cerrar sesión». Sustituye al acceso directo «Alta de Usuario».
+- El perfil propio permite actualizar el nombre completo y la contraseña. El nombre se guarda en `profiles.full_name`; la contraseña se actualiza en Supabase Auth y nunca se almacena en tablas públicas.
+- Administración de usuarios: listado paginado con nombre, correo, rol y estado, alta como usuario activo y confirmado, edición del nombre completo precargado, cambio de contraseña y confirmación de activación/desactivación. No permite desactivarse a sí mismo. Incluye estados de carga, vacío, error/reintento y envío bloqueado para evitar duplicados.
 - Tablero horizontal con columnas.
 - Cada columna representa un estado.
 - Cada tarea se muestra como card.
 - Modal o drawer para detalle de tarea.
+
+## Filtro de responsables del tablero
+
+- Junto a «Nueva tarea» se ofrece un desplegable con casillas por persona (nombre/correo), sin filtrar por roles.
+- Al entrar se selecciona «Todos», que incluye tareas sin asignados. Seleccionar personas desmarca «Todos»; marcar «Todos» limpia las personas. Al retirar la última persona se recupera «Todos» automáticamente.
+- La selección múltiple muestra tareas asignadas a cualquiera de las personas seleccionadas, sin duplicarlas. Resumen y contadores reflejan las tareas visibles; se informa cuando no hay coincidencias.
+- Cada apertura de «Nueva tarea» precarga las personas del filtro como responsables editables; con «Todos» no precarga a nadie. Un fallo al crear conserva el borrador y sus asignaciones.
+- El filtro es local a la vista y no se conserva tras recargar. Incluye carga, error/reintento y listado vacío. Los movimientos mantienen las tareas ocultas en el conjunto de datos y tienen en cuenta sus posiciones.
 
 ## Cards
 

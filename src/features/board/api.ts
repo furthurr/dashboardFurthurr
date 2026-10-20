@@ -1,13 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import { type TaskWithAssignees, type TaskStatus, type TaskPriority } from '@/types'
+import { type TaskWithAssignees, type TaskStatus, type TaskPriority, type AssigneeProfile, type Task } from '@/types'
 
-async function fetchTasks(): Promise<TaskWithAssignees[]> {
+export async function fetchTasks(): Promise<TaskWithAssignees[]> {
   const { data, error } = await supabase
     .from('tasks')
     .select(`
       *,
-      task_assignees(profile_id, profiles(full_name, avatar_url, role))
+      task_assignees(profile_id, profiles(id, full_name, email, avatar_url, role, is_active))
     `)
     .order('position')
 
@@ -17,7 +17,7 @@ async function fetchTasks(): Promise<TaskWithAssignees[]> {
     ...task,
     assignees: ((task.task_assignees as Array<{ profiles: unknown }>) || []).map(
       (ta) => ta.profiles
-    ),
+    ).filter(Boolean),
   })) as TaskWithAssignees[]
 }
 
@@ -55,41 +55,50 @@ export function useCreateTask() {
       description,
       status,
       priority,
-      createdBy,
+      assigneeIds = [],
     }: {
       title: string
       description?: string
       status: TaskStatus
       priority: TaskPriority
       createdBy: string
+      assigneeIds?: string[]
     }) => {
-      const { data: maxPosData } = await supabase
-        .from('tasks')
-        .select('position')
-        .eq('status', status)
-        .order('position', { ascending: false })
-        .limit(1)
-
-      const newPosition = maxPosData && maxPosData.length > 0 ? (maxPosData[0].position as number) + 1 : 0
-
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert({
-          title,
-          description: description || null,
-          status,
-          priority,
-          created_by: createdBy,
-          position: newPosition,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-      return data
+      // Ownership is derived from auth.uid() in SQL, never from client-supplied createdBy.
+      return createTaskWithAssignees({ title, description, status, priority, assigneeIds })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    },
+  })
+}
+
+export async function createTaskWithAssignees(data: {
+  title: string; description?: string; status: TaskStatus; priority: TaskPriority; assigneeIds: string[]
+}): Promise<Task> {
+  const { data: task, error } = await supabase.rpc('create_task_with_assignees', {
+    p_title: data.title, p_description: data.description || null, p_status: data.status,
+    p_priority: data.priority, p_assignee_ids: [...new Set(data.assigneeIds)],
+  })
+  if (error) throw error
+  return task as Task
+}
+
+export async function setTaskAssignees(taskId: string, assigneeIds: string[]): Promise<AssigneeProfile[]> {
+  const { data, error } = await supabase.rpc('set_task_assignees', {
+    p_task_id: taskId, p_assignee_ids: [...new Set(assigneeIds)],
+  })
+  if (error) throw error
+  return data as AssigneeProfile[]
+}
+
+export function useSetTaskAssignees() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ taskId, assigneeIds }: { taskId: string; assigneeIds: string[] }) => setTaskAssignees(taskId, assigneeIds),
+    onSuccess: (assignees, { taskId }) => {
+      queryClient.setQueryData<TaskWithAssignees[]>(['tasks'], (tasks) => tasks?.map((task) => task.id === taskId ? { ...task, assignees } : task))
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
 }

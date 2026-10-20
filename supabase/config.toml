@@ -1,0 +1,7 @@
+[auth]
+# Accounts are provisioned by the admin-users function, not public signUp.
+enable_signup = false
+
+[functions.admin-users]
+# Token is verified explicitly with auth.getUser inside the function (supports publishable keys).
+verify_jwt = false

@@ -22,9 +22,10 @@ Correspondencia: `public.profiles`; extiende la identidad de `auth.users`.
 | `avatar_url` | `string \| null` | Sí | Puede identificar | URL de avatar |
 | `nickname` | `string \| null` | Sí | Puede identificar | Alias |
 | `role` | `UserRole` | No | Autorización | Por defecto `invitado` en SQL |
+| `is_active` | `boolean` | No | Estado de acceso | Default `true`; cambio administrativo, no equivale a borrado ni revocación JWT |
 | `created_at`, `updated_at` | `string` | TS requeridos; SQL permite null y asigna `now()` por defecto | No | Metadato |
 
-Fuente: `src/types/index.ts:7-16`, `supabase-schema.sql:21-30`.
+Fuente: `src/types/index.ts:7-17`, `supabase/migrations/202610190001_user_administration.sql:4-16`. El default de columna de rol es `invitado`; el trigger de alta y la función administrativa asignan `usuario` en el flujo actual.
 
 ## `Task` y `TaskWithAssignees`
 
@@ -41,10 +42,18 @@ Correspondencia: `public.tasks`; `TaskWithAssignees` agrega `assignees` y contad
 | `created_by` | `string \| null` | Sí | FK a `profiles.id`, `ON DELETE SET NULL` |
 | `position` | `number` | No | `numeric` en SQL, default `0` |
 | `created_at`, `updated_at` | `string` | TS requeridos; SQL permite null y asigna `now()` por defecto | Timestamps |
-| `assignees` | `Profile[]` | No (en TS) | Derivado de relación por la query; proyección incompleta, ver D-03 |
+| `assignees` | `AssigneeProfile[]` | No (en TS) | Proyección explícita con identidad/estado; relaciones nulas descartadas |
 | `comment_count`, `attachment_count` | `number?` | Opcional | Tipos definidos; no vienen en la query `useTasks` observada |
 
-Fuente: `src/types/index.ts:18-35`, `supabase-schema.sql:39-50`.
+Fuente: `src/types/index.ts:19-38`, `src/features/board/api.ts:5-21`.
+
+### Proyecciones y solicitudes nuevas
+
+- `AssigneeProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url' | 'role' | 'is_active'>`. Las seis propiedades se proyectan explícitamente; no tiene `nickname` ni timestamps (`src/types/index.ts:32`).
+- `ManagedUser = Pick<Profile, 'id' | 'full_name' | 'email' | 'role' | 'is_active'>`, usado en la lista administrativa (`src/features/users/api.ts:4`).
+- `UserAction`/`AdminAction`: uniones discriminadas por `action`: `create`, `rename`, `password`, `set-active`; el contrato servidor añade `list`. Validación runtime **de solicitudes administrativas**, no de todas las respuestas ni modelos (`supabase/functions/admin-users/validation.ts:1-32`).
+- Solicitud de creación de tarea: título, descripción opcional, enum de estado/prioridad y `assigneeIds: string[]`; SQL recibe UUIDs, valida destinos y obtiene propietario de la sesión (`src/features/board/api.ts:76-92`).
+- `TaskImagePreview`: `{ id: string, fileName: string, signedUrl: string }`, proyección transitoria sin persistir la URL firmada (`src/features/board/attachmentsApi.ts:5-9`).
 
 ## Relaciones auxiliares
 
@@ -56,7 +65,7 @@ Fuente: `src/types/index.ts:18-35`, `supabase-schema.sql:39-50`.
 | `profile_id` | `string` | FK a `profiles.id` |
 | `created_at` | `string` | Timestamp |
 
-Fuente: `src/types/index.ts:37-41`, `supabase-schema.sql:59-64`.
+Fuente: `src/types/index.ts:40-44`. La PK compuesta impide duplicados; escrituras cliente se revocan y se gestionan por RPC (`supabase/migrations/202610200001_task_assignments.sql:5-43`).
 
 ### `Comment` y `CommentWithAuthor`
 
@@ -69,7 +78,7 @@ Fuente: `src/types/index.ts:37-41`, `supabase-schema.sql:59-64`.
 | `created_at`, `updated_at` | `string` | TS requeridos; SQL permite null con default | Timestamps |
 | `author` (`CommentWithAuthor`) | `Profile` | No (en TS) | Query devuelve solo una proyección parcial; ver D-03 |
 
-Fuente: `src/types/index.ts:43-54`, `supabase-schema.sql:73-80`.
+Fuente: `src/types/index.ts:46-57`, `src/features/board/commentsApi.ts:5-16`; D-03 sigue abierta para el autor de comentarios.
 
 ### `TaskAttachment`
 
@@ -84,7 +93,7 @@ Fuente: `src/types/index.ts:43-54`, `supabase-schema.sql:73-80`.
 | `mime_type` | `string` | No | MIME del navegador |
 | `created_at` | `string` | TS requerido; SQL permite null con default | Timestamp |
 
-Fuente: `src/types/index.ts:56-65`, `supabase-schema.sql:89-98`.
+Fuente: `src/types/index.ts:59-68`, `supabase-schema.sql:89-99`.
 
 ## Ausencias relevantes
 

@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   DndContext,
   DragOverlay,
@@ -16,22 +15,24 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { useTasks, useUpdateTaskStatus, useCreateTask, useDeleteTask, useUpdateTask, useUpdateTaskPositions } from './api'
+import { useTasks, useUpdateTaskStatus, useCreateTask, useDeleteTask, useUpdateTask, useUpdateTaskPositions, useSetTaskAssignees } from './api'
+import { useAssignableUsers } from './assigneesApi'
 import { useComments, useCreateComment, useDeleteComment } from './commentsApi'
 import { useAttachments, useTaskImagePreviews, useUploadAttachment, useDeleteAttachment } from './attachmentsApi'
 import { BOARD_COLUMNS } from './constants'
 import { BoardColumn } from './BoardColumn'
 import { TaskCard } from './TaskCard'
 import { CreateTaskModal } from './CreateTaskModal'
+import { AssigneeFilter } from './AssigneeFilter'
 import { TaskDetailModal } from './TaskDetailModal'
 import { type TaskPriority, type TaskStatus, type TaskWithAssignees } from '@/types'
 import { useAuth } from '@/features/auth/AuthContext'
+import { AccountMenu } from '@/shared/ui/AccountMenu'
 import { Toast } from '@/shared/ui/Toast'
 import { useToast } from '@/shared/ui/useToast'
 
 export function BoardPage() {
-  const { user, profile, signOut } = useAuth()
-  const navigate = useNavigate()
+  const { user, profile } = useAuth()
   const { data: tasks = [], isLoading, error, refetch } = useTasks()
   const { data: taskImages = {} } = useTaskImagePreviews(tasks.map((task) => task.id))
   const updateTaskStatus = useUpdateTaskStatus()
@@ -43,6 +44,9 @@ export function BoardPage() {
   const [optimisticTasks, setOptimisticTasks] = useState<TaskWithAssignees[] | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const assignableUsers = useAssignableUsers(true)
+  const [filterUserIds, setFilterUserIds] = useState<string[]>([])
+  const setTaskAssignees = useSetTaskAssignees()
   const [selectedTask, setSelectedTask] = useState<TaskWithAssignees | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const [createWarning, setCreateWarning] = useState<string | null>(null)
@@ -55,6 +59,11 @@ export function BoardPage() {
   const movementBusy = movementPending || updateTaskStatus.isPending || updateTaskPositions.isPending
 
   const isAdmin = profile?.role === 'admin'
+  const canEditSelectedTask = isAdmin || (profile?.role === 'usuario' && selectedTask?.created_by === user?.id)
+  const assigneeOptions = {
+    users: assignableUsers.data ?? [], loading: assignableUsers.isLoading,
+    error: Boolean(assignableUsers.error), onRetry: () => { void assignableUsers.refetch() },
+  }
 
   const selectedTaskId = selectedTask?.id ?? null
   const { data: comments = [], isLoading: commentsLoading, error: commentsError } = useComments(selectedTaskId)
@@ -95,6 +104,8 @@ export function BoardPage() {
   }
 
   const displayTasks = optimisticTasks ?? tasks
+  const visibleTasks = filterUserIds.length === 0 ? displayTasks
+    : displayTasks.filter((task) => task.assignees.some((person) => filterUserIds.includes(person.id)))
 
   const tasksByColumn = BOARD_COLUMNS.reduce<Record<TaskStatus, typeof displayTasks>>(
     (acc, col) => {
@@ -105,6 +116,10 @@ export function BoardPage() {
     },
     {} as Record<TaskStatus, typeof displayTasks>
   )
+  const visibleTasksByColumn = BOARD_COLUMNS.reduce<Record<TaskStatus, typeof displayTasks>>((acc, col) => {
+    acc[col.id] = tasksByColumn[col.id].filter((task) => visibleTasks.includes(task))
+    return acc
+  }, {} as Record<TaskStatus, typeof displayTasks>)
 
   async function performMovement(action: () => Promise<unknown>) {
     if (pendingRef.current || movementBusy) return
@@ -204,9 +219,13 @@ export function BoardPage() {
     if (!task) return
 
     const sortedTasks = [...tasksByColumn[task.status]]
+    const visibleColumn = visibleTasksByColumn[task.status]
+    const visibleIndex = visibleColumn.findIndex((t) => t.id === taskId)
+    const visibleTarget = visibleColumn[visibleIndex + (direction === 'up' ? -1 : 1)]
+    if (!visibleTarget) return
     const currentIndex = sortedTasks.findIndex((t) => t.id === taskId)
 
-    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+    const targetIndex = sortedTasks.findIndex((t) => t.id === visibleTarget.id)
 
     if (targetIndex < 0 || targetIndex >= sortedTasks.length) return
 
@@ -233,6 +252,7 @@ export function BoardPage() {
     status: TaskStatus
     priority: TaskPriority
     files: File[]
+    assigneeIds: string[]
   }) {
     if (!user || createPendingRef.current) return
 
@@ -303,19 +323,22 @@ export function BoardPage() {
           </div>
           <div className="flex max-w-full flex-wrap items-center gap-2">
             {user && <span className="max-w-48 truncate text-sm text-[var(--color-text-muted)]" title={user.email}>{user.email}</span>}
-            {isAdmin && <button type="button" className="ui-button" onClick={() => navigate('/register')}>Alta de Usuario</button>}
-            <button type="button" className="ui-button" onClick={() => signOut()}>Cerrar Sesión</button>
+            <AccountMenu />
           </div>
         </header>
 
         <div className="board-toolbar">
           <dl aria-label="Resumen de tareas" className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-            <div><dt className="text-[var(--color-text-muted)]">Total</dt><dd className="font-semibold">{displayTasks.length}</dd></div>
-            {BOARD_COLUMNS.map((col) => <div key={col.id}><dt className="text-[var(--color-text-muted)]">{col.label}</dt><dd className="font-semibold">{tasksByColumn[col.id].length}</dd></div>)}
+            <div><dt className="text-[var(--color-text-muted)]">Total</dt><dd className="font-semibold">{visibleTasks.length}</dd></div>
+            {BOARD_COLUMNS.map((col) => <div key={col.id}><dt className="text-[var(--color-text-muted)]">{col.label}</dt><dd className="font-semibold">{visibleTasksByColumn[col.id].length}</dd></div>)}
           </dl>
-          <button type="button" className="ui-button ui-button--primary" onClick={() => setIsModalOpen(true)}>+ Nueva Tarea</button>
+          <div className="flex max-w-full flex-wrap items-center gap-2">
+            <AssigneeFilter {...assigneeOptions} value={filterUserIds} onChange={setFilterUserIds} />
+            <button type="button" className="ui-button ui-button--primary" onClick={() => setIsModalOpen(true)}>+ Nueva Tarea</button>
+          </div>
         </div>
         <div className="px-4 sm:px-8">
+          {filterUserIds.length > 0 && visibleTasks.length === 0 && <p role="status" className="ui-feedback mb-4">No hay tareas asignadas a los usuarios seleccionados.</p>}
           {moveError && <p role="alert" className="ui-feedback ui-feedback--error mb-4">{moveError}</p>}
           {createWarning && <div role="alert" className="ui-feedback ui-feedback--error mb-4 flex flex-wrap items-start justify-between gap-3">
             <p className="min-w-0 flex-1">{createWarning}</p>
@@ -339,13 +362,13 @@ export function BoardPage() {
             {BOARD_COLUMNS.map((col) => (
               <fieldset key={col.id} disabled={movementBusy} className="m-0 min-w-0 shrink-0 border-0 p-0">
                 <SortableContext
-                  items={tasksByColumn[col.id].map((t) => t.id)}
+                  items={visibleTasksByColumn[col.id].map((t) => t.id)}
                   strategy={verticalListSortingStrategy}
                 >
                   <BoardColumn
                     id={col.id}
                     label={col.label}
-                    tasks={tasksByColumn[col.id]}
+                    tasks={visibleTasksByColumn[col.id]}
                     taskImages={taskImages}
                     onTaskClick={(task) => {
                       setSelectedTask(task)
@@ -373,6 +396,8 @@ export function BoardPage() {
           onSubmit={handleCreateTask}
           isLoading={isCreateSubmitting || createTask.isPending || uploadAttachment.isPending}
           errorMessage={createError}
+          assigneeOptions={assigneeOptions}
+          initialAssigneeIds={filterUserIds}
         />
 
         <TaskDetailModal
@@ -383,18 +408,25 @@ export function BoardPage() {
           attachmentsLoading={attachmentsLoading}
           commentsError={Boolean(commentsError)}
           attachmentsError={Boolean(attachmentsError)}
+          assigneeOptions={assigneeOptions}
+          onSaveAssignees={selectedTask ? async (assigneeIds) => {
+            const taskId = selectedTask.id
+            const assignees = await setTaskAssignees.mutateAsync({ taskId, assigneeIds })
+            setSelectedTask((current) => current?.id === taskId ? { ...current, assignees } : current)
+            setOptimisticTasks((current) => current?.map((task) => task.id === taskId ? { ...task, assignees } : task) ?? null)
+          } : undefined}
           isOpen={isDetailOpen}
           onClose={() => {
             setIsDetailOpen(false)
             setSelectedTask(null)
           }}
-          onSave={selectedTask ? (data) => {
+          onSave={selectedTask && canEditSelectedTask ? (data) => {
             setNotice('')
             return updateTask.mutateAsync({ taskId: selectedTask.id, ...data }).then(() => {
               setNotice('Tarea guardada correctamente.')
             })
           } : undefined}
-          onDelete={selectedTask ? () => {
+          onDelete={selectedTask && canEditSelectedTask ? () => {
             setNotice('')
             return deleteTask.mutateAsync(selectedTask.id).then(() => {
               setNotice('Tarea eliminada correctamente.')

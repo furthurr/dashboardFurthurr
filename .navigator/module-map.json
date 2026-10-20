@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-10-16T17:32:58Z",
+  "generated_at": "2026-10-20T15:21:21Z",
   "root": ".",
   "modules": [
     {
@@ -11,13 +11,13 @@
       "kind": "app",
       "tech": ["React", "TypeScript", "Vite"],
       "entrypoints": ["src/main.tsx", "src/App.tsx"],
-      "depends_on": ["auth", "board", "global-styles"]
+      "depends_on": ["auth", "board", "users", "global-styles"]
     },
     {
       "id": "auth",
       "name": "Autenticación",
       "path": "src/features/auth",
-      "responsibility": "Gestiona login, registro, sesión, perfil y rutas protegidas.",
+      "responsibility": "Gestiona login, sesión, perfil activo y rutas protegidas; el registro antiguo redirige a administración.",
       "kind": "feature",
       "tech": ["React", "TypeScript", "Supabase Auth"],
       "entrypoints": ["src/features/auth/AuthContext.tsx", "src/features/auth/ProtectedRoute.tsx"],
@@ -27,11 +27,34 @@
       "id": "board",
       "name": "Tablero Kanban",
       "path": "src/features/board",
-      "responsibility": "Presenta y actualiza tareas, comentarios, adjuntos y orden de columnas.",
+      "responsibility": "Presenta tareas, comentarios, adjuntos y ordenamiento, con creación y asignaciones múltiples por RPC.",
       "kind": "feature",
       "tech": ["React", "TypeScript", "TanStack Query", "dnd-kit"],
       "entrypoints": ["src/features/board/BoardPage.tsx"],
-      "depends_on": ["auth", "supabase-client", "shared-types"]
+      "depends_on": ["auth", "supabase-client", "shared-types", "shared-ui", "database-schema"],
+      "notes": "database-schema representa el contrato RPC consumido, no un import TypeScript."
+    },
+    {
+      "id": "users",
+      "name": "Administración de usuarios",
+      "path": "src/features/users",
+      "responsibility": "Presenta listado administrativo, alta, nombre, contraseña y activación de cuentas.",
+      "kind": "feature",
+      "tech": ["React", "TypeScript", "TanStack Query"],
+      "entrypoints": ["src/features/users/UsersPage.tsx", "src/features/users/api.ts"],
+      "depends_on": ["auth", "supabase-client", "shared-types", "shared-ui", "admin-users"],
+      "notes": "admin-users es dependencia de uso vía functions.invoke, no un import del servidor."
+    },
+    {
+      "id": "shared-ui",
+      "name": "UI compartida",
+      "path": "src/shared/ui",
+      "responsibility": "Aporta diálogos, notificaciones y controles de cuenta reutilizados por las features.",
+      "kind": "lib",
+      "tech": ["React", "TypeScript"],
+      "entrypoints": ["src/shared/ui/Dialog.tsx", "src/shared/ui/Toast.tsx"],
+      "depends_on": ["auth"],
+      "notes": "AccountMenu apareció durante la sincronización y usa Auth; su flujo de perfil queda pendiente de revisión específica."
     },
     {
       "id": "supabase-client",
@@ -47,7 +70,7 @@
       "id": "shared-types",
       "name": "Tipos compartidos",
       "path": "src/types",
-      "responsibility": "Declara tipos de perfil, tareas, comentarios, adjuntos y enums de aplicación.",
+      "responsibility": "Declara perfiles con estado activo, proyección AssigneeProfile, tareas, comentarios, adjuntos y enums.",
       "kind": "lib",
       "tech": ["TypeScript"],
       "entrypoints": ["src/types/index.ts"],
@@ -67,11 +90,32 @@
       "id": "database-schema",
       "name": "Schema Supabase",
       "path": "supabase-schema.sql",
-      "responsibility": "Mantiene el schema Postgres local, RLS, Storage, vistas y grants de referencia.",
+      "responsibility": "Mantiene el bootstrap Postgres, RLS, Storage, vistas, grants y funciones transaccionales de referencia.",
       "kind": "other",
       "tech": ["PostgreSQL", "SQL"],
       "entrypoints": ["supabase-schema.sql"],
       "depends_on": []
+    },
+    {
+      "id": "database-migrations",
+      "name": "Migraciones Supabase",
+      "path": "supabase/migrations",
+      "responsibility": "Evoluciona instalaciones existentes con estado de cuenta, permisos y RPCs de tareas/asignaciones.",
+      "kind": "other",
+      "tech": ["PostgreSQL", "SQL"],
+      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql"],
+      "depends_on": ["database-schema"]
+    },
+    {
+      "id": "admin-users",
+      "name": "Función administrativa de cuentas",
+      "path": "supabase/functions/admin-users",
+      "responsibility": "Verifica identidad y admin activo antes de ejecutar acciones privilegiadas de cuentas.",
+      "kind": "service",
+      "tech": ["Deno", "TypeScript", "Supabase Edge Functions", "Supabase Auth"],
+      "entrypoints": ["supabase/functions/admin-users/index.ts"],
+      "depends_on": ["database-schema"],
+      "notes": "Despliegue separado de GitHub Pages; instrucciones en supabase/README.md."
     },
     {
       "id": "product-specs",
