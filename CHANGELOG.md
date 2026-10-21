@@ -1,5 +1,30 @@
 # Changelog
 
+## [v0.3.0] - 2026-10-20
+
+### Funcionalidades
+
+- Editar cualquier tarea desde su detalle, propia o ajena, con cualquier cuenta activa: título, descripción, estado y prioridad quedan guardables para `admin`, `usuario` e `invitado`.
+- Mover y reordenar cualquier card del tablero, con independencia de quién la creó.
+- Mantener «Eliminar tarea» reservado a quien creó la tarea o a un administrador.
+
+### Permisos y backend
+
+- Ampliar la policy de `UPDATE` sobre `tasks` a toda cuenta autenticada y activa, y sustituir el permiso de tabla completa por permisos por columna sobre `title`, `description`, `status`, `priority` y `position`.
+- Impedir que el cliente escriba `created_by`, de modo que nadie puede reclamar una tarea ajena para después eliminarla.
+- Añadir la migración `supabase/migrations/202610200002_shared_task_editing.sql` para instalaciones existentes y actualizar el bootstrap `supabase-schema.sql`.
+- Actualizar las pruebas transaccionales de permisos y asignaciones con las nuevas reglas de edición, propiedad y borrado.
+
+### Documentación y verificación
+
+- Actualizar las especificaciones de requisitos, permisos, UI/UX, Kanban y progreso, además de la guía operativa de Supabase y la documentación del proyecto.
+- Verificar con `npm ci`, build, lint, 89 pruebas de frontend, 9 pruebas de la Edge Function y las dos suites SQL transaccionales con `ROLLBACK`.
+
+### Notas de despliegue
+
+- La migración de edición compartida ya está aplicada en la instalación vinculada; GitHub Pages publica la SPA con este release.
+- La Edge Function `admin-users` no cambia en esta versión y no requiere redespliegue.
+
 ## [v0.2.0] - 2026-10-20
 
 ### Funcionalidades
