@@ -15,6 +15,9 @@ begin
     or has_column_privilege(current_user, 'public.profiles', 'is_active', 'UPDATE') then
     raise exception 'Client can modify protected profile columns';
   end if;
+  if has_column_privilege(current_user, 'public.tasks', 'created_by', 'UPDATE') then
+    raise exception 'Client can rewrite task ownership';
+  end if;
   insert into public.tasks (id, title, created_by)
     values (current_setting('app.access_probe_id')::uuid, 'Transactional access probe', auth.uid());
   if not exists (select 1 from public.tasks where id = current_setting('app.access_probe_id')::uuid) then
@@ -46,7 +49,11 @@ begin
     raise exception 'Inactive account can insert tasks';
   exception when insufficient_privilege then null;
   end;
+  -- RLS filters the row silently, so an allowed update would report a changed row.
+  update public.tasks set title = 'Must not be updated'
+    where id = current_setting('app.access_probe_id')::uuid;
+  if found then raise exception 'Inactive account can update tasks'; end if;
 end $$;
 reset role;
 rollback;
-select 'PASS: active access, protected columns, inactive read/write denial; all probes rolled back' as verification;
+select 'PASS: active access, protected columns, shared task editing, inactive read/write denial; all probes rolled back' as verification;

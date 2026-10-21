@@ -65,7 +65,8 @@ Cada card debe mostrar como mínimo:
 
 Debe mostrar:
 
-- Título editable según permisos.
+- Título, descripción, estado y prioridad editables por cualquier cuenta activa, con independencia de quién creó la tarea.
+- «Eliminar tarea» solo se ofrece al creador de la tarea o a un administrador.
 - Descripción.
 - Estado.
 - Prioridad.

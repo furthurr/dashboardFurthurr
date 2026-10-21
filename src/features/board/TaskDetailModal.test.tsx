@@ -12,7 +12,7 @@ const task: TaskWithAssignees = {
 const base = { task, comments: [], attachments: [], isOpen: true, onClose: vi.fn() }
 
 describe('Detalle de tarea', () => {
-  it('precarga responsables, permite desasignarlos todos sin permiso de editar campos y mantiene el detalle abierto', async () => {
+  it('precarga responsables, permite desasignarlos todos sin callback de guardado y mantiene el detalle abierto', async () => {
     const user = userEvent.setup()
     const person = { id: 'a', full_name: 'Ana', email: 'ana@example.test', avatar_url: null, role: 'usuario' as const, is_active: true }
     const onSaveAssignees = vi.fn().mockResolvedValue([])

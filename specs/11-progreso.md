@@ -72,6 +72,14 @@
 - URL: https://github.com/furthurr/dashboardFurthurr
 - Primer commit: `7791d6e`
 
+## 2026-10-20
+
+- Se aprobó la edición compartida de tareas: cualquier cuenta autenticada y activa (`admin`, `usuario`, `invitado`) puede editar y mover cualquier card, aunque no la haya creado.
+- La interfaz dejó de ocultar los campos de edición por rol o por autoría; el borrado sigue reservado al creador o a un `admin`.
+- La base de datos acompaña la regla: nueva policy de `UPDATE` sobre `tasks` para todo autenticado activo y permisos por columna (`title`, `description`, `status`, `priority`, `position`) para que `created_by` no sea escribible desde el cliente.
+- Se añadió la migración `supabase/migrations/202610200002_shared_task_editing.sql` para instalaciones existentes y se actualizó el bootstrap `supabase-schema.sql`.
+- Se actualizaron las pruebas de cliente y el probe SQL que fijaban la regla anterior.
+
 ## Próximo Paso
 
 - Configurar secrets en GitHub: `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`

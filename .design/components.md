@@ -2,7 +2,7 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
-## Estado actual — cuentas y responsables, 2026-10-20
+## Estado actual — edición compartida de tareas, 2026-10-20
 
 Esta sección prevalece sobre el historial inferior para las áreas modificadas. Describe el árbol de trabajo sin commit; no altera tokens ni convierte las revisiones históricas en baseline Git. El antiguo `RegisterPage` fue eliminado y las referencias inferiores a él son **históricas**, no rutas/archivos actuales.
 
@@ -17,7 +17,7 @@ Esta sección prevalece sobre el historial inferior para las áreas modificadas.
 | Responsables inactivos | Asignación previa se muestra con «(inactivo)» y permite retirarla; no aparece como nueva opción. Sin selección muestra «Sin usuarios asignados» | `src/features/board/AssigneePicker.tsx:21-48` |
 | Creación con responsables | Selector mantiene IDs en el borrador y los envía con el resto de datos; usa el mismo estado de bloqueo de creación/adjuntos. Un fallo de creación conserva selección y archivos | `src/features/board/CreateTaskModal.tsx`, `src/features/board/CreateTaskModal.test.tsx` |
 | Detalle / guardado independiente | Precarga IDs y conserva borradores de campos/responsables por separado. «Guardar asignaciones» no cierra el detalle ni guarda título/estado. Cambios pendientes avisan y deshabilitan «Guardar cambios» para evitar descartarlos. Durante una operación bloquea selección/cierre/doble envío; ante error conserva selección; éxito muestra toast | `src/features/board/TaskDetailModal.tsx:54-97`, `:167-176` |
-| Permisos visuales en detalle | Usuario/invitado sobre tarea ajena puede guardar responsables aunque no reciba `onSave`/`onDelete` de campos. Sus campos quedan deshabilitados; los permisos efectivos siguen en SQL | `src/features/board/BoardPage.tsx`, `src/features/board/TaskDetailModal.tsx:149-176` |
+| Edición compartida en detalle | Cualquier cuenta activa, incluida `invitado`, recibe `onSave` y ve los campos de título, descripción, estado y prioridad editables sobre cualquier tarea, propia o ajena. «Eliminar tarea» solo se ofrece al creador o a un admin: sin ese permiso el botón no aparece. La interfaz ya no refleja roles ni autoría para la edición; el permiso efectivo sigue en SQL | `src/features/board/BoardPage.tsx:61-65`, `:423-434`, `src/features/board/TaskDetailModal.tsx:150-165`, `:235-239` |
 
 ### Verificación de esta entrega y límites
 
@@ -27,7 +27,9 @@ Evidencia de implementación previa en esta sesión, **no nuevos comandos ejecut
 - `UsersPage.test.tsx`: edición de nombre precargada, rechazo de espacios, conservación/reintento/cancelación, alta, contraseña, estado, listado y protección de ruta.
 - `AssigneePicker.test.tsx`: búsqueda nombre/correo, multiselección, retirada completa, inactivos, carga/error/reintento y vacío.
 - `CreateTaskModal.test.tsx`: envío múltiple, retención ante fallo y bloqueo durante envío. `TaskDetailModal.test.tsx`: guardado independiente sin editar campos, fallos conservando borrador y bloqueo de doble envío/cierre.
-- `BoardPage.test.tsx`: usuario e invitado en tarea ajena no guardan otros campos ni eliminan tarea, pero sí gestionan responsables. La tarjeta reutiliza sus iniciales/avatares existentes (`src/features/board/TaskCard.tsx:96-115`).
+- `BoardPage.test.tsx`: en la entrega anterior, usuario e invitado sobre una tarea ajena no guardaban otros campos ni eliminaban la tarea, pero sí gestionaban responsables; ese comportamiento cambió con la edición compartida y la cobertura actual se detalla más abajo. La tarjeta reutiliza sus iniciales/avatares existentes (`src/features/board/TaskCard.tsx:96-115`).
+
+Para el cambio de edición compartida, la implementación registró 89 pruebas Vitest, lint y build correctos. `BoardPage.test.tsx` cubre ahora que `usuario` e `invitado` pueden editar y guardar una tarea ajena, que el botón «Eliminar tarea» sigue reservado al creador y al administrador, y que «Guardar cambios» aparece para cualquier rol activo. `TaskDetailModal.test.tsx` mantiene la cobertura del guardado de responsables sin callback de guardado de campos. No se ejecutó una nueva validación visual en navegador ni una auditoría de contraste o lector de pantalla: los cambios no introducen tokens, estilos ni componentes nuevos, solo la disponibilidad de controles ya existentes.
 - Chromium a 360/768/1440 px con backend simulado: selección múltiple en creación/detalle, guardado independiente, retirada por invitado, sin errores de página ni desbordamiento del documento/diálogo; capturas temporales revisadas, no versionadas.
 
 Las pruebas DOM y visuales simuladas no certifican todo el flujo de administración en navegador, funcionamiento E2E con usuarios reales, contraste completo WCAG, otros navegadores ni lector de pantalla. Las pruebas SQL/Edge se describen en [datos](../.data/README.md), no son evidencia visual.

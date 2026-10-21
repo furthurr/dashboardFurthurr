@@ -212,16 +212,13 @@ create policy "Authenticated users can create tasks"
         )
     );
 
--- Users can update tasks they created; admins can update any task
-create policy "Creators and admins can update tasks"
+-- Any active account can edit any task; column grants limit the writable fields.
+-- The restrictive "Active account required" policy still blocks inactive accounts.
+create policy "Active accounts can update tasks"
     on public.tasks for update
-    using (
-        created_by = auth.uid()
-        or exists (
-            select 1 from public.profiles
-            where id = auth.uid() and role = 'admin'
-        )
-    );
+    to authenticated
+    using (true)
+    with check (true);
 
 -- Creators and admins can delete tasks
 create policy "Creators and admins can delete tasks"
@@ -447,8 +444,10 @@ grant select on public.profiles to authenticated;
 grant update on public.profiles to authenticated;
 grant select on public.tasks to authenticated;
 grant insert on public.tasks to authenticated;
-grant update on public.tasks to authenticated;
 grant delete on public.tasks to authenticated;
+-- Client writes are limited to the editable fields; created_by stays server-owned.
+revoke update on public.tasks from anon, authenticated;
+grant update (title, description, status, priority, position) on public.tasks to authenticated;
 grant select on public.task_assignees to authenticated;
 grant insert on public.task_assignees to authenticated;
 grant delete on public.task_assignees to authenticated;

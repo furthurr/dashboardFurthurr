@@ -59,7 +59,8 @@ export function BoardPage() {
   const movementBusy = movementPending || updateTaskStatus.isPending || updateTaskPositions.isPending
 
   const isAdmin = profile?.role === 'admin'
-  const canEditSelectedTask = isAdmin || (profile?.role === 'usuario' && selectedTask?.created_by === user?.id)
+  // El borrado no se amplía respecto a la regla anterior: solo el creador o un admin.
+  const canDeleteSelectedTask = isAdmin || selectedTask?.created_by === user?.id
   const assigneeOptions = {
     users: assignableUsers.data ?? [], loading: assignableUsers.isLoading,
     error: Boolean(assignableUsers.error), onRetry: () => { void assignableUsers.refetch() },
@@ -420,13 +421,14 @@ export function BoardPage() {
             setIsDetailOpen(false)
             setSelectedTask(null)
           }}
-          onSave={selectedTask && canEditSelectedTask ? (data) => {
+          // Edición compartida: cualquier cuenta activa puede editar los campos de cualquier tarea.
+          onSave={selectedTask ? (data) => {
             setNotice('')
             return updateTask.mutateAsync({ taskId: selectedTask.id, ...data }).then(() => {
               setNotice('Tarea guardada correctamente.')
             })
           } : undefined}
-          onDelete={selectedTask && canEditSelectedTask ? () => {
+          onDelete={selectedTask && canDeleteSelectedTask ? () => {
             setNotice('')
             return deleteTask.mutateAsync(selectedTask.id).then(() => {
               setNotice('Tarea eliminada correctamente.')

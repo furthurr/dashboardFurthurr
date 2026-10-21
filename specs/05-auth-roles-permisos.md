@@ -2,7 +2,7 @@
 
 Estado: `aprobada`
 
-Última actualización: 2026-10-19
+Última actualización: 2026-10-20
 
 ## Archivo De Referencia
 
@@ -39,21 +39,24 @@ Admin:
 Usuario:
 
 - Puede ver tareas.
-- Puede crear y editar tareas si se aprueba esta regla.
+- Puede crear tareas.
+- Puede editar cualquier tarea, propia o ajena.
 - Puede crear comentarios.
 - Puede editar solo sus comentarios.
 
 Invitado:
 
 - Puede ver tareas.
+- Puede editar cualquier tarea, propia o ajena.
 - No puede crear comentarios.
 - No puede editar comentarios.
 - No puede editar comentarios aunque sean propios, porque no puede crearlos.
 
 ## Decisiones Resueltas
 
-- Usuario puede eliminar tareas solo si es el creador o admin.
-- Usuario puede editar tareas solo si es el creador o admin.
+- Cualquier cuenta autenticada y activa puede editar los campos de cualquier tarea, sea propia o ajena.
+- Usuario puede eliminar tareas solo si es el creador o admin. El borrado no se amplía.
+- La edición compartida no permite cambiar el creador de la tarea: `created_by` no es escribible desde el cliente.
 - Invitado puede ver adjuntos (SELECT en task_attachments para authenticated).
 - El administrador inicial se configura manualmente en Supabase.
 - Las altas administrativas crean cuentas con rol `usuario`, activas y con correo confirmado, sin enlace de activación.
@@ -64,8 +67,8 @@ Invitado:
 |---|---|---|---|
 | Ver tareas | Sí | Sí | Sí |
 | Crear tareas | Sí | Sí | No |
-| Editar tareas propias | Sí | Sí | No |
-| Editar tareas ajenas | Sí | No | No |
+| Editar tareas propias | Sí | Sí | Sí |
+| Editar tareas ajenas | Sí | Sí | Sí |
 | Eliminar tareas propias | Sí | Sí | No |
 | Eliminar tareas ajenas | Sí | No | No |
 | Ver comentarios | Sí | Sí | Sí |
@@ -88,8 +91,18 @@ Invitado:
 - Crear tareas mantiene los permisos actuales (`admin` y `usuario`). La tarea y sus responsables iniciales se guardan en una transacción.
 - Se permite cero, uno o varios responsables; no se admiten duplicados ni nuevos responsables inexistentes o inactivos.
 - Una asignación previa a una cuenta inactiva se conserva y puede retirarse. Desactivar cuentas no modifica asignaciones automáticamente.
-- En el detalle, «Guardar asignaciones» es independiente del guardado de los demás campos. No amplía permisos de edición/eliminación de tareas.
+- En el detalle, «Guardar asignaciones» es independiente del guardado de los demás campos. No amplía permisos de eliminación de tareas.
 - Las escrituras de asignaciones usan funciones Postgres autenticadas que comprueban el estado de la cuenta y bloquean la tarea durante la transacción; el cliente no puede escribir directamente en `task_assignees`.
+
+## Edición compartida de tareas
+
+- Cualquier cuenta autenticada y activa, incluidos `admin`, `usuario` e `invitado`, puede editar los campos de cualquier tarea: título, descripción, estado, prioridad y posición.
+- La creación de tareas sigue reservada a `admin` y `usuario`; la edición compartida no amplía ese permiso.
+- El borrado de tareas no se amplía: solo el creador o un `admin` pueden eliminar.
+- La interfaz no oculta el campo de edición por rol ni por autoría: el detalle muestra los campos editables y «Guardar cambios» para cualquier cuenta activa.
+- El cliente solo puede escribir `title`, `description`, `status`, `priority` y `position` en `tasks`. `created_by`, `created_at` y `updated_at` no son escribibles desde el cliente, de modo que nobody puede reclamar la propiedad de una tarea ajena para después eliminarla.
+- El movimiento entre columnas y el reordenado comparten la misma regla: cualquier cuenta activa puede mover y reordenar cualquier tarea.
+- La base de datos es la frontera efectiva de esta regla; la interfaz solo refleja el permiso y no lo restringe.
 
 ## Administración de usuarios
 

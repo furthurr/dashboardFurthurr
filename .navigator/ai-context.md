@@ -30,7 +30,7 @@
 
 - Usa `HashRouter`; GitHub Pages no reescribe rutas internas y Vite publica bajo `/dashboardFurthurr/`.
 - `/board` exige cuenta activa; `/users` añade rol admin; `/register` redirige a `/users`. El cambio concurrente añade `/profile` y acceso desde `AccountMenu`, cuyo flujo completo queda fuera de esta revisión.
-- Cualquier cuenta activa, incluidos invitados, puede guardar responsables por separado; crear tareas sigue reservado a admin/usuario. No confundir asignación con permiso de edición de otros campos.
+- Cualquier cuenta activa, incluidos invitados, puede guardar responsables por separado y editar y mover cualquier tarea, sea propia o ajena. Crear tareas sigue reservado a admin/usuario; borrar, a quien creó la tarea o a un admin. No confundir la edición compartida con la creación ni con el borrado.
 - `specs/` conserva requisitos/intención de producto; actualiza la spec antes de implementar funcionalidad.
 - Contrasta cambios de persistencia con `supabase-schema.sql` y la matriz de `specs/05-auth-roles-permisos.md`.
 - Verifica comportamiento en el código y contratos: los índices de Navigator son orientación, no fuente de verdad.
@@ -55,9 +55,9 @@
 
 ## Meta
 
-- Actualizado: 2026-10-20, sincronización focalizada autorizada de cuentas y responsables.
+- Actualizado: 2026-10-20, sincronización focalizada autorizada de la edición compartida de tareas.
 - Source commit: omitido; working tree con cambios locales no incluidos en `HEAD`.
-- HEAD observado: `1d3069d904bc9e1dc6a7363d3967ad4c2709dace`, no baseline de los cambios documentados.
+- HEAD observado: `048f4deb0d3f2c0bab859bbc4d593cf7e6694714`, no baseline de los cambios documentados.
 - Cambios concurrentes `ProfilePage`/`AccountMenu`: localizados para evitar rutas obsoletas; comportamiento completo y nuevas pruebas no sincronizados ni validados aquí.
 - Navigator root: `.`
-- Actualizado con: project-navigator, capas 0–1; símbolos y grafo permanecen deshabilitados. `config.yaml` se conservó.
+- Actualizado con: documentation-orchestrator, capas 0–1; símbolos y grafo permanecen deshabilitados. `config.yaml` se conservó.

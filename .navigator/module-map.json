@@ -27,7 +27,7 @@
       "id": "board",
       "name": "Tablero Kanban",
       "path": "src/features/board",
-      "responsibility": "Presenta tareas, comentarios, adjuntos y ordenamiento, con creación y asignaciones múltiples por RPC.",
+      "responsibility": "Presenta tareas, comentarios, adjuntos y ordenamiento, con creación y asignaciones múltiples por RPC y edición compartida de cualquier tarea.",
       "kind": "feature",
       "tech": ["React", "TypeScript", "TanStack Query", "dnd-kit"],
       "entrypoints": ["src/features/board/BoardPage.tsx"],
@@ -103,7 +103,7 @@
       "responsibility": "Evoluciona instalaciones existentes con estado de cuenta, permisos y RPCs de tareas/asignaciones.",
       "kind": "other",
       "tech": ["PostgreSQL", "SQL"],
-      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql"],
+      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql", "supabase/migrations/202610200002_shared_task_editing.sql"],
       "depends_on": ["database-schema"]
     },
     {

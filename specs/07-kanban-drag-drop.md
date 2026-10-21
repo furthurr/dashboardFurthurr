@@ -43,8 +43,8 @@ Recomendación inicial: Opción B para facilitar movimientos frecuentes.
 
 ## Restricciones Por Rol
 
-Pendiente de decisión:
+Resuelto:
 
-- Si invitado puede arrastrar cards.
-- Si usuario puede mover cualquier tarea.
-- Si solo admin puede mover tareas a `finalizadas`.
+- Cualquier cuenta autenticada y activa puede arrastrar y mover cualquier card, incluida una creada por otra persona.
+- No hay restricción por rol para mover tareas a `finalizadas`.
+- El movimiento cambia `status` y `position`, y es una edición compartida: aplica la misma regla que la edición de campos.

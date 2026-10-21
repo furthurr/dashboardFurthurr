@@ -86,10 +86,14 @@ RLS está habilitado para las cinco tablas de la aplicación (`supabase-schema.s
 | --- | --- | --- | --- |
 | `profiles` | select | cuenta activa lee perfiles; cuenta inactiva autenticada puede leer únicamente el propio para mostrar bloqueo | `supabase/migrations/202610190001_user_administration.sql:18-38` |
 | `profiles` | update cliente | conserva RLS dueño/admin, exige cuenta activa y solo concede columnas `full_name`, `avatar_url`, `nickname`; no `role` ni `is_active` | `supabase-schema.sql:179-193`, `supabase/migrations/202610190001_user_administration.sql:14-16`, `:33-35` |
-| `tasks` | select/insert/update/delete | gate restrictivo de cuenta activa AND políticas anteriores; crear admin/usuario, modificar/borrar creador/admin según SQL | `supabase-schema.sql:198-235`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
+| `tasks` | select | autenticado activo por RLS | `supabase-schema.sql:199-202`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
+| `tasks` | insert | requiere rol `admin`/`usuario` activo; el propietario lo fija la RPC, no el cliente | `supabase-schema.sql:204-213`, `supabase/migrations/202610200001_task_assignments.sql:47-76` |
+| `tasks` | update | **edición compartida**: cualquier cuenta autenticada activa puede actualizar cualquier tarea | `supabase-schema.sql:215-221`, `supabase/migrations/202610200002_shared_task_editing.sql:9-14` |
+| `tasks` | update (columnas cliente) | solo `title`, `description`, `status`, `priority`, `position`; `created_by` no es escribible | `supabase-schema.sql:448-450`, `supabase/migrations/202610200002_shared_task_editing.sql:19-21` |
+| `tasks` | delete | creador o admin; gate restrictivo de cuenta activa | `supabase-schema.sql:223-232`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
 | `task_assignees` | select | autenticado activo por RLS | `supabase-schema.sql:241-244`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
 | `task_assignees` | escrituras cliente | INSERT/UPDATE/DELETE revocados; los predicados históricos no conceden permisos por sí solos | `supabase/migrations/202610200001_task_assignments.sql:5` |
-| `task_assignees` | RPC | cuenta activa de cualquier rol sustituye responsables; no obtiene permiso para editar la tarea | `supabase/migrations/202610200001_task_assignments.sql:7-45` |
+| `task_assignees` | RPC | cuenta activa de cualquier rol sustituye responsables; la RPC no edita la tarea, aunque la edición de sus campos es un permiso separado y más amplio | `supabase/migrations/202610200001_task_assignments.sql:7-45`, `supabase/migrations/202610200002_shared_task_editing.sql:9-21` |
 | `comments` | select/insert/update/delete | gate activo AND políticas anteriores: lectura autenticada, alta admin/usuario, update/delete autor/admin | `supabase-schema.sql:273-309`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
 | `task_attachments` | select/insert/delete | gate activo AND políticas anteriores de lectura/carga/eliminación de metadata | `supabase-schema.sql:314-343`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
 
@@ -100,6 +104,18 @@ Los comentarios de algunas policies de Storage describen roles distintos de lo q
 `is_active_account()` es `SECURITY DEFINER`, `STABLE`, con `search_path = ''`; consulta `profiles` por `auth.uid()` sin recursión RLS. Se concede a roles de API para evaluar policies, no permite escoger otra identidad (`supabase/migrations/202610190001_user_administration.sql:7-12`).
 
 Las RPCs de asignación son `SECURITY DEFINER` con path vacío y ejecución solo para `authenticated`; verifican identidad/estado explícitamente. `set_task_assignees` bloquea la fila de tarea y perfiles destino; deduplica, valida y sustituye atómicamente el conjunto. `create_task_with_assignees` exige rol admin/usuario, obtiene el creador de la sesión y usa bloqueo asesor por estado para calcular posición; un error de asignaciones revierte la tarea. Los invitados solo pueden ejecutar la sustitución, no el alta (`supabase/migrations/202610200001_task_assignments.sql:7-76`).
+
+### Edición compartida de tareas
+
+La tercera migración amplía el `UPDATE` de `tasks` a toda cuenta autenticada activa y sustituye el permiso de tabla completo por permisos por columna (`supabase/migrations/202610200002_shared_task_editing.sql:1-22`):
+
+- La policy `Active accounts can update tasks` reemplaza a `Creators and admins can update tasks` y se aplica `to authenticated` con `using (true)` / `with check (true)`. La policy restrictiva `Active account required` sigue ANDando, de modo que una cuenta desactivada no escribe aunque conserve la sesión.
+- `revoke update on public.tasks from anon, authenticated` elimina el privilegio de tabla; `grant update (title, description, status, priority, position) to authenticated` concede solo las columnas editables. `created_by`, `created_at`, `updated_at` e `id` quedan fuera del alcance de escritura del cliente.
+- Esa separación de columnas es la que impide escalar privilegios: con `UPDATE` abierto y `created_by` escribible, cualquiera podría reclamar la propiedad de una tarea ajena y después borrarla, porque la policy de borrado comprueba `created_by = auth.uid()`.
+- El borrado no se amplía: sigue requiriendo ser creador o `admin`. La creación sigue reservada a `admin`/`usuario` y su propietario lo deriva `auth.uid()`.
+- `updated_at` lo mantiene el trigger `set_tasks_updated_at`; no requiere privilegio de columna para el cliente.
+
+La migración es idempotente respecto a la policy (usa `drop policy if exists` para el nombre anterior y el nuevo) y no toca las RPCs de asignación ni las vistas.
 
 ## Storage
 

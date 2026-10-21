@@ -16,6 +16,7 @@ Estado: `borrador`
 - Admin puede gestionar tareas, comentarios y usuarios.
 - Usuario puede gestionar tareas y comentarios según permisos definidos.
 - Invitado puede visualizar, pero no crear ni editar comentarios.
+- Cualquier cuenta activa puede editar los campos de cualquier tarea, propia o ajena; el borrado sigue reservado a su creador o a un administrador.
 - Administración de usuarios: listado, alta como `usuario`, edición del nombre completo, cambio de contraseña y activación/desactivación. Un administrador no puede desactivarse a sí mismo.
 
 ## Tareas
@@ -28,6 +29,7 @@ Estado: `borrador`
 - Al crearla se pueden elegir cero, uno o varios usuarios activos mediante un desplegable por nombre/correo, con opción «Todos» y sin mostrar los ya asignados. Al abrir el detalle se precargan los responsables y se pueden añadir o desasignar con un guardado independiente, disponible para cualquier cuenta activa, incluidos invitados.
 - Cada tarea puede tener anotaciones especiales.
 - Cada tarea puede tener adjuntos de máximo 5 MB.
+- Cualquier cuenta activa puede editar título, descripción, estado y prioridad de cualquier tarea, y moverla entre columnas o reordenarla dentro de su columna.
 
 ## Estados
 

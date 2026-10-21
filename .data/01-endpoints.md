@@ -64,7 +64,7 @@ No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge
 - Request: `{ p_task_id: UUID, p_assignee_ids: UUID[] }`; `[]` desasigna a todos. No admite lista nula ni IDs nulos; elimina duplicados.
 - Response: `AssigneeProfile[]` en JSON, ordenados por nombre/ID. Actualiza la caché de tareas e invalida la query.
 - Validación: destinos existentes y activos; permite conservar un destino inactivo si ya estaba asignado. Bloquea tarea y perfiles objetivo durante la transacción. Prevalece el último conjunto guardado, sin detección de conflicto de borradores.
-- Permisos: no modifica título, descripción, propietario, estado ni prioridad. Escritura directa cliente en `task_assignees` revocada.
+- Permisos: no modifica título, descripción, propietario, estado ni prioridad. Escritura directa cliente en `task_assignees` revocada. La edición de esos campos de la tarea se rige por su propia policy y sus permisos por columna, no por esta RPC.
 - Errores SQL: `42501` cuenta no autorizada; `22023` lista/destino inválido; `P0002` tarea inexistente. El SDK los propaga; la UI conserva el borrador y presenta un mensaje seguro.
 - Fuente: `src/features/board/api.ts:87-104`, `supabase/migrations/202610200001_task_assignments.sql:5-45`.
 
@@ -78,13 +78,17 @@ No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge
 ### Actualizar tarea — `tasks.update`
 
 - Propósito: cambiar título, descripción, estado y prioridad.
+- Auth: cualquier cuenta autenticada activa, **incluido `invitado`**, sobre cualquier tarea; no se limita a la tarea creada por el actor.
 - Request observado: `taskId` y esos campos; filtro por `id`.
+- Columnas escribibles: solo `title`, `description`, `status`, `priority` y `position`. `created_by` no es escribible desde el cliente.
 - Response: no se consume fila; la query `tasks` se invalida al completar.
-- Fuente: `src/features/board/api.ts:106-134`.
+- Errores: si la migración `202610200002_shared_task_editing.sql` no está aplicada en el proyecto, la base de datos rechaza la escritura con un error de RLS; la UI conserva el borrador y muestra un mensaje seguro.
+- Fuente: `src/features/board/api.ts:106-134`, `supabase/migrations/202610200002_shared_task_editing.sql:1-22`.
 
 ### Cambiar estado/posición — `tasks.update`
 
 - Propósito: actualizar estado y posición de una tarea al moverla entre columnas.
+- Auth: cualquier cuenta autenticada activa, sobre cualquier tarea.
 - Request observado: `taskId`, `status`, `position`; filtro por `id`.
 - Response: sin fila de respuesta consumida; invalidación de `tasks`.
 - Fuente: `src/features/board/api.ts:31-47`.
@@ -92,6 +96,7 @@ No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge
 ### Reordenar posiciones — varias operaciones `tasks.update`
 
 - Propósito: persistir la nueva posición de una lista de tareas.
+- Auth: cualquier cuenta autenticada activa.
 - Request observado: arreglo `{ taskId, position }`; ejecuta una actualización por elemento usando `Promise.all`.
 - Response: no hay transacción explícita; se invalidan las tareas al completar.
 - Fuente: `src/features/board/api.ts:154-174`.
@@ -99,8 +104,9 @@ No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge
 ### Eliminar tarea — `tasks.delete`
 
 - Propósito: borrar una tarea por `id`.
+- Auth: el creador de la tarea o un `admin`. La edición compartida no amplía este permiso.
 - Response: no se consume fila; error se lanza.
-- Fuente: `src/features/board/api.ts:136-152`.
+- Fuente: `src/features/board/api.ts:136-152`, `supabase/migrations/202610200002_shared_task_editing.sql:16-18`.
 
 ### Leer / crear / eliminar comentarios — `comments`
 

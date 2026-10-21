@@ -5,7 +5,7 @@ La SPA sigue alojada en GitHub Pages. Las operaciones privilegiadas se ejecutan 
 ## Instalación existente
 
 1. Realiza una copia de seguridad y prueba primero en un proyecto de pruebas.
-2. Ejecuta las migraciones pendientes en orden: `migrations/202610190001_user_administration.sql` y después `migrations/202610200001_task_assignments.sql`. No vuelvas a ejecutar el schema bootstrap en una instalación existente. Las cuentas existentes conservan su rol y quedan activas; las asignaciones existentes se conservan.
+2. Ejecuta las migraciones pendientes en orden: `migrations/202610190001_user_administration.sql`, después `migrations/202610200001_task_assignments.sql` y por último `migrations/202610200002_shared_task_editing.sql`. No vuelvas a ejecutar el schema bootstrap en una instalación existente. Las cuentas existentes conservan su rol y quedan activas; las asignaciones existentes se conservan.
 3. En Supabase Auth, deshabilita **Allow new users to sign up** (registro público). La API administrativa `createUser` continúa disponible. No es necesario desactivar globalmente la confirmación por correo: esta función usa `email_confirm: true` al crear cada cuenta.
 
    Alternativamente, con CLI **2.121.0** se puede revisar y aplicar el único ajuste declarado de Auth en `config.toml`, conservando las propiedades no declaradas:
@@ -73,4 +73,21 @@ Prueba transaccional de permisos y consistencia, con cuentas/tareas de prueba qu
 npx supabase@2.121.0 db query --linked --project-ref <project-ref> --file supabase/tests/task_assignments.sql
 ```
 
-Comprobación manual: crea una tarea con varios responsables, quita uno y guarda las asignaciones en el detalle. Comprueba las iniciales en la tarjeta, reabre y desasigna a todos. Repite con usuario e invitado sobre una tarea ajena: deben poder guardar asignaciones sin poder editar título/descripción ni eliminar la tarea. En el detalle, los responsables se guardan mediante «Guardar asignaciones», por separado del resto del borrador.
+Comprobación manual: crea una tarea con varios responsables, quita uno y guarda las asignaciones en el detalle. Comprueba las iniciales en la tarjeta, reabre y desasigna a todos. Repite con usuario e invitado sobre una tarea ajena: deben poder guardar asignaciones y editar título, descripción, estado y prioridad, pero no eliminar la tarea. En el detalle, los responsables se guardan mediante «Guardar asignaciones», por separado del resto del borrador.
+
+## Edición compartida de tareas
+
+La migración `202610200002_shared_task_editing.sql` amplía la edición de tareas a cualquier cuenta activa. Si la administración de usuarios y las asignaciones ya están desplegadas, aplica solamente esta migración pendiente. No necesita otra Edge Function.
+
+- Cualquier cuenta autenticada y activa, incluidos `admin`, `usuario` e `invitado`, puede editar `title`, `description`, `status`, `priority` y `position` de cualquier tarea y moverla o reordenarla.
+- La creación de tareas sigue reservada a `admin` y `usuario`, y el borrado sigue reservado al creador o a un `admin`.
+- La migración revoca el permiso de `UPDATE` sobre la tabla completa y concede permisos por columna. `created_by` deja de ser escribible desde el cliente, de modo que nadie puede reclamar una tarea ajena para después eliminarla.
+- La policy restrictiva «Active account required» se mantiene: una cuenta desactivada no puede escribir tareas aunque tenga la sesión vigente.
+
+Prueba transaccional de permisos y consistencia, con cuentas/tareas de prueba que se revierten al terminar:
+
+```bash
+npx supabase@2.121.0 db query --linked --project-ref <project-ref> --file supabase/tests/task_assignments.sql
+```
+
+Comprobación manual: con una cuenta `usuario` o `invitado`, abre una tarea creada por otra persona, cambia el título y guarda. El cambio debe persistir tras recargar. Comprueba que «Eliminar tarea» no aparece para esa cuenta y que sigue apareciendo para el creador y para un admin. Intenta cambiar `created_by` desde el cliente: debe ser rechazado por permisos de columnas.

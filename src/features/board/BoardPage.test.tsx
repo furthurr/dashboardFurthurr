@@ -169,7 +169,7 @@ describe('Integración del tablero', () => {
     expect(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` })).toBeVisible()
   })
 
-  it.each(['usuario', 'invitado'])('permite al rol %s asignar en tareas ajenas sin editar sus campos', async (role) => {
+  it.each(['usuario', 'invitado'])('permite al rol %s editar y asignar en tareas ajenas sin poder eliminarlas', async (role) => {
     const user = userEvent.setup()
     mocks.role = role
     const person = { id: 'person', full_name: 'Persona asignada', email: 'person@example.test', avatar_url: null, role: 'usuario' as const, is_active: true }
@@ -178,8 +178,8 @@ describe('Integración del tablero', () => {
     mocks.assign.mutateAsync.mockResolvedValueOnce([person])
     renderBoard()
     await user.click(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }))
-    expect(screen.getByLabelText('Título')).toBeDisabled()
-    expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Título')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Eliminar tarea' })).not.toBeInTheDocument()
     await user.selectOptions(within(screen.getByRole('dialog')).getByLabelText('Asignar usuario'), 'person')
     await user.click(screen.getByRole('button', { name: 'Guardar asignaciones' }))
@@ -187,6 +187,41 @@ describe('Integración del tablero', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar asignaciones' })).toBeDisabled())
     expect(mocks.update.mutateAsync).not.toHaveBeenCalled()
     expect(screen.getByRole('dialog')).toBeVisible()
+  })
+
+  it.each(['usuario', 'invitado'])('permite al rol %s guardar los cambios de una tarea ajena', async (role) => {
+    const user = userEvent.setup()
+    mocks.role = role
+    mocks.tasks.mockReturnValue({ data: [{ ...task, created_by: 'someone-else' }], isLoading: false, error: null, refetch: mocks.refetch })
+    renderBoard()
+    await user.click(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }))
+    await user.clear(screen.getByLabelText('Título'))
+    await user.type(screen.getByLabelText('Título'), 'Editada por otra persona')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    expect(mocks.update.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ taskId: task.id, title: 'Editada por otra persona' }))
+  })
+
+  it('reserva eliminar tarea al creador y al administrador', async () => {
+    const user = userEvent.setup()
+    mocks.role = 'usuario'
+    mocks.tasks.mockReturnValue({ data: [{ ...task, created_by: 'someone-else' }], isLoading: false, error: null, refetch: mocks.refetch })
+    const { unmount } = renderBoard()
+    await user.click(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }))
+    expect(screen.queryByRole('button', { name: 'Eliminar tarea' })).not.toBeInTheDocument()
+    unmount()
+
+    mocks.role = 'usuario'
+    mocks.tasks.mockReturnValue({ data: [{ ...task, created_by: 'user-1' }], isLoading: false, error: null, refetch: mocks.refetch })
+    const own = renderBoard()
+    await user.click(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }))
+    expect(screen.getByRole('button', { name: 'Eliminar tarea' })).toBeInTheDocument()
+    own.unmount()
+
+    mocks.role = 'admin'
+    mocks.tasks.mockReturnValue({ data: [{ ...task, created_by: 'someone-else' }], isLoading: false, error: null, refetch: mocks.refetch })
+    renderBoard()
+    await user.click(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }))
+    expect(screen.getByRole('button', { name: 'Eliminar tarea' })).toBeInTheDocument()
   })
   it('no persiste un movimiento al soltar la tarjeta sobre sí misma', async () => {
     const user = userEvent.setup()

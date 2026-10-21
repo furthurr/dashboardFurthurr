@@ -74,7 +74,7 @@ El schema completo está en `supabase-schema.sql` (ejecutado en SQL Editor de Su
 
 - [`README.md`](README.md) es la entrada humana: configuración, ejecución, rutas y enlaces.
 - [`specs/`](specs/README.md) es la fuente de verdad de requisitos e intención de producto; actualiza la spec correspondiente antes de implementar una funcionalidad.
-- `.sdd/` (si existe) pertenece al workflow SDD externo a este orquestador; `specs/` conserva la fuente de requisitos del producto.
+- `.sdd/` y `.release/` pertenecen a workflows externos a este orquestador; `specs/` conserva la fuente de requisitos del producto y `supabase/README.md` la guía operativa de publicación.
 - [`supabase-schema.sql`](supabase-schema.sql) es la fuente de verdad local del schema Postgres. Contrástalo con `specs/04-modelo-datos.md` y `specs/05-auth-roles-permisos.md`.
 - [`supabase/migrations/`](supabase/migrations/) contiene cambios incrementales para instalaciones existentes; [`supabase/README.md`](supabase/README.md) describe orden, despliegue de Edge Functions, configuración de Auth y pruebas SQL. El bootstrap completo no debe reejecutarse sobre una BD existente.
 - [`supabase/functions/admin-users/`](supabase/functions/admin-users/) contiene backend administrativo gestionado por Supabase; las asignaciones usan RPCs Postgres autenticadas. «Sin servidor propio» no significa ausencia de código servidor. Publicar la SPA en Pages no despliega esas funciones ni las migraciones; las claves privilegiadas nunca van al frontend.
@@ -86,5 +86,5 @@ El schema completo está en `supabase-schema.sql` (ejecutado en SQL Editor de Su
 
 Para la estructura de ejecución actual consulta el mapa de módulos y el código; el árbol de carpetas descrito en la sección `Folder Structure` de este archivo puede ser anterior a la implementación vigente.
 
-Las marcas de documentación deben distinguir el árbol de trabajo sin commit de un baseline Git verificable; no declarar sincronizado `HEAD` cuando hay cambios locales relevantes. `.sdd/` permanece fuera del mantenimiento de este orquestador.
+Las marcas de documentación deben distinguir el árbol de trabajo sin commit de un baseline Git verificable; no declarar sincronizado `HEAD` cuando hay cambios locales relevantes. `.sdd/` y `.release/` permanecen fuera del mantenimiento de este orquestador.
 <!-- ai-agents-kit:documentation:end -->

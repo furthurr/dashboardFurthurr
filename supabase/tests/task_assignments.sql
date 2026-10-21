@@ -29,7 +29,8 @@ begin
   end if;
 end $$;
 
--- A guest can replace assignments on another account's task but not its fields.
+-- A guest can replace assignments and edit task fields on another account's task,
+-- but cannot take ownership of it or delete it.
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('app.assignment_guest'), 'role', 'authenticated')::text, true);
 do $$
 begin
@@ -38,8 +39,21 @@ begin
   if (select count(*) from public.task_assignees where task_id = current_setting('app.assignment_task')::uuid) <> 2 then
     raise exception 'Guest could not assign on another account task';
   end if;
-  update public.tasks set title = 'Forbidden change' where id = current_setting('app.assignment_task')::uuid;
-  if found then raise exception 'Assignment permission broadened task editing'; end if;
+  update public.tasks set title = 'Shared edit' where id = current_setting('app.assignment_task')::uuid;
+  if not found then raise exception 'Guest cannot edit task fields'; end if;
+  if not exists (select 1 from public.tasks where id = current_setting('app.assignment_task')::uuid and title = 'Shared edit') then
+    raise exception 'Guest edit did not persist';
+  end if;
+  begin
+    update public.tasks set created_by = current_setting('app.assignment_guest')::uuid
+      where id = current_setting('app.assignment_task')::uuid;
+    raise exception 'Client can rewrite task ownership';
+  exception when insufficient_privilege then null;
+  end;
+  -- RLS filters DELETE silently: an allowed delete would report a deleted row.
+  delete from public.tasks where id = current_setting('app.assignment_task')::uuid;
+  if found then raise exception 'Guest can delete another account task'; end if;
+  update public.tasks set title = 'Assignment transaction probe' where id = current_setting('app.assignment_task')::uuid;
   begin
     perform public.create_task_with_assignees('Guest creation forbidden', null, 'backlog', 'normal', '{}');
     raise exception 'Guest can create tasks';
