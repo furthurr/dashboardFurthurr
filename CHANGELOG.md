@@ -1,5 +1,35 @@
 # Changelog
 
+## [v0.6.0] - 2026-10-22
+
+### Funcionalidades
+
+- Separar el selector de tableros en «Tableros activos» y «Tableros desactivados»; la sección de desactivados solo se muestra al administrador activo.
+- Mostrar el badge «Tareas pendientes» con la suma de tareas en `backlog`, `por_hacer` y `haciendo` de cada tablero.
+- Añadir las acciones «Cambiar nombre» y «Desactivar|Activar» en el selector, con diálogo de renombrado y de confirmación que explica el efecto sobre los miembros.
+- Traducir los errores de Supabase (permisos, sesión caducada, nombre duplicado o inválido) a mensajes accionables y conservar el borrador tras un fallo.
+- Limitar los destinos de traslado de una tarea a tableros activos.
+
+### Permisos y backend
+
+- Añadir `boards.is_active` y las RPCs `rename_board`, `set_board_active` y `list_boards_with_pending_counts`. El catálogo de tableros pasa a obtenerse por RPC, que replica la visibilidad de RLS.
+- Reservar el renombrado y la activación/desactivación al administrador activo en el servidor (`42501`); desactivar un tablero conserva tareas, comentarios, adjuntos y membresías, y sus miembros pierden el acceso, también por URL directa, mientras el administrador activo lo mantiene y puede reactivarlo.
+- Corregir la recursión RLS de `INSERT ... RETURNING` con `202610220001_board_access_returning.sql` y reescribir la policy «Accessible boards» sin invocar funciones que lean `boards`; los miembros leen su propia fila de `board_members` con la policy «Members read own memberships».
+
+### Documentación y verificación
+
+- Verificar 128 pruebas Vitest en 15 archivos, `npm run lint` y `npm run build` correctos; el build mantiene la advertencia de chunk principal superior a 500 kB.
+- Validar el SQL contra PostgreSQL 16 local con Auth/Storage simulados por dos rutas: bootstrap nuevo y base existente con las dos migraciones del 2026-10-22. Los probes de `supabase/tests/boards.sql` pasan en ambas.
+- Comprobar en Chrome headless con CDP contra `npm run dev`, con llamadas a Supabase simuladas: las dos secciones, el badge, el renombrado, el ciclo desactivar/reactivar y la vista sin acciones para cuentas no administradoras.
+- Actualizar especificaciones, contratos, documentación de diseño, arquitectura, índices del proyecto y guía operativa de Supabase.
+- Límites de la evidencia: no hay pruebas E2E con cuentas reales ni auditoría de accesibilidad; la verificación local usa Auth/Storage simulados y no reproduce el entorno Supabase.
+
+### Notas de despliegue
+
+- `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql` ya están aplicadas en el proyecto Supabase remoto, en ese orden, el 2026-10-22. Tras aplicarlas pasan las tres suites remotas (`boards.sql`, `task_assignments.sql` y `user_access.sql`) y revierten sus fixtures con `ROLLBACK`; el proyecto conserva sus 4 tableros y sus 32 tareas.
+- En una instalación existente que no las tenga, aplicarlas en ese orden antes de publicar la SPA compatible. El bootstrap `supabase-schema.sql` ya incluye los mismos objetos.
+- La publicación de la SPA en GitHub Pages ocurre con este push a `main`; el workflow de Pages no aplica SQL ni Edge Functions.
+
 ## [v0.5.0] - 2026-10-22
 
 ### Funcionalidades
