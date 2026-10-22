@@ -574,6 +574,7 @@ grant execute on function public.create_task_with_assignees(text, text, public.t
 create table public.boards (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(btrim(name)) between 1 and 120 and name = btrim(name)),
+  is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
 create unique index boards_unique_name on public.boards (lower(name));
@@ -597,10 +598,13 @@ language sql stable security definer set search_path = '' as $$
 $$;
 create function public.can_access_board(p_board_id uuid) returns boolean
 language sql stable security definer set search_path = '' as $$
-  select public.is_active_account() and exists (
-    select 1 from public.boards b where b.id = p_board_id and (public.is_board_admin() or exists (
-      select 1 from public.board_members m where m.board_id = b.id and m.profile_id = auth.uid()
-    ))
+  -- Members only reach active boards; active admins reach every board.
+  select public.is_active_account() and (
+    public.is_board_admin() or exists (
+      select 1 from public.board_members m
+      join public.boards b on b.id = m.board_id
+      where m.board_id = p_board_id and m.profile_id = auth.uid() and b.is_active
+    )
   );
 $$;
 create function public.can_access_task(p_task_id uuid) returns boolean
@@ -614,9 +618,19 @@ alter table public.board_members enable row level security;
 revoke all on public.boards, public.board_members from anon, authenticated;
 grant select, insert on public.boards to authenticated;
 grant select on public.board_members to authenticated;
-create policy "Accessible boards" on public.boards for select to authenticated using (public.can_access_board(id));
+create policy "Accessible boards" on public.boards for select to authenticated
+  using (
+    public.is_active_account() and (
+      public.is_board_admin()
+      or (boards.is_active and exists (
+        select 1 from public.board_members m
+        where m.board_id = boards.id and m.profile_id = auth.uid()
+      ))
+    )
+  );
 create policy "Admins create boards" on public.boards for insert to authenticated with check (public.is_board_admin());
 create policy "Admins read memberships" on public.board_members for select to authenticated using (public.is_board_admin());
+create policy "Members read own memberships" on public.board_members for select to authenticated using (profile_id = auth.uid());
 create policy "Board access required" on public.tasks as restrictive for all to authenticated
   using (public.can_access_board(board_id)) with check (public.can_access_board(board_id));
 create policy "Board access required" on public.task_assignees as restrictive for all to authenticated
@@ -645,6 +659,54 @@ begin
   insert into public.board_members(board_id, profile_id) select p_board_id, id from unnest(p_profile_ids) ids(id) on conflict do nothing;
 end;
 $$;
+
+-- Board lifecycle: rename and deactivate/reactivate are admin only.
+create function public.rename_board(p_board_id uuid, p_name text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare trimmed text;
+begin
+  if not public.is_board_admin() then raise exception 'Admin required' using errcode = '42501'; end if;
+  if p_board_id is null or p_name is null then raise exception 'Invalid board' using errcode = '22023'; end if;
+  trimmed := btrim(p_name);
+  if char_length(trimmed) < 1 or char_length(trimmed) > 120 then
+    raise exception 'Invalid board name' using errcode = '22023';
+  end if;
+  perform 1 from public.boards where id = p_board_id for update;
+  if not found then raise exception 'Board not found' using errcode = 'P0002'; end if;
+  update public.boards set name = trimmed where id = p_board_id;
+end;
+$$;
+create function public.set_board_active(p_board_id uuid, p_active boolean) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if not public.is_board_admin() then raise exception 'Admin required' using errcode = '42501'; end if;
+  if p_board_id is null or p_active is null then raise exception 'Invalid board' using errcode = '22023'; end if;
+  perform 1 from public.boards where id = p_board_id for update;
+  if not found then raise exception 'Board not found' using errcode = 'P0002'; end if;
+  update public.boards set is_active = p_active where id = p_board_id;
+end;
+$$;
+-- Accessible boards with pending tasks (backlog, por_hacer, haciendo).
+create function public.list_boards_with_pending_counts()
+returns table (id uuid, name text, is_active boolean, created_at timestamptz, pending_count bigint)
+language sql stable security definer set search_path = '' as $$
+  select b.id, b.name, b.is_active, b.created_at,
+    (select count(*) from public.tasks t
+      where t.board_id = b.id and t.status in ('backlog', 'por_hacer', 'haciendo'))
+  from public.boards b
+  where public.is_active_account() and (
+    public.is_board_admin()
+    or (b.is_active and exists (
+      select 1 from public.board_members m where m.board_id = b.id and m.profile_id = auth.uid()
+    ))
+  )
+  order by b.name;
+$$;
+revoke all on function public.rename_board(uuid, text), public.set_board_active(uuid, boolean),
+  public.list_boards_with_pending_counts() from public, anon;
+grant execute on function public.rename_board(uuid, text), public.set_board_active(uuid, boolean),
+  public.list_boards_with_pending_counts() to authenticated;
+
 alter function public.set_task_assignees(uuid, uuid[]) rename to set_task_assignees_internal;
 revoke all on function public.set_task_assignees_internal(uuid, uuid[]) from public, anon, authenticated;
 create function public.set_task_assignees(p_task_id uuid, p_assignee_ids uuid[]) returns jsonb
