@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-10-22T04:01:18Z",
+  "generated_at": "2026-10-22T21:38:23Z",
   "root": ".",
   "modules": [
     {
@@ -32,18 +32,18 @@
       "tech": ["React", "TypeScript", "TanStack Query", "dnd-kit"],
       "entrypoints": ["src/features/board/BoardPage.tsx"],
       "depends_on": ["auth", "boards", "supabase-client", "shared-types", "shared-ui", "database-schema"],
-      "notes": "database-schema representa el contrato RPC consumido, no un import TypeScript."
+      "notes": "database-schema representa el contrato RPC consumido, no un import TypeScript. Los destinos de traslado se limitan a tableros activos."
     },
     {
       "id": "boards",
-      "name": "Selección y acceso a tableros",
+      "name": "Selección, acceso y ciclo de vida de tableros",
       "path": "src/features/boards",
-      "responsibility": "Presenta los tableros permitidos, administra creación/membresías para admin y valida el tablero antes de montar el Kanban.",
+      "responsibility": "Presenta los tableros permitidos en secciones activa/desactivada con conteo de pendientes, administra creación/membresías/renombrado/activación para admin y valida el tablero antes de montar el Kanban.",
       "kind": "feature",
       "tech": ["React", "TypeScript", "TanStack Query", "Supabase PostgREST/RPC"],
       "entrypoints": ["src/features/boards/BoardsPage.tsx", "src/features/boards/BoardRoute.tsx", "src/features/boards/api.ts"],
       "depends_on": ["auth", "board", "supabase-client", "shared-types", "shared-ui", "database-schema"],
-      "notes": "Comparte AssigneePicker/consulta de usuarios con board; autorización definitiva en RLS/RPC, no en las cards."
+      "notes": "Comparte AssigneePicker/consulta de usuarios con board; el catálogo se obtiene por RPC list_boards_with_pending_counts y la autorización definitiva vive en RLS/RPC, no en las cards."
     },
     {
       "id": "users",
@@ -81,7 +81,7 @@
       "id": "shared-types",
       "name": "Tipos compartidos",
       "path": "src/types",
-      "responsibility": "Declara perfiles, membresías proyectadas, tableros, tareas con board_id, comentarios, adjuntos y enums.",
+      "responsibility": "Declara perfiles, membresías proyectadas, tableros (con is_active y pending_count), tareas con board_id, comentarios, adjuntos y enums.",
       "kind": "lib",
       "tech": ["TypeScript"],
       "entrypoints": ["src/types/index.ts"],
@@ -91,7 +91,7 @@
       "id": "global-styles",
       "name": "Estilos globales",
       "path": "src/index.css",
-      "responsibility": "Define Tailwind, paleta oscura, custom properties y reglas globales de foco/movimiento.",
+      "responsibility": "Define Tailwind, paleta oscura, custom properties, clases compartidas ui-* (incluido .ui-badge) y reglas globales de foco/movimiento.",
       "kind": "other",
       "tech": ["CSS", "Tailwind CSS v4"],
       "entrypoints": ["src/index.css"],
@@ -101,7 +101,7 @@
       "id": "database-schema",
       "name": "Schema Supabase",
       "path": "supabase-schema.sql",
-      "responsibility": "Mantiene el bootstrap Postgres, RLS, Storage, vistas, grants y funciones transaccionales de referencia.",
+      "responsibility": "Mantiene el bootstrap Postgres, RLS, Storage, vistas, grants y funciones transaccionales de referencia, incluido el ciclo de vida de tableros.",
       "kind": "other",
       "tech": ["PostgreSQL", "SQL"],
       "entrypoints": ["supabase-schema.sql"],
@@ -111,11 +111,12 @@
       "id": "database-migrations",
       "name": "Migraciones Supabase",
       "path": "supabase/migrations",
-      "responsibility": "Evoluciona instalaciones existentes con estado de cuenta, RPCs y políticas de autorización/membresía por tablero.",
+      "responsibility": "Evoluciona instalaciones existentes con estado de cuenta, RPCs, políticas de autorización/membresía por tablero y el ciclo de vida de tableros (is_active, renombrado, activación y listado con pendientes).",
       "kind": "other",
       "tech": ["PostgreSQL", "SQL"],
-      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql", "supabase/migrations/202610200002_shared_task_editing.sql", "supabase/migrations/202610210001_boards.sql"],
-      "depends_on": ["database-schema"]
+      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql", "supabase/migrations/202610200002_shared_task_editing.sql", "supabase/migrations/202610210001_boards.sql", "supabase/migrations/202610220001_board_access_returning.sql", "supabase/migrations/202610220002_board_lifecycle.sql"],
+      "depends_on": ["database-schema"],
+      "notes": "Las dos migraciones de 202610220002 se aplicaron el 2026-10-22 en el proyecto Supabase remoto, en ese orden; las tres suites SQL remotas pasan y revierten sus fixtures con ROLLBACK. La SPA compatible aún no está publicada en GitHub Pages."
     },
     {
       "id": "admin-users",

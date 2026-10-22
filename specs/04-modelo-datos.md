@@ -58,7 +58,14 @@ Llave primaria compuesta: `task_id`, `profile_id`.
 
 - `id`: uuid, primary key.
 - `name`: text, requerido, único sin distinguir mayúsculas; entre 1 y 120 caracteres tras recortar espacios.
+- `is_active`: boolean, obligatorio, `true` por defecto. Un tablero desactivado solo es visible para los administradores activos; sus miembros dejan de acceder a él y a sus tareas. Desactivar no borra tareas, comentarios, adjuntos ni membresías.
 - `created_at`: timestamptz.
+
+Operaciones sobre tableros (reservadas a administradores activos):
+
+- `rename_board(p_board_id, p_name)`: renombra el tablero; conserva las reglas de longitud (1–120 tras recortar) y unicidad sin distinguir mayúsculas.
+- `set_board_active(p_board_id, p_active)`: desactiva o reactiva el tablero sin eliminar su contenido.
+- `list_boards_with_pending_counts()`: devuelve `id`, `name`, `is_active`, `created_at` y `pending_count` (tareas en `backlog`, `por_hacer` y `haciendo`). El administrador activo recibe todos los tableros; el resto, solo los tableros activos de los que es miembro.
 
 ### `board_members`
 

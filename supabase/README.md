@@ -5,7 +5,7 @@ La SPA sigue alojada en GitHub Pages. Las operaciones privilegiadas se ejecutan 
 ## Instalación existente
 
 1. Realiza una copia de seguridad y prueba primero en un proyecto de pruebas.
-2. Ejecuta las migraciones pendientes en orden: `migrations/202610190001_user_administration.sql`, `migrations/202610200001_task_assignments.sql`, `migrations/202610200002_shared_task_editing.sql` y finalmente `migrations/202610210001_boards.sql`. No vuelvas a ejecutar el schema bootstrap en una instalación existente. Las tareas existentes se asignan al tablero `Offline`; las cuentas activas existentes se convierten en miembros de `Offline`; `General` inicia sin miembros. Revisa la política de asignación antes de aplicar en producción.
+2. Ejecuta las migraciones pendientes en orden: `migrations/202610190001_user_administration.sql`, `migrations/202610200001_task_assignments.sql`, `migrations/202610200002_shared_task_editing.sql`, `migrations/202610210001_boards.sql`, `migrations/202610220001_board_access_returning.sql` y `migrations/202610220002_board_lifecycle.sql`. No vuelvas a ejecutar el schema bootstrap en una instalación existente. Las tareas existentes se asignan al tablero `Offline`; las cuentas activas existentes se convierten en miembros de `Offline`; `General` inicia sin miembros. Revisa la política de asignación antes de aplicar en producción.
 3. En Supabase Auth, deshabilita **Allow new users to sign up** (registro público). La API administrativa `createUser` continúa disponible. No es necesario desactivar globalmente la confirmación por correo: esta función usa `email_confirm: true` al crear cada cuenta.
 
    Alternativamente, con CLI **2.121.0** se puede revisar y aplicar el único ajuste declarado de Auth en `config.toml`, conservando las propiedades no declaradas:
@@ -27,9 +27,21 @@ Para una instalación nueva, `../supabase-schema.sql` incluye el modelo de table
 
 ### Tableros y acceso por membresía
 
-`202610210001_boards.sql` crea `boards` y `board_members`, asigna las tareas/usuarios activos existentes a `Offline`, y crea `General` vacío. Admin activo accede a todos los tableros, crea tableros y sustituye miembros; usuarios e invitados solo acceden a tableros donde sean miembros. Ser responsable de una tarea no concede acceso. Las cuentas nuevas no reciben membresías automáticamente.
+`202610210001_boards.sql` crea `boards` y `board_members`, asigna las tareas/usuarios activos existentes a `Offline`, y crea `General` vacío. `202610220001_board_access_returning.sql` corrige la comprobación RLS usada al devolver la fila recién creada por PostgREST. `202610220002_board_lifecycle.sql` añade `boards.is_active`, las RPCs de renombrado y de activación, y el listado con tareas pendientes. Admin activo accede a todos los tableros, crea tableros y sustituye miembros; usuarios e invitados solo acceden a tableros donde sean miembros. Ser responsable de una tarea no concede acceso. Las cuentas nuevas no reciben membresías automáticamente.
+
+### Ciclo de vida de los tableros
+
+`202610220002_board_lifecycle.sql` añade `boards.is_active` (por defecto `true`) y tres RPCs:
+
+- `rename_board(p_board_id, p_name)`: solo administrador activo. Recorta el nombre y exige entre 1 y 120 caracteres; el índice único sigue rechazando nombres duplicados (`23505`) y el nombre inválido devuelve `22023`.
+- `set_board_active(p_board_id, p_active)`: solo administrador activo. Desactiva o reactiva un tablero **sin borrar** tareas, comentarios, adjuntos ni membresías.
+- `list_boards_with_pending_counts()`: devuelve `id`, `name`, `is_active`, `created_at` y `pending_count` (tareas en `backlog`, `por_hacer` y `haciendo`). El administrador activo ve todos los tableros, incluidos los desactivados; las demás cuentas solo ven los tableros activos de los que son miembros.
+
+Al desactivar un tablero, sus miembros dejan de verlo en el selector y de acceder a sus tareas (RLS), incluida la URL directa; el administrador activo conserva el acceso y puede reactivarlo. La policy de lectura de `boards` ya no llama a ninguna función que lea `boards`, para no reintroducir la recursión que corrigió `202610220001_board_access_returning.sql`; los miembros leen su propia fila de `board_members` mediante la policy «Members read own memberships».
 
 RLS limita tareas, asignaciones, comentarios, metadata de adjuntos y Storage por tablero. Crear tarea exige rol admin/usuario activo y acceso al tablero; cambiar tablero usa `move_task_to_board`, exige acceso a origen y destino y actualiza la misma tarea conservando sus relaciones. La secuencia se aplicó en el proyecto Supabase seleccionado y los probes SQL remotos pasaron el 2026-10-21. El push y publicación de la SPA siguen pendientes.
+
+`202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql` se aplicaron en ese mismo proyecto el 2026-10-22, en ese orden. Después de aplicarlas se verificaron de nuevo las tres suites (`boards.sql`, `task_assignments.sql` y `user_access.sql`): las tres pasan y sus fixtures se revierten con `ROLLBACK`. El proyecto conserva sus 4 tableros y sus 32 tareas; la columna `is_active` se creó con `true` en todos ellos.
 
 Las cargas nuevas usan path `<task-id>/<UUID>.<ext>`; las antiguas con path plano se resuelven desde metadata. El bucket de adjuntos permanece privado. La UI genera URLs firmadas de corta duración; accesos firmados ya emitidos o archivos descargados no se revocan retroactivamente.
 
@@ -57,13 +69,15 @@ Comprueba con cuentas separadas:
 
 Antes de publicar la nueva SPA, verifica además: admin ve Offline y General, usuario/invitado ve solo tableros asignados, asignar una tarea no añade membresía, miembro de ambos tableros traslada una sola tarea conservando sus relaciones, y la cuenta que no pertenece al destino recibe denegación. Al retirar una membresía, nuevas peticiones de tablas/Storage deben quedar denegadas.
 
+Para el ciclo de vida de los tableros: en «Tableros», el administrador ve «Cambiar nombre», «Desactivar» y «Activar»; el tablero desactivado pasa a su propia sección, visible solo para administradores. Comprueba que un miembro deja de ver el tablero desactivado y que su URL directa responde «no tienes acceso»; que «Tareas pendientes» suma `backlog`, `por_hacer` y `haciendo`; y que una cuenta no administradora recibe denegación al invocar `rename_board` o `set_board_active` directamente.
+
 1. Un admin ve «Usuarios»; usuario e invitado no pueden abrir la ruta ni invocar la función (403).
 2. Alta: la sesión del admin no cambia; la cuenta nueva entra inmediatamente sin correo.
 3. Cambia la contraseña; la nueva permite entrar y la anterior no. Esto no promete revocar sesiones existentes.
 4. Desactiva una cuenta ya conectada: con su JWT anterior, tareas, comentarios, asignaciones, vistas y Storage privado dejan de ser accesibles. La UI comprueba el perfil cada 30 segundos y al volver a la ventana. Reactiva y verifica el acceso.
 5. Intenta cambiar `role` o `is_active` directamente con el cliente autenticado: debe ser rechazado por permisos de columnas.
 6. Verifica que las tareas, comentarios y adjuntos del usuario desactivado se conservan.
-- Desde «Usuarios», confirma la promoción de una cuenta `usuario` o `invitado`; verifica que el rol cambia a `admin`, que `is_active` no cambia y que una cuenta no administradora recibe 403 si intenta invocar directamente la operación. Re-despliega `admin-users` para que la acción nueva esté disponible en Supabase.
+7. Desde «Usuarios», confirma la promoción de una cuenta `usuario` o `invitado`; verifica que el rol cambia a `admin`, que `is_active` no cambia y que una cuenta no administradora recibe 403 si intenta invocar directamente la operación. Re-despliega `admin-users` para que la acción nueva esté disponible en Supabase.
 
 `is_active` es el estado de acceso a **esta plataforma**: no elimina el usuario de Auth ni invalida criptográficamente sus JWT. La protección inmediata es RLS, que consulta el estado en cada petición. El cliente autenticado puede leer su propio perfil inactivo para mostrar el bloqueo, pero no modificarlo. Los avatares del bucket público siguen siendo públicos; archivos ya descargados o URLs firmadas emitidas previamente no pueden retirarse retroactivamente mediante RLS.
 

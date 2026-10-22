@@ -7,17 +7,20 @@ Documentación canónica de arquitectura. Lee este archivo antes de cambiar lím
 - Tecnología detectada: SPA React 19/TypeScript 6/Vite 8, Supabase Auth/PostgreSQL/Storage, Edge Function administrativa y RPCs Postgres.
 - Modo: `lite`.
 - Commit base revisado: `81335b92bc1962a47c9c3bb963271c3667bc7b63` (2026-05-04). Es una referencia, no un baseline que incluya los cambios locales.
-- Última actualización documental: 2026-10-21, flujo de tableros y promoción local de cuentas a admin; refleja el árbol de trabajo y no establece un baseline Git nuevo.
+- Última actualización documental: 2026-10-22, ciclo de vida de tableros (activación/desactivación, renombrado y conteo de pendientes) con sus políticas RLS y RPCs, y en la misma fecha la **aplicación verificada de `202610220001` y `202610220002` en el proyecto Supabase remoto**; refleja el árbol de trabajo y no establece un baseline Git nuevo.
+- `HEAD` actual: `b42a4d2fd6b1eebae82305eb4aa3402e995078c5` (2026-10-22, `chore(release): preparar versión v0.5.0`). El árbol de trabajo contiene 31 archivos modificados y 2 migraciones sin trackear (`202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql`): **esta documentación no declara `HEAD` como fuente sincronizada**.
 - Commit base de implementación y primera sincronización: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`.
-- Actualización operativa posterior: la migración de tableros y los tres probes SQL se aplicaron/pasaron en el proyecto Supabase elegido el 2026-10-21. Este registro de despliegue sigue pendiente de commit; no se declara sincronizado con HEAD.
-- Alcance: selección post-login, administración de cuentas y promoción de roles vía Edge Function, gestión de membresías, autorización RLS por tablero, aislamiento de recursos y traslado atómico.
+- Actualización operativa posterior: la migración de tableros y los tres probes SQL se aplicaron/pasaron en el proyecto Supabase elegido el 2026-10-21. El 2026-10-22 se aplicaron además, en orden, `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql`, y se volvieron a pasar las tres suites SQL remotas (`boards.sql`, `task_assignments.sql`, `user_access.sql`) con fixtures revertidos mediante `ROLLBACK`. Este registro de despliegue sigue pendiente de commit; no se declara sincronizado con HEAD.
+- Estado de despliegue del ciclo de vida: `202610220001` y `202610220002` **aplicadas el 2026-10-22 en el proyecto Supabase remoto**, en ese orden; el contrato remoto ya es compatible con la UI del ciclo de vida. Siguen pendientes: la publicación de la SPA en GitHub Pages (ocurre al hacer push a `main`) y el baseline Git.
+- Alcance: selección post-login, administración de cuentas y promoción de roles vía Edge Function, gestión de membresías, autorización RLS por tablero, aislamiento de recursos, traslado atómico y ciclo de vida de tableros.
 
 ## Contexto para IA
 
 - **Sistema:** dashboard Kanban estático en GitHub Pages; datos/Auth/Storage mediante Supabase JS. El repositorio también contiene backend desplegable en Supabase: `admin-users` para operaciones privilegiadas y funciones Postgres para tareas/asignaciones. No hay servidor de aplicación independiente ni SSR (`src/App.tsx:19-42`, `supabase/functions/admin-users/index.ts:13-80`).
 - **Estilo:** features cliente `auth`, `boards`, `board` y `users`, providers globales y TanStack Query. Lecturas ordinarias acceden al SDK; las operaciones de autorización y traslado usan RPCs. No se documenta una capa de repositorios (`src/features/boards/api.ts`, `src/features/board/api.ts`).
-- **Módulos y límites:** `auth` mantiene sesión/perfil; `boards` compone selector, creación y miembros; `board` contiene Kanban, tareas, adjuntos, comentarios y `AssigneePicker`; `src/types/` define modelos. La autorización real reside en Postgres/Storage, no en la visibilidad de controles React.
-- **Datos y permisos:** cada tarea referencia obligatoriamente a un tablero. Admin activo ve todos; usuario/invitado activo accede solo por membresía. Ser responsable no da acceso. RLS restrictiva sigue el tablero para tareas, asignaciones, comentarios y adjuntos. Alta admin/usuario requiere pertenencia; traslado exige acceso a origen y destino. Las cuentas activas existentes se asignan inicialmente a Offline; General inicia sin miembros (`supabase/migrations/202610210001_boards.sql:4-22,24-59,63-131`).
+- **Módulos y límites:** `auth` mantiene sesión/perfil; `boards` compone selector, creación, miembros y ciclo de vida de tableros; `board` contiene Kanban, tareas, adjuntos, comentarios y `AssigneePicker`; `src/types/` define modelos. La autorización real reside en Postgres/Storage, no en la visibilidad de controles React.
+- **Datos y permisos:** cada tarea referencia obligatoriamente a un tablero. Admin activo ve todos; usuario/invitado activo accede solo por membresía y solo a tableros activos. Ser responsable no da acceso. RLS restrictiva sigue el tablero para tareas, asignaciones, comentarios y adjuntos. Alta admin/usuario requiere pertenencia; traslado exige acceso a origen y a un destino activo. Las cuentas activas existentes se asignan inicialmente a Offline; General inicia sin miembros (`supabase/migrations/202610210001_boards.sql:4-22,24-59,63-131`, `supabase/migrations/202610220002_board_lifecycle.sql:15-36`).
+- **Ciclo de vida en la base de datos:** `boards.is_active` activa/desactiva un tablero sin borrar contenido ni membresías. Tres RPCs `SECURITY DEFINER` con `search_path = ''` lo sostienen: `list_boards_with_pending_counts` (catálogo visible con conteo de pendientes), `rename_board` y `set_board_active` (solo admin). La policy de lectura de `boards` no invoca funciones que lean `boards`, para no reintroducir la recursión que corrigió `202610220001_board_access_returning.sql` (`supabase/migrations/202610220002_board_lifecycle.sql:7-90`).
 - **Regla de dependencias observada:** las páginas de feature pueden usar sus hooks/API locales, tipos compartidos y el cliente en `src/lib/`; la inicialización y el routing viven en `App.tsx` (`src/App.tsx:1-40`, `src/features/board/api.ts:1-21`). No asumir una separación por capas que el código actual no implementa.
 - **Fuentes de verdad:** `specs/` contiene la intención funcional y las decisiones de producto (`AGENTS.md:33-40`); `supabase-schema.sql` es el schema SQL de referencia según `AGENTS.md:68-70`; el código actual describe el comportamiento implementado. Las carpetas `.data/` y `.design/` documentan sus respectivos dominios sin reemplazar esas fuentes.
 
@@ -32,7 +35,7 @@ flowchart LR
   browser <-->|Auth, PostgREST y Storage| supabase[(Supabase<br/>Auth + PostgreSQL + Storage)]
   browser -->|JWT verificado + acciones administrativas| edge[Supabase Edge Function<br/>admin-users]
   edge -->|API administrativa y perfiles| supabase
-  browser -->|RPC autenticado| rpc[Funciones Postgres<br/>tableros, creación, asignaciones y traslados]
+  browser -->|RPC autenticado| rpc[Funciones Postgres<br/>tableros, ciclo de vida, creación, asignaciones y traslados]
   rpc -->|transacción y permisos explícitos| supabase
   actions[GitHub Actions] -->|npm ci · npm run build · publica dist| pages
 ```
@@ -54,7 +57,7 @@ flowchart LR
 | Entrada y composición | Monta React, providers, `HashRouter` y rutas | `src/main.tsx:6-10`, `src/App.tsx:1-40` |
 | Auth | Sesión, perfil activo, limpieza de caché y refresco a los 30 s/al recuperar foco | `src/features/auth/AuthContext.tsx:27-98`, `src/features/auth/ProtectedRoute.tsx:9-34` |
 | Users | Listado paginado, alta confirmada, nombre, contraseña, estado y promoción confirmada de cuentas no admin a admin | `src/features/users/UsersPage.tsx`, `src/features/users/api.ts` |
-| Boards | Selector de tableros accesibles; creación admin; gestión de miembros; ruta valida el acceso | `src/features/boards/BoardsPage.tsx`, `src/features/boards/BoardRoute.tsx`, `src/features/boards/api.ts` |
+| Boards | Selector de tableros accesibles con secciones activa/desactivada, creación admin, gestión de miembros, renombrado y activar/desactivar; la ruta valida el acceso | `src/features/boards/BoardsPage.tsx`, `src/features/boards/BoardRoute.tsx`, `src/features/boards/api.ts` |
 | Board | Columnas, tarjetas, modales, ordenamiento y mutaciones de tareas | `src/features/board/BoardPage.tsx:30-53`, `src/features/board/api.ts:5-29`, `src/features/board/BoardPage.tsx:97-147` |
 | Comentarios y adjuntos | Hooks/API asociados a tareas y Storage para ficheros | `src/features/board/commentsApi.ts:5-24`, `src/features/board/attachmentsApi.ts:5-22`, `src/features/board/attachmentsApi.ts:24-72` |
 | Cliente Supabase | Crea el cliente con las variables de entorno públicas requeridas | `src/lib/supabase.ts:1-10` |
@@ -62,8 +65,9 @@ flowchart LR
 | Servicio gestionado | Auth, persistencia, Storage y políticas RLS | `supabase-schema.sql:10-168`, `supabase-schema.sql:349-424` |
 | Administración privilegiada | Verifica JWT con `auth.getUser`, exige admin activo y ejecuta API administrativa, incluida la promoción de rol | `supabase/functions/admin-users/index.ts:20-72`, `supabase/functions/admin-users/validation.ts` |
 | Funciones transaccionales | Alta de tarea con responsables y sustitución completa de asignaciones | `supabase/migrations/202610200001_task_assignments.sql:7-76` |
-| Políticas de edición compartida | Permisos por columna en `tasks` y policy de `UPDATE` para todo autenticado activo | `supabase/migrations/202610200002_shared_task_editing.sql:1-22` |
+| Políticas de edición compartida | Permisos por columna en `tasks` y policy de `UPDATE` para todo autenticado activo | `supabase/migrations/202610200002_shared_task_editing.sql:1-19` |
 | Políticas de tableros | Membresías, aislamiento RLS de datos/Storage y RPCs para creación, traslado y gestión de miembros | `supabase/migrations/202610210001_boards.sql` |
+| Ciclo de vida de tableros | Columna `boards.is_active`, RPCs `rename_board`/`set_board_active`/`list_boards_with_pending_counts` y policies reescritas sin recursión RLS | `supabase/migrations/202610220001_board_access_returning.sql`, `supabase/migrations/202610220002_board_lifecycle.sql` |
 
 TanStack Query está configurado en `src/App.tsx` con `staleTime` de cinco minutos y un reintento (`src/App.tsx:10-17`); las queries de tareas, comentarios y adjuntos se definen junto a la feature correspondiente (`src/features/board/api.ts:24-29`, `src/features/board/commentsApi.ts:19-24`, `src/features/board/attachmentsApi.ts:16-22`). El tablero permite mover tareas con dnd-kit y dispone de sensor de teclado (`src/features/board/BoardPage.tsx:56-65`, `src/features/board/BoardPage.tsx:97-147`).
 
@@ -74,8 +78,18 @@ TanStack Query está configurado en `src/App.tsx` con `staleTime` de cinco minut
 1. `AuthProvider` recupera la sesión de Supabase y escucha cambios de autenticación (`src/features/auth/AuthContext.tsx:38-63`).
 2. Con una sesión, obtiene el perfil desde `profiles`; sin sesión, limpia el estado (`src/features/auth/AuthContext.tsx:22-36`, `src/features/auth/AuthContext.tsx:43-48`).
 3. `ProtectedRoute` redirige sin sesión, bloquea perfiles ausentes/inactivos y comprueba `adminOnly`. El perfil se refresca cada 30 segundos y al recuperar foco; se descartan respuestas de sesiones anteriores y se limpia la caché al cambiar identidad o perder acceso (`src/features/auth/ProtectedRoute.tsx:21-32`, `src/features/auth/AuthContext.tsx:27-98`).
-4. Tras autenticarse, el usuario consulta `boards`; RLS devuelve todos a admin y solo membresías a otras cuentas. `BoardRoute` vuelve a comprobar acceso antes de montar el Kanban.
+4. Tras autenticarse, el usuario consulta el catálogo de tableros mediante la RPC `list_boards_with_pending_counts`, que replica la visibilidad de RLS y añade el conteo de pendientes; `BoardRoute` vuelve a comprobar acceso contra ese catálogo antes de montar el Kanban.
 5. `BoardPage` consulta tareas por `board_id`; comentarios y adjuntos siguen sujetos a RLS del tablero (`src/features/board/api.ts`, `src/features/board/commentsApi.ts`, `src/features/board/attachmentsApi.ts`).
+
+### Ciclo de vida de tableros
+
+1. El selector pide el catálogo por RPC y lo separa en dos secciones según `is_active`: «Tableros activos» para todos y «Tableros desactivados» solo para admin activo (`src/features/boards/BoardsPage.tsx:19-20,32-35`).
+2. Cada card muestra el conteo de pendientes que devuelve la misma RPC; el cliente no cuenta tareas por su cuenta (`src/features/boards/BoardsPage.tsx:60`).
+3. Renombrar y activar/desactivar se ejecutan como RPC `SECURITY DEFINER` que vuelven a comprobar el rol admin en servidor: `rename_board` recorta y valida 1–120 caracteres; `set_board_active` alterna `is_active` sin borrar tareas, comentarios, adjuntos ni membresías (`supabase/migrations/202610220002_board_lifecycle.sql:38-66`).
+4. El efecto sobre el acceso no depende de la UI: `can_access_board` exige tablero activo para los miembros, y la policy restrictiva por tablero se apoya en ella. Un tablero desactivado deja de ser visible y accesible para sus miembros, también por URL directa, mientras el admin activo conserva el acceso y puede reactivarlo (`supabase/migrations/202610220002_board_lifecycle.sql:26-36`).
+5. Un tablero desactivado tampoco es destino válido de un traslado: la interfaz filtra por `is_active` y la RPC de traslado vuelve a comprobar el acceso al destino (`src/features/board/BoardPage.tsx:411`).
+
+**Restricción anti-recursión.** `INSERT ... RETURNING` de PostgREST evalúa la policy de lectura de `boards`. Por eso la policy reescrita comprueba la pertenencia con un `EXISTS` directo sobre `board_members` en lugar de llamar a `can_access_board()`; y `can_access_board()` puede leer `boards` (necesita `is_active`) solo porque ya no la invoca esa policy. Reintroducir una llamada de ese tipo en la policy de lectura de `boards` rompería el alta de tableros con «infinite recursion detected in policy» (`supabase/migrations/202610220001_board_access_returning.sql:5-14`, `supabase/migrations/202610220002_board_lifecycle.sql:12-24`).
 
 ### Datos del tablero
 
@@ -93,6 +107,8 @@ Ese workflow **no despliega SQL ni Edge Functions**. En instalaciones existentes
 
 El selector y las nuevas operaciones requieren `202610210001_boards.sql` además de las migraciones anteriores. Esa secuencia ya se aplicó al proyecto elegido; el frontend compatible aún no se desplegó a Pages.
 
+El ciclo de vida de tableros añade dos migraciones que deben aplicarse **en orden** sobre instalaciones existentes: `202610220001_board_access_returning.sql` (corrige la recursión RLS al devolver la fila insertada) y `202610220002_board_lifecycle.sql` (columna `is_active`, policies reescritas y las tres RPCs). El bootstrap `supabase-schema.sql` ya incluye los mismos objetos para instalaciones nuevas. Estado real: **ambas migraciones se aplicaron el 2026-10-22 en el proyecto Supabase remoto**, en ese orden, y las tres suites SQL remotas pasaron con fixtures revertidos mediante `ROLLBACK`; el contrato remoto ya es compatible con el frontend que llama a `list_boards_with_pending_counts`. Lo que sigue pendiente es publicar esa SPA en GitHub Pages (push a `main`) (`supabase/README.md`).
+
 ## 6. Riesgos y límites conocidos
 
 - La disponibilidad depende de GitHub Pages y Supabase, incluidas Edge Functions y RPCs. No se observó persistencia local alternativa.
@@ -102,7 +118,12 @@ El selector y las nuevas operaciones requieren `202610210001_boards.sql` además
 - Las sustituciones concurrentes de responsables se serializan; prevalece el último conjunto guardado, sin resolución de conflictos del borrador. El código no promete revocar sesiones al cambiar contraseñas ni eliminar enlaces firmados al desactivar cuentas.
 - Ampliar la edición de tareas a toda cuenta activa aumenta la superficie de escritura concurrente sobre `tasks`: varias personas pueden editar la misma card sin bloqueo de versión ni detección de conflicto de borrador, y la última escritura prevalece. La ausencia de ese mecanismo es una limitación conocida del modelo, no un defecto introducido por la migración.
 - La regla de edición compartida está contenida en la base de datos, no en la interfaz. Un cliente que omita la capa React queda igualmente sujeto a RLS y a los permisos por columna.
+- El ciclo de vida de tableros sigue el mismo patrón: la visibilidad de los controles (secciones, botones) es solo una ayuda de interfaz; la autorización efectiva la aplican la RPC `SECURITY DEFINER` y las policies de Postgres. Un cliente que omita la capa React obtiene el mismo rechazo (`42501`) y la misma pérdida de acceso al tablero desactivado (`supabase/migrations/202610220002_board_lifecycle.sql:15-24,44,60`).
 - `task-attachments` es privado y los enlaces firmados expiran; enlaces ya emitidos o datos descargados no se revocan retroactivamente mediante RLS.
+- La policy de lectura de `boards` es una frontera delicate: cualquier función que lea `public.boards` invocada desde ella reintroduciría la recursión RLS. La corrección depende de que la policy siga usando un `EXISTS` directo sobre `board_members` (`supabase/migrations/202610220002_board_lifecycle.sql:12-24`).
+- Desactivar un tablero no es revocar identidad: las membresías, las tareas, los comentarios y los adjuntos se conservan, y los JWT o las URLs firmadas ya emitidos siguen siendo válidos. Un tablero desactivado es recuperable por el admin activo con `set_board_active`.
+- El conteo de pendientes se recalcula en cada listado (subselect correlacionado sobre `tasks` por tablero) y el cliente refresca cada 30 s; con volumen alto el coste crece sin caché ni materialización (`supabase/migrations/202610220002_board_lifecycle.sql:71-85`, `src/features/boards/api.ts:20-22`).
+- Las migraciones `202610220001` y `202610220002` ya están aplicadas en el proyecto Supabase remoto (2026-10-22) y las tres suites SQL remotas pasan, pero la SPA compatible **aún no está publicada en GitHub Pages**: hasta el push, el usuario seguirá viendo la versión anterior del selector. El baseline Git también sigue pendiente, así que `HEAD` no es fuente sincronizada.
 
 ## Evidencia de implementación y límites de esta revisión
 
@@ -111,6 +132,10 @@ En revisiones previas al cambio de tableros se registraron 79 pruebas Vitest, 9 
 Para tableros se registraron 111 pruebas Vitest, lint/build correctos y advertencia de chunk principal >500 kB. Los probes SQL pasaron en PostgreSQL local embebido con Auth/Storage simulados y en el proyecto Supabase elegido; los fixtures terminan en `ROLLBACK`. Chromium con backend simulado verificó selector, miembros y traslado a 360/768/1440 px. La SPA aún no se desplegó; no es auditoría de seguridad completa ni accesibilidad WCAG.
 
 La promoción de rol quedó implementada en el árbol de trabajo y se verificó con 115 pruebas Vitest, 11 pruebas Deno de `admin-users`, lint y build correctos. El build mantiene la advertencia de chunk principal >500 kB. No se comprobó el despliegue de la versión actualizada de la Edge Function ni de la SPA.
+
+El ciclo de vida de tableros se verificó en el árbol de trabajo con 128 pruebas Vitest en 15 archivos, lint y build correctos (persiste el aviso de chunk >500 kB). El SQL se ejecutó contra PostgreSQL 16 local en Docker con Auth/Storage simulados, en dos rutas: bootstrap nuevo y base existente con `202610220001` y `202610220002`; los probes de `supabase/tests/boards.sql` pasan en ambas, y el baseline con el bootstrap de `HEAD` también pasó. Con tareas en los cinco estados, el contador marca 3 (solo `backlog`, `por_hacer` y `haciendo`). Chrome headless con CDP, contra `npm run dev` e interceptando las llamadas a Supabase con datos simulados, verificó las dos secciones, el badge, el renombrado, el ciclo desactivar/reactivar y la vista de rol no administrador. El 2026-10-22 esas dos migraciones se aplicaron además en el proyecto Supabase remoto, en ese orden, y las tres suites remotas (`supabase/tests/boards.sql`, `task_assignments.sql`, `user_access.sql`) pasaron revirtiendo sus fixtures con `ROLLBACK`; el proyecto conserva sus 4 tableros y sus 32 tareas, con `is_active = true` en todos.
+
+Límites de esa evidencia: la verificación local usa un harness propio con Auth/Storage simulados y no reproduce el entorno Supabase; la evidencia remota cubre SQL (migraciones aplicadas y tres suites en `PASS` con fixtures revertidos), pero no hay E2E con cuentas reales, ni auditoría de accesibilidad, ni comprobación de la UI contra el servicio real porque la SPA compatible **aún no está publicada en GitHub Pages**. El baseline Git sigue pendiente porque el árbol de trabajo tiene 31 archivos modificados y 2 migraciones sin trackear.
 
 ## Decisiones
 

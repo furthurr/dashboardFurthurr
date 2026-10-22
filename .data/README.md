@@ -4,22 +4,25 @@ Documentación canónica de datos y contratos consumidos por la aplicación. Lé
 
 ## Estado de sincronización
 
-- Tecnología detectada: cliente TypeScript `@supabase/supabase-js`, Auth/PostgREST/PostgreSQL/Storage, Edge Function `admin-users` y RPCs de tareas/asignaciones.
+- Tecnología detectada: cliente TypeScript `@supabase/supabase-js`, Auth/PostgREST/PostgreSQL/Storage, Edge Function `admin-users` y RPCs de tareas/asignaciones/tableros.
 - Modo: `full`.
 - ¿BD interna?: No. La persistencia es PostgreSQL gestionado externamente por Supabase; el schema de referencia está en `supabase-schema.sql`.
 - Commit base revisado: `81335b92bc1962a47c9c3bb963271c3667bc7b63` (2026-05-04), no representa cambios locales posteriores.
-- Última actualización documental: 2026-10-21, sincronización de tableros y del contrato de promoción de cuentas a admin; describe el árbol de trabajo sin fijar un nuevo baseline Git.
+- Última actualización documental: 2026-10-22, ciclo de vida de tableros (`is_active`, renombrado, activación/desactivación y conteo de pendientes) y, en la misma fecha, **aplicación verificada de `202610220001` y `202610220002` en el proyecto Supabase remoto**; describe el **árbol de trabajo sin commit** y no fija un nuevo baseline Git.
+- `HEAD` actual: `b42a4d2fd6b1eebae82305eb4aa3402e995078c5` (2026-10-22, `chore(release): preparar versión v0.5.0`). El árbol de trabajo tiene 31 archivos modificados y 2 migraciones sin trackear (`202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql`): **esta documentación no declara `HEAD` como fuente sincronizada**. Baseline Git pendiente.
 - Commit base de implementación y primera sincronización: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`, incluye el código, la migración y la documentación funcional inicial.
 - Actualización operativa posterior: la secuencia de migraciones y las pruebas SQL `boards.sql`, `task_assignments.sql` y `user_access.sql` se ejecutaron correctamente en el proyecto Supabase seleccionado el 2026-10-21. El registro documental de ese despliegue y la release `v0.4.0` siguen sin commit; baseline de esta actualización **pendiente**.
+- Estado de despliegue del ciclo de vida: `202610220001` y `202610220002` **aplicadas el 2026-10-22 en el proyecto Supabase remoto**, en ese orden. Las tres suites SQL remotas (`boards.sql`, `task_assignments.sql`, `user_access.sql`) pasan y revierten sus fixtures con `ROLLBACK`. Siguen pendientes: la publicación de la SPA en GitHub Pages (ocurre al hacer push a `main`) y el baseline Git.
 
 ## Contexto para IA
 
-- **Qué consume:** SDK para Auth/tablas/Storage, `functions.invoke('admin-users')` para administración (incluida la promoción a admin) y RPCs para crear/trasladar tareas, reemplazar responsables y gestionar miembros. No se encontró OpenAPI; [el catálogo](01-endpoints.md) documenta los contratos observados.
+- **Qué consume:** SDK para Auth/tablas/Storage, `functions.invoke('admin-users')` para administración (incluida la promoción a admin) y RPCs para listar/crear/trasladar tareas, reemplazar responsables, gestionar miembros y operar el ciclo de vida de tableros. No se encontró OpenAPI; [el catálogo](01-endpoints.md) documenta los contratos observados.
 - **Auth:** `AuthProvider` verifica el perfil activo, lo refresca cada 30 s/al recuperar foco y limpia la caché ante cambio de identidad o pérdida de acceso. RLS/grants y verificaciones explícitas en Edge/RPC autorizan las operaciones; `is_active` no es revocación criptográfica de JWT (`src/features/auth/AuthContext.tsx:27-98`).
-- **Modelos clave:** `Board`, `Task.board_id`, `board_members`, `AssigneeProfile`, `TaskWithAssignees.assignees` y `ManagedUser` (`src/types/index.ts`, `supabase/migrations/202610210001_boards.sql`).
+- **Modelos clave:** `Board` (con `is_active` y `pending_count`), `Task.board_id`, `board_members`, `AssigneeProfile`, `TaskWithAssignees.assignees` y `ManagedUser` (`src/types/index.ts`, `supabase/migrations/202610210001_boards.sql`).
 - **Fuentes de datos:** Supabase Auth, PostgreSQL administrado, Storage y caché de TanStack Query. No se encontró una base de datos local.
-- **Convenciones:** TanStack Query, cinco minutos/un reintento por defecto; administración y usuarios asignables usan `staleTime: 0`. Listado administrativo de 50 por página y consulta de cuentas activas en lotes de 500. No hay timeout explícito ni contrato global de error; la Edge Function sí devuelve `{ error: string }`.
-- **Integridad y permisos:** cada tarea tiene un `board_id`; admins ven todos los tableros y otras cuentas activas solo los que tienen asignados. Ser responsable de una tarea no concede acceso al tablero. RLS limita tareas, asignaciones, comentarios y metadatos/objetos de Storage. Las acciones sobre tareas existentes requieren acceso a su tablero; crear tarea además requiere rol y membresía. El traslado requiere acceso al origen y destino y no duplica la tarea. Admin gestiona miembros.
+- **Convenciones:** TanStack Query, cinco minutos/un reintento por defecto; administración y usuarios asignables usan `staleTime: 0`. El catálogo de tableros se obtiene por RPC (`list_boards_with_pending_counts`) con `staleTime: 0` y refresco de 30 s; alta, renombrado y activación/desactivación invalidan `['boards']`. Listado administrativo de 50 por página y consulta de cuentas activas en lotes de 500. No hay timeout explícito ni contrato global de error; la Edge Function sí devuelve `{ error: string }` y el selector de tableros traduce códigos SQL a mensajes (`src/features/boards/BoardsPage.tsx:72-91`).
+- **Integridad y permisos:** cada tarea tiene un `board_id`; admins ven todos los tableros y otras cuentas activas solo los **activos** en los que son miembros. Ser responsable de una tarea no concede acceso al tablero. RLS limita tareas, asignaciones, comentarios y metadatos/objetos de Storage. Las acciones sobre tareas existentes requieren acceso a su tablero; crear tarea además requiere rol y membresía. El traslado requiere acceso al origen y a un destino activo. Admin gestiona miembros, renombra y activa/desactiva tableros.
+- **Ciclo de vida de tableros:** `boards.is_active` permite desactivar un tablero sin borrar tareas, comentarios, adjuntos ni membresías. Mientras está desactivado, sus miembros dejan de verlo y de acceder a sus tareas (también por URL directa); el admin activo conserva el acceso y puede reactivarlo. El listado de pendientes suma `backlog`, `por_hacer` y `haciendo`.
 - **Campos sensibles/PII:** perfiles incluyen email, nombre y avatar; tareas, comentarios y adjuntos contienen contenido aportado por usuarios e identificadores. No se documentan valores reales.
 - **Límite de esta documentación:** registra el contrato observado, no certifica la configuración desplegada de Supabase ni sustituye una auditoría de seguridad.
 
@@ -36,7 +39,7 @@ Documentación canónica de datos y contratos consumidos por la aplicación. Lé
 
 ## Fuentes de verdad
 
-- `supabase-schema.sql`: bootstrap de referencia; `supabase/migrations/`: cambios incrementales para instalaciones existentes. `supabase/README.md`: orden y operación; no reejecutar el bootstrap sobre una BD existente.
+- `supabase-schema.sql`: bootstrap de referencia (incluye ya `boards.is_active` y las tres RPCs de ciclo de vida); `supabase/migrations/`: cambios incrementales para instalaciones existentes, con `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql` ya aplicadas el 2026-10-22 en el proyecto remoto. `supabase/README.md`: orden y operación; no reejecutar el bootstrap sobre una BD existente.
 - `src/types/index.ts`: tipos TypeScript usados por la app.
 - `src/lib/supabase.ts`: inicialización y nombres de variables necesarias.
 - `src/features/auth/`, `src/features/users/`, `src/features/boards/` y `src/features/board/`: operaciones cliente; `supabase/functions/admin-users/`: validación y acciones servidor.
@@ -57,3 +60,38 @@ Se reutiliza evidencia previa de implementación en esta sesión: 79 pruebas Vit
 Para tableros se registraron 111 pruebas Vitest, lint y build correctos. Los tres probes SQL pasaron con Auth/Storage simulados contra bootstrap+migración incremental local y contra el proyecto Supabase seleccionado; sus fixtures se revierten. Chromium con backend simulado cubrió selector, miembros y traslado a 360/768/1440 px. Esto no es E2E completo ni auditoría de seguridad. El build informa que el chunk principal supera 500 kB.
 
 La acción local `promote-admin` se verificó con 115 pruebas Vitest, 11 pruebas Deno de `admin-users`, lint y build correctos. No requiere migración SQL; el despliegue de esta versión de la Edge Function no se comprobó. El baseline Git de esta actualización queda pendiente mientras haya cambios locales sin commit.
+
+### Ciclo de vida de tableros (2026-10-22)
+
+Evidencia de la implementación en el árbol de trabajo, **no comandos repetidos durante esta sincronización documental**:
+
+- Vitest: 128 pruebas en 15 archivos, todas correctas. Cubren el selector (secciones, badge, renombrado, activar/desactivar, vista sin acciones para no admin) en `src/features/boards/BoardsPage.test.tsx:117-200`, los contratos RPC en `src/features/boards/api.test.ts:23-58` y el filtrado de destinos en `src/features/board/TaskDetailModal.test.tsx:15`.
+- `npm run lint` y `npm run build` correctos; persiste el aviso preexistente de chunk principal >500 kB.
+- SQL ejecutado contra PostgreSQL 16 local en Docker con Auth/Storage simulados, en dos rutas: (a) bootstrap nuevo y (b) base existente + `202610220001` y `202610220002`. Los probes de `supabase/tests/boards.sql` pasan en ambas; el baseline con el bootstrap de `HEAD` también pasó.
+- Comprobación adicional: con tareas en los cinco estados, el contador marca 3 (solo `backlog`, `por_hacer` y `haciendo`).
+- Navegador real (Chrome headless con CDP) contra `npm run dev`, interceptando las llamadas a Supabase con datos simulados: se verificaron las dos secciones, el badge, el renombrado (diálogo precargado y actualización de la lista), el ciclo desactivar/reactivar y la vista de rol no administrador sin acciones ni sección de desactivados.
+
+Límites de esta evidencia:
+
+- La verificación SQL descrita arriba es local, con PostgreSQL 16 en Docker y Auth/Storage simulados; la aplicación y la verificación remotas se documentan en el apartado siguiente.
+- No hay E2E con cuentas reales ni auditoría de accesibilidad.
+- La verificación SQL local usa un harness propio con Auth/Storage simulados, no el entorno Supabase: no certifica el comportamiento del servicio Supabase, sus grants efectivos ni sus políticas Storage.
+- El baseline Git sigue pendiente: el árbol de trabajo contiene 31 archivos modificados y 2 migraciones sin trackear, y `HEAD` (`b42a4d2`) no incluye esta feature.
+
+### Aplicación remota y verificación (2026-10-22)
+
+Hecho verificado sobre el proyecto Supabase remoto (proyecto «furthurr'sDashboard»), registrado en `supabase/README.md`:
+
+- Se aplicaron en este orden `supabase/migrations/202610220001_board_access_returning.sql` y `supabase/migrations/202610220002_board_lifecycle.sql`.
+- Estado previo comprobado antes de aplicar: `boards.is_active` no existía y tampoco existían las RPCs `rename_board`, `set_board_active` y `list_boards_with_pending_counts`, ni la policy «Members read own memberships».
+- Estado posterior comprobado: `boards.is_active` presente, las tres RPCs presentes y la policy «Members read own memberships» presente. El proyecto conserva sus 4 tableros y sus 32 tareas; la columna se creó con `true` en todos ellos.
+- Verificación posterior a la aplicación: las tres suites SQL remotas pasan y revierten sus fixtures con `ROLLBACK`:
+  - `supabase/tests/boards.sql` → «PASS: boards, membership, RPC authorization, resources, transfer and revocation», con los nuevos probes de ciclo de vida (el admin ve los tableros desactivados y su contador, renombra, rechaza duplicado y nombre vacío, desactiva y reactiva; el miembro pierde visibilidad y acceso y recibe `42501`).
+  - `supabase/tests/task_assignments.sql` → PASS.
+  - `supabase/tests/user_access.sql` → PASS.
+
+Lo que este hecho **no** cierra:
+
+- La SPA compatible **sigue sin publicar en GitHub Pages**; el despliegue ocurre al hacer push a `main`.
+- El **baseline Git sigue pendiente** (31 archivos modificados y 2 migraciones sin trackear), así que ninguna carpeta declara `HEAD` como fuente sincronizada.
+- La verificación remota cubre SQL; no sustituye una comprobación de la UI contra el servicio real ni una auditoría de seguridad.

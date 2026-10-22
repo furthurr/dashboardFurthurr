@@ -2,6 +2,12 @@
 
 Hallazgos visuales/documentales detectados en los componentes y estilos revisados. No se modificó UI ni se ejecutó una auditoría automatizada de accesibilidad.
 
+## Revisión focalizada — 2026-10-22 (ciclo de vida de tableros)
+
+El selector añade dos secciones, un badge numérico y dos diálogos, pero **no introduce tokens visuales**: `.ui-badge` se compone con variables existentes (`--color-border`, `--radius-sm`, `--color-surface-elevated`, `--color-text`, `--space-2`, `--text-xs`) y los diálogos reutilizan `Dialog`, `ui-field`, `ui-label`, `ui-button--danger` y `ui-feedback--error` (`src/index.css:139`, `src/features/boards/BoardsPage.tsx:60-66,118-165`). No se abre un finding nuevo de accesibilidad: el contador se presenta como texto numérico con etiqueta visible («Tareas pendientes:»), no solo por color, y los botones de ciclo de vida llevan nombre accesible con el nombre del tablero (`src/features/boards/BoardsPage.tsx:62-65`).
+
+Evidencia de la implementación: 128 pruebas Vitest, lint y build correctos, y comprobación en Chrome headless con CDP sobre `npm run dev` con llamadas a Supabase simuladas (secciones, badge, renombrado, desactivar/reactivar y vista de rol no administrador). No se ejecutó auditoría WCAG, contraste calculado, lector de pantalla ni revisión responsive en esta entrega; el badge `.ui-badge` es una superficie elevada sobre borde, por lo que su contraste real queda sin medir. La migración que respalda el ciclo de vida **está aplicada en el proyecto Supabase remoto** desde el 2026-10-22 (`202610220001` y `202610220002`, en ese orden; las tres suites SQL remotas pasan y revierten sus fixtures con `ROLLBACK`), pero la **SPA compatible aún no está publicada en GitHub Pages**, por lo que la UI no pudo probarse contra el servicio real.
+
 ## Revisión focalizada — 2026-10-20
 
 Administración y responsables reutilizan `Dialog` y clases/tokens existentes; el selector añade controles nativos, estados explícitos y borrado contextual (`src/features/users/UsersPage.tsx:105-132`, `src/features/board/AssigneePicker.tsx:26-50`). No se introducen findings de accesibilidad no verificados ni se cierran deudas por ausencia de errores en tests.

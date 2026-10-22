@@ -1,6 +1,8 @@
 # Schema de persistencia Supabase
 
-La persistencia es PostgreSQL gestionado fuera de la SPA. `supabase-schema.sql` es el bootstrap completo; `supabase/migrations/` contiene los cambios incrementales para instalaciones existentes. La secuencia hasta `202610210001_boards.sql` se aplicó y verificó en el proyecto Supabase seleccionado para GitHub Pages el 2026-10-21; esto no certifica otros proyectos/entornos.
+La persistencia es PostgreSQL gestionado fuera de la SPA. `supabase-schema.sql` es el bootstrap completo; `supabase/migrations/` contiene los cambios incrementales para instalaciones existentes. La secuencia hasta `202610210001_boards.sql` se aplicó y verificó en el proyecto Supabase seleccionado para GitHub Pages el 2026-10-21, y el 2026-10-22 se aplicaron además `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql`; esto no certifica otros proyectos/entornos.
+
+Las migraciones `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql` **están aplicadas en el proyecto Supabase remoto** desde el 2026-10-22, en ese orden. Antes de aplicarlas se comprobó que `boards.is_active` no existía y que tampoco existían las RPCs `rename_board`, `set_board_active` y `list_boards_with_pending_counts`, ni la policy «Members read own memberships»; después de aplicarlas se comprobó que la columna, las tres RPCs y esa policy están presentes, y que el proyecto conserva sus 4 tableros y sus 32 tareas con `is_active = true` en todos. Las tres suites SQL remotas (`boards.sql`, `task_assignments.sql`, `user_access.sql`) pasan y revierten sus fixtures con `ROLLBACK`. Antes de esa aplicación también se verificaron contra PostgreSQL 16 local con Auth/Storage simulados, en dos rutas: bootstrap nuevo y base existente con ambas migraciones. El bootstrap `supabase-schema.sql` ya incorpora los mismos objetos para instalaciones nuevas.
 
 ## Modelo relacional
 
@@ -35,6 +37,7 @@ erDiagram
   BOARDS {
     uuid id PK
     text name UK
+    boolean is_active
     timestamptz created_at
   }
   BOARD_MEMBERS {
@@ -79,7 +82,7 @@ erDiagram
   }
 ```
 
-Fuente: `supabase-schema.sql` y `supabase/migrations/202610210001_boards.sql:4-22`.
+Fuente: `supabase-schema.sql` y `supabase/migrations/202610210001_boards.sql:4-22`, `supabase/migrations/202610220002_board_lifecycle.sql:5`.
 
 ## Enumeraciones y reglas de persistencia
 
@@ -100,13 +103,14 @@ RLS está habilitado para las tablas de aplicación. La siguiente tabla resume l
 | `profiles` | select | cuenta activa lee perfiles; cuenta inactiva autenticada puede leer únicamente el propio para mostrar bloqueo | `supabase/migrations/202610190001_user_administration.sql:18-38` |
 | `profiles` | update cliente | conserva RLS dueño/admin, exige cuenta activa y solo concede columnas `full_name`, `avatar_url`, `nickname`; no `role` ni `is_active` | `supabase-schema.sql:179-193`, `supabase/migrations/202610190001_user_administration.sql:14-16`, `:33-35` |
 | `tasks` | select | autenticado activo por RLS | `supabase-schema.sql:199-202`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
-| `boards` | select | Admin activo ve todos; otras cuentas activas solo los tableros de `board_members` | `supabase/migrations/202610210001_boards.sql:24-49` |
-| `boards` | insert | Solo admin activo; nombre único (case-insensitive), recortado de 1–120 caracteres | `supabase/migrations/202610210001_boards.sql:4-9,47-48` |
-| `board_members` | select / escritura | Solo admin lee; RPC admin sustituye perfiles existentes/activos. Sin alta directa cliente | `supabase/migrations/202610210001_boards.sql:42-49,63-80` |
+| `boards` | select | Admin activo ve todos (activos y desactivados); otras cuentas activas solo los tableros **activos** de `board_members`. La policy no invoca funciones que lean `boards` (anti-recursión con `INSERT ... RETURNING`) | `supabase/migrations/202610220002_board_lifecycle.sql:12-24` |
+| `boards` | insert | Solo admin activo; nombre único (case-insensitive), recortado de 1–120 caracteres. La fila nace con `is_active = true` | `supabase/migrations/202610210001_boards.sql:4-9,47-48`, `supabase-schema.sql:574-580` |
+| `board_members` | select (admin) | Solo admin lee la tabla completa de membresías; RPC admin sustituye perfiles existentes/activos. Sin alta directa cliente | `supabase/migrations/202610210001_boards.sql:42-49,63-80` |
+| `board_members` | select (miembro) | Cada miembro autenticado lee **su propia fila** (`profile_id = auth.uid()`); no expone membresías ajenas | `supabase/migrations/202610220002_board_lifecycle.sql:7-10` |
 | `tasks` | insert | requiere rol `admin`/`usuario` activo; el propietario lo fija la RPC, no el cliente | `supabase-schema.sql:204-213`, `supabase/migrations/202610200001_task_assignments.sql:47-76` |
 | `tasks`, `task_assignees`, `comments`, `task_attachments` | todas | Policy restrictiva exige membresía del tablero de la tarea o admin activo. Ser responsable no otorga acceso | `supabase/migrations/202610210001_boards.sql:51-59` |
 | `tasks` | update | **edición compartida dentro de tablero accesible**: cualquier cuenta autenticada activa puede actualizar cualquier tarea que puede consultar; `board_id` además se protege por policy/grants/RPC | `supabase-schema.sql:215-221`, `supabase/migrations/202610200002_shared_task_editing.sql:9-14`, `supabase/migrations/202610210001_boards.sql:51-53` |
-| `tasks` | update (columnas cliente) | solo `title`, `description`, `status`, `priority`, `position`; `created_by` no es escribible | `supabase-schema.sql:448-450`, `supabase/migrations/202610200002_shared_task_editing.sql:19-21` |
+| `tasks` | update (columnas cliente) | solo `title`, `description`, `status`, `priority`, `position`; `created_by` no es escribible | `supabase-schema.sql:448-450`, `supabase/migrations/202610200002_shared_task_editing.sql:16-17` |
 | `tasks` | delete | creador o admin; gate restrictivo de cuenta activa | `supabase-schema.sql:223-232`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
 | `task_assignees` | select | autenticado activo por RLS | `supabase-schema.sql:241-244`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
 | `task_assignees` | escrituras cliente | INSERT/UPDATE/DELETE revocados; los predicados históricos no conceden permisos por sí solos | `supabase/migrations/202610200001_task_assignments.sql:5` |
@@ -122,9 +126,34 @@ Los comentarios de algunas policies de Storage describen roles distintos de lo q
 
 Las RPCs de tareas/tableros son `SECURITY DEFINER` con path vacío y ejecución para `authenticated`. `set_task_assignees` aplica acceso a tablero y delega validaciones existentes; `create_task_with_assignees` exige admin/usuario activo y acceso al tablero, y calcula posición dentro de tablero/estado; `move_task_to_board` requiere acceso a origen y destino y actualiza el mismo registro; `set_board_members` reserva la sustitución de miembros al admin. El cliente no escribe directamente `board_id` ni las membresías (`supabase/migrations/202610210001_boards.sql:63-131`).
 
+### Ciclo de vida de tableros
+
+La migración `202610220002_board_lifecycle.sql` (aplicada en el proyecto Supabase remoto el 2026-10-22, después de `202610220001_board_access_returning.sql`) añade el ciclo de vida del tablero. `supabase-schema.sql` ya incluye los mismos objetos para instalaciones nuevas (`supabase-schema.sql:574-580,599-633,663-708`).
+
+| Objeto | Contrato | Fuente |
+| --- | --- | --- |
+| `boards.is_active` | `boolean not null default true`; desactiva sin borrar contenido ni membresías | `supabase/migrations/202610220002_board_lifecycle.sql:5` |
+| Policy «Accessible boards» (reescrita) | Admin activo ve todo; el resto solo tableros activos de los que es miembro. **No llama a ninguna función que lea `boards`** | `supabase/migrations/202610220002_board_lifecycle.sql:12-24` |
+| Policy «Members read own memberships» | Cada miembro autenticado lee su propia fila de `board_members` | `supabase/migrations/202610220002_board_lifecycle.sql:7-10` |
+| `can_access_board(p_board_id)` (reescrita) | Exige `b.is_active` para los miembros; el admin activo conserva acceso a cualquier tablero | `supabase/migrations/202610220002_board_lifecycle.sql:27-36` |
+| RPC `rename_board(p_board_id, p_name)` | Solo admin (`42501`); nombre recortado de 1–120 (`22023`); tablero inexistente (`P0002`); unicidad por índice `lower(name)` | `supabase/migrations/202610220002_board_lifecycle.sql:38-54` |
+| RPC `set_board_active(p_board_id, p_active)` | Solo admin (`42501`); alterna `is_active` sin borrar tareas, comentarios, adjuntos ni membresías | `supabase/migrations/202610220002_board_lifecycle.sql:56-66` |
+| RPC `list_boards_with_pending_counts()` | Devuelve `id, name, is_active, created_at, pending_count` con la misma visibilidad que RLS; `pending_count` suma tareas en `backlog`, `por_hacer` y `haciendo` | `supabase/migrations/202610220002_board_lifecycle.sql:68-85` |
+
+Las tres RPCs se revocan a `public`/`anon` y se conceden a `authenticated` (`supabase/migrations/202610220002_board_lifecycle.sql:87-90`).
+
+**Justificación anti-recursión.** `INSERT ... RETURNING` de PostgREST evalúa también la policy de lectura de `boards`. Si esa policy consultara `can_access_board()` y esta leyera `public.boards`, la evaluación volvería a disparar la policy y Postgres detectaría recursión infinita en la policy. Por eso:
+
+1. `202610220001_board_access_returning.sql` reescribe `can_access_board()` para que **no** lea `public.boards`: consulta únicamente `board_members` (`supabase/migrations/202610220001_board_access_returning.sql:5-14`).
+2. `202610220002_board_lifecycle.sql` reescribe la policy «Accessible boards» para que tampoco invoque esa función: comprueba la pertenencia con un `EXISTS` directo sobre `board_members` y la condición `boards.is_active` en el propio predicado (`supabase/migrations/202610220002_board_lifecycle.sql:12-24`).
+
+Consecuencia observable: `can_access_board()` sí puede leer `boards` (necesita `is_active`), pero **la policy de lectura de `boards` ya no lo hace**. Añadir en el futuro una función que lea `boards` a esa policy reintroduciría la recursión.
+
+**Efecto del apagado.** Con `is_active = false`, los miembros pierden la lectura del tablero y `can_access_board()` deja de concederles acceso a sus tareas, comentarios, adjuntos y asignaciones —también por URL directa—, porque la policy restrictiva «Board access required» se apoya en `can_access_board()` (`supabase/migrations/202610220002_board_lifecycle.sql:27-36`, `supabase-schema.sql:634-641`). El admin activo mantiene el acceso y puede reactivar el tablero; la membresía no se borra.
+
 ### Edición compartida de tareas
 
-La migración `202610200002_shared_task_editing.sql` amplía el `UPDATE` de `tasks` a toda cuenta autenticada activa y sustituye el permiso de tabla completo por permisos por columna (`supabase/migrations/202610200002_shared_task_editing.sql:1-22`):
+La migración `202610200002_shared_task_editing.sql` amplía el `UPDATE` de `tasks` a toda cuenta autenticada activa y sustituye el permiso de tabla completo por permisos por columna (`supabase/migrations/202610200002_shared_task_editing.sql:1-19`):
 
 - La policy `Active accounts can update tasks` reemplaza a `Creators and admins can update tasks` y se aplica `to authenticated` con `using (true)` / `with check (true)`. La policy restrictiva `Active account required` sigue ANDando, de modo que una cuenta desactivada no escribe aunque conserve la sesión.
 - `revoke update on public.tasks from anon, authenticated` elimina el privilegio de tabla; `grant update (title, description, status, priority, position) to authenticated` concede solo las columnas editables. `created_by`, `created_at`, `updated_at` e `id` quedan fuera del alcance de escritura del cliente.

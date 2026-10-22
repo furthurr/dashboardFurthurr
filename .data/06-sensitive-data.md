@@ -4,7 +4,7 @@ Este inventario describe tipos/campos existentes; no contiene valores reales ni 
 
 | Campo/dato | Dónde aparece | Sensibilidad | Cifrado verificable en repo | Almacenamiento | Notas |
 | --- | --- | --- | --- | --- | --- |
-| Email | `profiles.email`, modelo `Profile` | PII alta | No verificable | PostgreSQL Supabase | Campo obligatorio (`supabase-schema.sql:21-30`, `src/types/index.ts:7-16`) |
+| Email | `profiles.email`, modelo `Profile` | PII alta | No verificable | PostgreSQL Supabase | Campo obligatorio (`supabase-schema.sql:21-30`, `src/types/index.ts:7-17`) |
 | Nombre completo y nickname | `profiles.full_name`, `profiles.nickname` | PII | No verificable | PostgreSQL Supabase | El nombre se deriva de metadata de Auth en el trigger (`supabase-schema.sql:142-154`) |
 | Avatar URL | `profiles.avatar_url`, bucket `avatars` | Identificador potencial | No verificable | PostgreSQL + Storage | Bucket declarado público (`supabase-schema.sql:348-351`) |
 | Identificadores de Auth/usuario | IDs de perfil, creador, autor y cargador | Dato identificable | No verificable | PostgreSQL/Supabase Auth | UUID asociados a actividad (`supabase-schema.sql:21-30`, `39-50`, `73-98`) |
@@ -14,7 +14,8 @@ Este inventario describe tipos/campos existentes; no contiene valores reales ni 
 | Contraseña de alta/cambio | `UsersPage` → `admin-users` → Supabase Auth | Secreto de autenticación | Cifrado del proveedor no verificable aquí | Estado transitorio de formulario/petición; no columna pública | No se devuelve en respuestas ni se registra explícitamente en logs; no se promete revocar sesiones al cambiarla (`supabase/functions/admin-users/index.ts:43-61`) |
 | Rol/estado activo | `profiles.role`, `profiles.is_active` | Autorización y estado de cuenta | No verificable | PostgreSQL | No son editables por grants cliente; `is_active` no invalida JWTs existentes (`supabase/migrations/202610190001_user_administration.sql:4-16`) |
 | Responsables | `task_assignees` y proyección `AssigneeProfile` | Identidad/actividad del equipo | No verificable | PostgreSQL y caché cliente | La lista activa incluye nombre/correo; no requiere rol admin (`src/features/board/assigneesApi.ts:5-20`) |
-| Membresías de tablero | `board_members.board_id`, `profile_id` | Relación identificable y señal de autorización | No verificable | PostgreSQL y caché de consulta administrativa | Admin ve todos los tableros; usuarios solo sus membresías. Ser responsable no concede membresía (`supabase/migrations/202610210001_boards.sql:10-15,24-49`) |
+| Membresías de tablero | `board_members.board_id`, `profile_id` | Relación identificable y señal de autorización | No verificable | PostgreSQL y caché de consulta administrativa | Admin ve todos los tableros; usuarios solo sus membresías en tableros activos. Ser responsable no concede membresía (`supabase/migrations/202610210001_boards.sql:10-15,24-49`, `supabase/migrations/202610220002_board_lifecycle.sql:12-36`) |
+| Estado de vida del tablero | `boards.is_active` | Estado de acceso, no PII | No verificable | PostgreSQL | No lo escribe el cliente directamente: solo la RPC `set_board_active` para admins. Conserva el mismo dato que `profiles.is_active` en cuanto a no equivaler a borrado ni revocación de JWT (`supabase/migrations/202610220002_board_lifecycle.sql:5,56-66`) |
 
 ## Tratamiento observado
 
@@ -22,6 +23,7 @@ Este inventario describe tipos/campos existentes; no contiene valores reales ni 
 - `AuthContext` escribe el error de carga de perfil en consola sin adjuntar explícitamente el perfil; limpia la caché al perder acceso/cambiar identidad (`src/features/auth/AuthContext.tsx:35-65`).
 - `SUPABASE_SERVICE_ROLE_KEY` se usa solo en el entorno de la Edge Function; nunca documentar su valor ni copiarla a variables `VITE_*` (`supabase/functions/admin-users/index.ts:20-23`).
 - URLs firmadas de detalle y miniaturas duran 60 segundos y se refrescan en caché cada 45 segundos. La pérdida posterior de membresía no revoca un link ya emitido ni datos ya descargados; `file_url` persistido es metadata/ruta, no el enlace visual usado por la UI (`src/features/board/attachmentsApi.ts`).
+- Desactivar un tablero tampoco revoca URLs firmadas ya emitidas ni datos ya descargados: la pérdida de acceso es de lectura en la base de datos, no una retirada de material ya entregado (`supabase/migrations/202610220002_board_lifecycle.sql:5,27-36`).
 - Editar nombre cambia el perfil público de aplicación, no el nombre en metadata de Auth (`supabase/functions/admin-users/index.ts:63-66`).
 - No se documentan requisitos de retención, exportación, borrado de cuenta ni clasificación de datos.
 - No se leyó ni transcribió `.env.local`; se omiten URLs/IDs de proyecto y cualquier valor de entorno.

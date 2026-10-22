@@ -12,11 +12,13 @@ Los tipos de aplicación viven en `src/types/index.ts`; el esquema SQL es `supab
 
 ## `Board` y `board_members`
 
-- `Board`: `{ id: string, name: string, created_at: string }`, corresponde a `public.boards`.
-- `public.boards.name` es único sin distinguir mayúsculas, y valida nombre recortado de 1–120 caracteres.
+- `Board`: `{ id: string, name: string, is_active: boolean, pending_count: number, created_at: string }`, corresponde a `public.boards` más el conteo derivado que añade la RPC de listado (`src/types/index.ts:33-39`).
+- `public.boards.name` es único sin distinguir mayúsculas (`boards_unique_name` sobre `lower(name)`), y valida nombre recortado de 1–120 caracteres (`supabase-schema.sql:576,580`).
+- `public.boards.is_active` es `boolean not null default true`; modela el ciclo de vida del tablero (activo/desactivado) sin borrado físico (`supabase-schema.sql:577`, `supabase/migrations/202610220002_board_lifecycle.sql:5`).
+- `pending_count` **no es una columna**: es un valor calculado por la RPC `list_boards_with_pending_counts` y devuelto como `bigint`; el cliente lo normaliza a `number` (`src/features/boards/api.ts:5,15`).
 - `board_members` es la relación many-to-many entre `boards.id` y `profiles.id`, con PK compuesta `(board_id, profile_id)`; se representa como perfiles `AssigneeProfile[]` en el cliente, no como entidad TS independiente.
-- Solo admins activos pueden crear tableros y gestionar membresías. `Offline` y `General` se crean por migración; los miembros activos existentes se asignan a Offline y General empieza vacío.
-- Fuente: `src/types/index.ts`, `src/features/boards/api.ts`, `supabase/migrations/202610210001_boards.sql:4-22,63-80`.
+- Solo admins activos pueden crear tableros, renombrarlos, activarlos/desactivarlos y gestionar membresías. `Offline` y `General` se crean por migración; los miembros activos existentes se asignan a Offline y General empieza vacío.
+- Fuente: `src/types/index.ts:33-39`, `src/features/boards/api.ts:5-18`, `supabase/migrations/202610210001_boards.sql:4-22,63-80`, `supabase/migrations/202610220002_board_lifecycle.sql:5,40-66`.
 
 ## `Profile`
 
@@ -54,11 +56,11 @@ Correspondencia: `public.tasks`; `TaskWithAssignees` agrega `assignees` y contad
 | `assignees` | `AssigneeProfile[]` | No (en TS) | Proyección explícita con identidad/estado; relaciones nulas descartadas |
 | `comment_count`, `attachment_count` | `number?` | Opcional | Tipos definidos; no vienen en la query `useTasks` observada |
 
-Fuente: `src/types/index.ts:19-45`, `src/features/board/api.ts:5-29`, `supabase/migrations/202610210001_boards.sql:19-22`.
+Fuente: `src/types/index.ts:19-47`, `src/features/board/api.ts:5-29`, `supabase/migrations/202610210001_boards.sql:19-22`.
 
 ### Proyecciones y solicitudes nuevas
 
-- `AssigneeProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url' | 'role' | 'is_active'>`. Las seis propiedades se proyectan explícitamente; no tiene `nickname` ni timestamps (`src/types/index.ts:32`).
+- `AssigneeProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url' | 'role' | 'is_active'>`. Las seis propiedades se proyectan explícitamente; no tiene `nickname` ni timestamps (`src/types/index.ts:41`).
 - `ManagedUser = Pick<Profile, 'id' | 'full_name' | 'email' | 'role' | 'is_active'>`, usado en la lista administrativa (`src/features/users/api.ts:4`).
 - `UserAction`/`AdminAction`: uniones discriminadas por `action`: `create`, `rename`, `password`, `set-active` y `promote-admin`; el contrato servidor añade `list`. `promote-admin` solo recibe `userId`; el servidor fija el rol `admin` y no admite un valor de rol del cliente. Validación runtime **de solicitudes administrativas**, no de todas las respuestas ni modelos (`src/features/users/api.ts:5-10`, `supabase/functions/admin-users/validation.ts:1-34`).
 - Solicitud de creación de tarea: título, descripción opcional, enum de estado/prioridad y `assigneeIds: string[]`; SQL recibe UUIDs, valida destinos y obtiene propietario de la sesión (`src/features/board/api.ts:76-92`).
@@ -74,7 +76,7 @@ Fuente: `src/types/index.ts:19-45`, `src/features/board/api.ts:5-29`, `supabase/
 | `profile_id` | `string` | FK a `profiles.id` |
 | `created_at` | `string` | Timestamp |
 
-Fuente: `src/types/index.ts:40-44`. La PK compuesta impide duplicados; escrituras cliente se revocan y se gestionan por RPC (`supabase/migrations/202610200001_task_assignments.sql:5-43`).
+Fuente: `src/types/index.ts:49-53`. La PK compuesta impide duplicados; escrituras cliente se revocan y se gestionan por RPC (`supabase/migrations/202610200001_task_assignments.sql:5-43`).
 
 ### `Comment` y `CommentWithAuthor`
 
@@ -87,7 +89,7 @@ Fuente: `src/types/index.ts:40-44`. La PK compuesta impide duplicados; escritura
 | `created_at`, `updated_at` | `string` | TS requeridos; SQL permite null con default | Timestamps |
 | `author` (`CommentWithAuthor`) | `Profile` | No (en TS) | Query devuelve solo una proyección parcial; ver D-03 |
 
-Fuente: `src/types/index.ts:46-57`, `src/features/board/commentsApi.ts:5-16`; D-03 sigue abierta para el autor de comentarios.
+Fuente: `src/types/index.ts:55-66`, `src/features/board/commentsApi.ts:5-16`; D-03 sigue abierta para el autor de comentarios.
 
 ### `TaskAttachment`
 
@@ -102,7 +104,7 @@ Fuente: `src/types/index.ts:46-57`, `src/features/board/commentsApi.ts:5-16`; D-
 | `mime_type` | `string` | No | MIME del navegador |
 | `created_at` | `string` | TS requerido; SQL permite null con default | Timestamp |
 
-Fuente: `src/types/index.ts:59-68`, `supabase-schema.sql:89-99`.
+Fuente: `src/types/index.ts:68-78`, `supabase-schema.sql:89-99`.
 
 ## Ausencias relevantes
 

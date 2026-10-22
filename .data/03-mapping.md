@@ -13,7 +13,7 @@ tasks row
         assignees[]
 ```
 
-La proyección coincide ahora con `AssigneeProfile`, no promete un `Profile` completo. Esta parte de D-03 está resuelta; el cast sigue sin validar respuestas en runtime (`src/types/index.ts:32-38`). `set_task_assignees` devuelve las mismas seis propiedades y sustituye el arreglo cacheado; no mezcla otros campos de la tarea (`src/features/board/api.ts:87-102`).
+La proyección coincide ahora con `AssigneeProfile`, no promete un `Profile` completo. Esta parte de D-03 está resuelta; el cast sigue sin validar respuestas en runtime (`src/types/index.ts:41-47`). `set_task_assignees` devuelve las mismas seis propiedades y sustituye el arreglo cacheado; no mezcla otros campos de la tarea (`src/features/board/api.ts:87-102`).
 
 El formulario envía IDs, no perfiles completos. El cliente y SQL deduplican; SQL acepta conservar responsables inactivos ya presentes, pero rechaza añadir nuevos inactivos. El hook aún acepta `createdBy` por compatibilidad local, pero no lo envía al RPC: `auth.uid()` define el creador (`src/features/board/api.ts:49-84`, `supabase/migrations/202610200001_task_assignments.sql:13-68`).
 
@@ -31,10 +31,16 @@ El objeto nuevo se carga en `<taskId>/<UUID>.<extensión>`; la metadata guarda l
 
 ## Tableros y pertenencia
 
-`Board` es la proyección directa de `boards`. `Task.board_id` enlaza cada tarea a exactamente un tablero. `board_members` se consulta como relación de perfiles; el filtro visible del catálogo de tableros se aplica en RLS, no en el cliente. El traslado ejecuta RPC y conserva el mismo `task_id`, de modo que comentarios, asignaciones y adjuntos permanecen relacionados (`src/features/boards/api.ts`, `supabase/migrations/202610210001_boards.sql:4-22,114-125`).
+`Board` es la proyección directa de `boards` **más** dos valores que no son columnas: la RPC `list_boards_with_pending_counts` devuelve `is_active` y `pending_count`, y el cliente los convierte a `boolean` y `number` (`src/features/boards/api.ts:5,11-17`). El listado ya no se filtra en el cliente: la RPC replica la visibilidad de RLS, por lo que admin activo recibe todos los tableros (activos y desactivados) y el resto solo los tableros activos de los que es miembro (`supabase/migrations/202610220002_board_lifecycle.sql:71-85`).
+
+`Task.board_id` enlaza cada tarea a exactamente un tablero. `board_members` se consulta como relación de perfiles; el filtro visible del catálogo de tableros se aplica en RLS, no en el cliente. El traslado ejecuta RPC y conserva el mismo `task_id`, de modo que comentarios, asignaciones y adjuntos permanecen relacionados; el destino se limita a tableros activos (`src/features/board/BoardPage.tsx:411`).
+
+El estado de vida (`is_active`) se propaga como dato, no como permiso de cliente: quien renombra o desactiva es siempre un admin activo según el rol del perfil, pero la autorización efectiva la comprueba la RPC en servidor (`42501` si no lo es) y la policy de lectura de `boards` (`supabase/migrations/202610220002_board_lifecycle.sql:15-24,44,60`).
+
+Fuente: `src/features/boards/api.ts`, `src/features/board/BoardPage.tsx:411`, `supabase/migrations/202610210001_boards.sql:4-22,114-125`, `supabase/migrations/202610220002_board_lifecycle.sql:15-24,71-85`.
 
 ## Tipos y validación
 
-- Las interfaces/uniones de `src/types/index.ts:1-68` describen tipos estáticos; `parseAction` sí valida los payloads administrativos de entrada, no las respuestas del SDK.
+- Las interfaces/uniones de `src/types/index.ts:1-78` describen tipos estáticos; `parseAction` sí valida los payloads administrativos de entrada, no las respuestas del SDK.
 - Las respuestas se convierten a esos tipos mediante casts en algunas consultas (`src/features/board/api.ts:16-21`, `src/features/board/commentsApi.ts:15-17`); no se observa una validación runtime del payload.
 - No hay una capa de mapeo DTO-dominio general: las queries de cada feature adaptan directamente el resultado donde hace falta.

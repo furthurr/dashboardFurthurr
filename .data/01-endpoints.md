@@ -35,23 +35,48 @@ No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge
 
 ## PostgreSQL vía Supabase
 
-### Leer tableros accesibles — `boards.select`
+### Leer tableros accesibles con pendientes — RPC `list_boards_with_pending_counts`
 
-- Request: `select('*').order('name')`; RLS determina las filas visibles.
-- Autorización: admins activos pueden leer todos los tableros; otras cuentas activas solo los que tienen en `board_members`. La pertenencia se administra aparte; ser responsable de una tarea no concede acceso.
-- Fuente: `src/features/boards/api.ts:5-13`, `supabase/migrations/202610210001_boards.sql:24-49`.
+- Propósito: obtener el catálogo de tableros visibles con el número de tareas pendientes. Sustituye a la lectura directa `boards.select`.
+- Request: sin parámetros; se invoca como `supabase.rpc('list_boards_with_pending_counts')`.
+- Response: una fila por tablero visible con `id`, `name`, `is_active`, `created_at` y `pending_count` (`bigint`). El cliente normaliza `pending_count` con `Number(...)` y convierte `is_active` con `Boolean(...)` (`src/features/boards/api.ts:5-18`).
+- `pending_count` suma las tareas del tablero en estado `backlog`, `por_hacer` o `haciendo`; excluye `en_revision` y `finalizadas` (`supabase/migrations/202610220002_board_lifecycle.sql:71-85`).
+- Autorización: la RPC es `SECURITY DEFINER` con `search_path = ''` y aplica la misma visibilidad que RLS: admin activo ve todos los tableros (activos y desactivados); el resto de cuentas activas solo los tableros activos en los que es miembro. No expone membresías ni conteos de otros tableros.
+- Errores: el error de Supabase se propaga; la pantalla distingue carga, error con reintento y catálogo vacío (`src/features/boards/BoardsPage.tsx:28-30`).
+- Fuente: `src/features/boards/api.ts:7-22`, `supabase/migrations/202610220002_board_lifecycle.sql:71-90`.
 
 ### Crear tablero — `boards.insert`
 
-- Request: `{ name }`; el cliente recorta el nombre. SQL exige 1–120 caracteres, sin espacios exteriores, y unicidad sin distinguir mayúsculas.
-- Auth: solo administrador activo, reforzado por RLS y la restricción SQL. Un tablero recién creado no tiene miembros.
-- Fuente: `src/features/boards/api.ts:15-25`, `supabase/migrations/202610210001_boards.sql:4-9,47-48`.
+- Request: `{ name }`; el cliente recorta el nombre. SQL exige 1–120 caracteres, sin espacios exteriores, y unicidad sin distinguir mayúsculas (`supabase-schema.sql:576,580`).
+- Auth: solo administrador activo, reforzado por RLS y la restricción SQL. Un tablero recién creado no tiene miembros y nace con `is_active = true` por defecto (`supabase-schema.sql:577`).
+- Nota de RLS: `INSERT ... RETURNING` de PostgREST evalúa también la policy de lectura de `boards`; por eso esa policy no invoca ninguna función que lea `boards` (ver «Ciclo de vida de tableros» en [schema](04-schema.md)).
+- Fuente: `src/features/boards/api.ts:24-34`, `supabase/migrations/202610210001_boards.sql:4-9,47-48`, `supabase/migrations/202610220002_board_lifecycle.sql:12-24`.
+
+### Renombrar tablero — RPC `rename_board`
+
+- Propósito: cambiar el nombre de un tablero sin salir del selector.
+- Request: `{ p_board_id: uuid, p_name: text }`; el cliente recorta el nombre antes de enviarlo (`src/features/boards/api.ts:44-47`).
+- Response: `void`; no se consume fila.
+- Auth: solo admin activo; en caso contrario la RPC lanza `42501` (`supabase/migrations/202610220002_board_lifecycle.sql:40-54`).
+- Validación: nombre recortado de 1–120 caracteres (`22023`), tablero inexistente (`P0002`). El índice único `lower(name)` reporta el duplicado como violación de unicidad (`23505`).
+- La RPC no cambia `is_active` ni toca tareas, comentarios, adjuntos o membresías.
+- Fuente: `src/features/boards/api.ts:36-47`, `supabase/migrations/202610220002_board_lifecycle.sql:38-54`.
+
+### Activar/desactivar tablero — RPC `set_board_active`
+
+- Propósito: desactivar o reactivar un tablero sin borrarlo.
+- Request: `{ p_board_id: uuid, p_active: boolean }`; response `void`.
+- Auth: solo admin activo (`42501`); tablero inexistente (`P0002`), argumentos nulos (`22023`).
+- Semántica: desactiva o reactiva la fila `boards.is_active`. No borra tareas, comentarios, adjuntos ni membresías; la reactivación devuelve el acceso a los miembros que conservaban su membresía (`supabase/migrations/202610220002_board_lifecycle.sql:56-66`).
+- Efecto colateral autorizado en RLS: mientras el tablero está desactivado, sus miembros pierden la lectura del tablero y el acceso a sus tareas (también por URL directa); el admin activo conserva el acceso.
+- Fuente: `src/features/boards/api.ts:49-60`, `supabase/migrations/202610220002_board_lifecycle.sql:56-66`.
 
 ### Leer/administrar membresías — `board_members` y RPC `set_board_members`
 
-- Las lecturas de miembros se paginan en rangos de 500. Solo el admin puede leer la tabla completa de membresías y sustituirlas mediante `{ p_board_id, p_profile_ids }`.
+- Las lecturas de miembros se paginan en rangos de 500. El admin puede leer la tabla completa de membresías y sustituirlas mediante `{ p_board_id, p_profile_ids }`.
+- Cada miembro autenticado puede además leer **su propia fila** de membresía mediante la policy «Members read own memberships» (`profile_id = auth.uid()`), que no expone las membresías ajenas (`supabase/migrations/202610220002_board_lifecycle.sql:7-10`).
 - Se admiten perfiles existentes y activos; los miembros inactivos ya asignados se pueden conservar o retirar, pero no agregar de nuevo. La lista completa se reemplaza atómicamente.
-- Fuente: `src/features/boards/api.ts:27-56`, `supabase/migrations/202610210001_boards.sql:63-80`.
+- Fuente: `src/features/boards/api.ts:62-91`, `supabase/migrations/202610210001_boards.sql:63-80`, `supabase/migrations/202610220002_board_lifecycle.sql:9-10`.
 
 ### Leer perfil — `profiles.select`
 
@@ -82,7 +107,8 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 
 - Request: `{ p_task_id, p_board_id }`; operación transaccional, no inserta una segunda tarea.
 - Auth: cuenta activa con acceso al tablero actual y al de destino. Conserva estado, prioridad, descripción y relaciones; calcula posición al final de la columna correspondiente del destino. RLS impide la mutación directa de `board_id`.
-- Fuente: `src/features/boards/api.ts:58-74`, `supabase/migrations/202610210001_boards.sql:114-131`.
+- Destino inactivo: `can_access_board` exige tablero activo para los miembros, de modo que un tablero desactivado no es un destino válido. La interfaz refuerza el filtro y solo ofrece tableros activos distintos del actual (`src/features/board/BoardPage.tsx:411`).
+- Fuente: `src/features/boards/api.ts:93-110`, `supabase/migrations/202610210001_boards.sql:114-131`, `supabase/migrations/202610220002_board_lifecycle.sql:27-36`.
 
 ### Reemplazar responsables — RPC `set_task_assignees`
 
@@ -109,7 +135,7 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 - Columnas escribibles: solo `title`, `description`, `status`, `priority` y `position`. `created_by` no es escribible desde el cliente.
 - Response: no se consume fila; la query `tasks` se invalida al completar.
 - Errores: si la migración `202610200002_shared_task_editing.sql` no está aplicada en el proyecto, la base de datos rechaza la escritura con un error de RLS; la UI conserva el borrador y muestra un mensaje seguro.
-- Fuente: `src/features/board/api.ts:106-134`, `supabase/migrations/202610200002_shared_task_editing.sql:1-22`.
+- Fuente: `src/features/board/api.ts:106-134`, `supabase/migrations/202610200002_shared_task_editing.sql:1-19`.
 
 ### Cambiar estado/posición — `tasks.update`
 
@@ -186,3 +212,4 @@ Validación servidor: nombre recortado 1–120 caracteres; email validado, recor
 
 - Las rutas HTTP internas de Supabase, límites de tamaño configurados en el servicio, respuestas exactas de Auth y estado de despliegue del proyecto Supabase no son verificables desde este repositorio.
 - Administración usa páginas de 50 y usuarios asignables lotes de 500. Tareas/comentarios/adjuntos continúan sin paginación explícita. El catálogo no certifica rate limits ni configuración remota actual; conserva la evidencia previa de despliegue descrita en el README de este dominio.
+- Las tres RPCs de ciclo de vida (`list_boards_with_pending_counts`, `rename_board`, `set_board_active`) y la columna `boards.is_active` **están aplicadas en el proyecto Supabase remoto** desde el 2026-10-22 (`202610220001` y `202610220002`, en ese orden), y las tres suites SQL remotas pasan con fixtures revertidos con `ROLLBACK`. En una instalación donde falte la migración, el listado por RPC falla y el selector queda en error con reintento. La SPA compatible aún no está publicada en GitHub Pages.

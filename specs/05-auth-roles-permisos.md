@@ -92,11 +92,16 @@ El alcance de las acciones sobre tareas y sus recursos asociados (asignaciones, 
 - Todo usuario debe seleccionar un tablero después de iniciar sesión; la ruta de un tablero también valida su existencia y acceso.
 - Un administrador activo puede ver todos los tableros, crear tableros y asignar/quitar miembros. Un tablero nuevo comienza sin miembros.
 - Usuario e invitado activos solo ven y abren los tableros a los que están asignados. Cuentas nuevas no reciben membresías automáticamente.
+- Un administrador activo puede **cambiar el nombre** de cualquier tablero y **desactivarlo o reactivarlo**. El nombre conserva las reglas de 1–120 caracteres y la unicidad sin distinguir mayúsculas, también en tableros desactivados.
+- Los tableros desactivados se muestran en una **sección propia, visible solo para administradores activos**. Sus miembros dejan de verlos y de acceder a sus tareas, incluida la URL directa; el administrador activo conserva el acceso y puede reactivarlos.
+- Desactivar un tablero **no borra** tareas, comentarios, adjuntos ni membresías; al reactivarlo, sus miembros recuperan el acceso.
+- Un tablero desactivado no se ofrece como destino de traslado de tareas.
+- El selector de tableros muestra el número de **tareas pendientes** de cada tablero visible: la suma de las tareas en `backlog`, `por_hacer` y `haciendo`.
 - Las cuentas activas existentes se añaden inicialmente a `Offline`; `General` queda vacío. Todas las tareas preexistentes se asignan a `Offline` durante la migración.
 - Crear tareas conserva la regla admin/usuario y exige membresía en ese tablero. Cualquier cuenta activa con acceso al tablero puede editar tareas según las reglas existentes.
 - Trasladar una tarea permite a cualquier cuenta activa con acceso tanto al tablero de origen como al destino; conserva la identidad y relaciones de la tarea. No crea una copia. La tarea deja de ser visible en origen.
 - RLS limita tareas, asignaciones, comentarios, metadatos de adjuntos y objetos de Storage al acceso del tablero. Los enlaces firmados ya emitidos permanecen utilizables hasta expirar; RLS no revoca descargas ya realizadas.
-- Implementación: `supabase/migrations/202610210001_boards.sql`; aplicada y comprobada con probes SQL en el proyecto Supabase seleccionado el 2026-10-21. La SPA aún no está publicada en Pages.
+- Implementación: `supabase/migrations/202610210001_boards.sql`, `migrations/202610220001_board_access_returning.sql` y `migrations/202610220002_board_lifecycle.sql`. Los cambios de estado y nombre se aplican mediante RPC (`rename_board`, `set_board_active`) que exigen administrador activo; el cliente no escribe `boards` directamente. El selector usa `list_boards_with_pending_counts()`, que replica la visibilidad de RLS. Verificado con probes SQL contra PostgreSQL local y en el proyecto Supabase remoto el 2026-10-22, donde las tres suites remotas pasan y revierten sus fixtures; la SPA aún no está publicada en Pages.
 
 ## Asignaciones de tareas
 

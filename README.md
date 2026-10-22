@@ -46,18 +46,22 @@ El schema de referencia, incluidas tablas, RLS, Storage y vistas, está en [`sup
 
 **Administración de usuarios:** antes de publicar esta versión, aplica la migración de estado/permisos, despliega `admin-users` y deshabilita el registro público de Auth siguiendo [`supabase/README.md`](supabase/README.md). El build de GitHub Pages no despliega funciones ni SQL. Las altas administrativas quedan confirmadas y activas sin enviar un enlace por correo.
 
+**Ciclo de vida de tableros:** el selector consulta el catálogo con la RPC `list_boards_with_pending_counts` y administra nombre y estado con `rename_board` y `set_board_active`. Esa versión requiere `supabase/migrations/202610220001_board_access_returning.sql` y `supabase/migrations/202610220002_board_lifecycle.sql`, aplicadas en ese orden según [`supabase/README.md`](supabase/README.md); sin ellas el selector de tableros falla. Ambas se aplicaron en el proyecto de producción el 2026-10-22 y las tres suites SQL remotas quedaron en `PASS`.
+
 **Responsables de tareas:** creación y detalle permiten asignar/desasignar varias personas mediante un desplegable por nombre/correo. Los ya asignados desaparecen de las opciones y «Todos» añade a todos los usuarios activos disponibles. Requiere también la migración `202610200001_task_assignments.sql` de la misma guía. Cualquier cuenta activa, incluidos invitados, puede guardar asignaciones en tareas ajenas sin obtener permiso para editar otros campos. La tarea y sus responsables iniciales se crean en una sola transacción. El tablero permite filtrar por personas y precarga esas personas al crear una tarea; con el filtro «Todos» se inicia sin asignados.
 
 ## Rutas y GitHub Pages
 
-La app usa `HashRouter` porque GitHub Pages no reescribe rutas SPA. La ruta raíz redirige al tablero. Rutas implementadas:
+La app usa `HashRouter` porque GitHub Pages no reescribe rutas SPA. La ruta raíz redirige al selector de tableros. Rutas implementadas:
 
 - `/dashboardFurthurr/#/login`
+- `/dashboardFurthurr/#/boards` (selector de tableros; requiere sesión y cuenta activa)
+- `/dashboardFurthurr/#/board/:boardId` (tablero Kanban; requiere sesión y acceso al tablero)
 - `/dashboardFurthurr/#/users` (requiere administrador activo)
 - `/dashboardFurthurr/#/profile` (perfil propio, requiere cuenta activa)
 - `/dashboardFurthurr/#/register` (compatibilidad: redirige a `/users`)
 - `/dashboardFurthurr/#/auth/callback`
-- `/dashboardFurthurr/#/board` (requiere sesión y cuenta activa)
+- `/dashboardFurthurr/#/board` (compatibilidad: redirige a `/boards`)
 
 Vite publica bajo `/dashboardFurthurr/`; conserva el prefijo `base` de `vite.config.ts` y el router hash alineados.
 
@@ -71,6 +75,7 @@ src/
   main.tsx                   Entrada React
   features/auth/             Login, sesión y rutas protegidas
   features/users/            Administración de usuarios
+  features/boards/           Selector de tableros, miembros y ciclo de vida
   features/board/            Tablero, tareas, comentarios y adjuntos
   lib/supabase.ts             Cliente Supabase
   types/index.ts             Tipos compartidos

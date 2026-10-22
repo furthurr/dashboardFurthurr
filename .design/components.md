@@ -2,9 +2,30 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
+## Actualización — ciclo de vida de tableros, 2026-10-22
+
+Describe el árbol de trabajo **sin commit**: `HEAD` (`b42a4d2`) no incluye esta feature y el baseline Git queda pendiente. No añade tokens, paleta, tema ni tipografía: la única clase visual nueva es `.ui-badge`, que reutiliza `--color-border`, `--radius-sm`, `--color-surface-elevated`, `--color-text`, `--space-2` y `--text-xs` (`src/index.css:139`).
+
+| Componente/patrón | Propósito, estados y comportamiento | Fuente |
+| --- | --- | --- |
+| Secciones del selector | Dos bloques con título y descripción: «Tableros activos» y «Tableros desactivados». La sección de desactivados solo se renderiza para admin activo y solo si hay tableros desactivados; ambos bloques comparten el componente `BoardSection`, que muestra «No hay tableros en esta sección.» cuando la lista está vacía. El listado se deriva en cliente de `is_active` sobre la misma query | `src/features/boards/BoardsPage.tsx:19-20,27-37,45-70` |
+| Badge de pendientes | Cada card muestra la etiqueta «Tareas pendientes:» seguida de `.ui-badge` con el número de tareas en `backlog`, `por_hacer` y `haciendo`. El badge es texto numérico con cifras tabulares, no un indicador solo por color | `src/features/boards/BoardsPage.tsx:60`, `src/index.css:139` |
+| Acciones de administración | Solo para admin activo: «Gestionar miembros», «Cambiar nombre» y «Activar/Desactivar». El botón de desactivar usa `ui-button--danger` y cambia de texto y nombre accesible según el estado del tablero («Desactivar X» / «Activar X») | `src/features/boards/BoardsPage.tsx:61-66` |
+| Diálogo de renombrado | `Dialog` con el nombre precargado, campo `ui-field` con `maxLength={120}`, ayuda «El nombre debe ser único y tener entre 1 y 120 caracteres», error `role=alert` con `ui-feedback--error` y pie con «Cancelar» / «Guardar nombre». El envío se bloquea mientras está pendiente y un fallo conserva el borrador | `src/features/boards/BoardsPage.tsx:118-141` |
+| Diálogo de activar/desactivar | `Dialog` de confirmación con el texto del efecto: al desactivar avisa de que los miembros dejarán de ver el tablero y sus tareas y de que **no se borra ninguna tarea, comentario, adjunto ni membresía**; al activar avisa de que los miembros recuperan el acceso. Acción destructiva en `ui-button--danger` y acción principal en `ui-button--primary` | `src/features/boards/BoardsPage.tsx:143-165` |
+| Mensajes de error del ciclo de vida | `describeBoardError` traduce el código de Postgres a lenguaje claro: duplicado, permisos insuficientes, sesión caducada, nombre fuera de rango y tablero inexistente; `getBoardUpdateErrorMessage` lo reutiliza para renombrar y activar/desactivar | `src/features/boards/BoardsPage.tsx:72-91` |
+| Entrada a un tablero desactivado | La ruta resuelve el tablero contra el catálogo accesible; un tablero desactivado no aparece para sus miembros, así que la URL directa cae en el aviso «El tablero no existe o no tienes acceso.» con vuelta al selector. El admin activo sí lo ve en la sección de desactivados | `src/features/boards/BoardRoute.tsx:10-12`, `src/features/boards/BoardsPage.tsx:34-35` |
+| Destinos de traslado | El selector de destino del detalle solo ofrece tableros activos distintos del actual; un tablero desactivado no se ofrece | `src/features/board/BoardPage.tsx:411` |
+
+### Verificación y límites
+
+128 pruebas Vitest en 15 archivos, lint y build correctos (persiste el aviso preexistente de chunk principal >500 kB). Comprobación en Chrome headless con CDP contra `npm run dev`, interceptando las llamadas a Supabase con datos simulados: se verificaron las dos secciones, el badge, el renombrado (diálogo precargado y actualización de la lista), el ciclo desactivar/reactivar y la vista de rol no administrador sin acciones ni sección de desactivados.
+
+Límites: no es E2E con cuentas reales ni auditoría WCAG/lector de pantalla; la verificación SQL del ciclo de vida se hizo en local con Auth/Storage simulados. El contrato que sostiene esta UI **sí está aplicado en el proyecto Supabase remoto** desde el 2026-10-22 (`202610220001` y `202610220002`, en ese orden; las tres suites SQL remotas pasan y revierten sus fixtures con `ROLLBACK`), pero la **SPA compatible aún no está publicada en GitHub Pages**, por lo que la UI sigue sin verificarse contra el servicio real (ver [datos](../.data/README.md)). No se comprobaron viewports adicionales ni contraste calculado en esta revisión.
+
 ## Actualización — tableros y pertenencia, 2026-10-21
 
-Esta sección describe el flujo local de selección/gestión de tableros y movimiento de tareas. No añade tokens, paleta, tema ni componente visual base; reutiliza `board-header`, `ui-button`, `ui-list-card`, `ui-feedback`, `Dialog` y `AssigneePicker`.
+Esta sección describe el flujo local de selección/gestión de tableros y movimiento de tareas. No añade tokens, paleta, tema ni componente visual base; reutiliza `board-header`, `ui-button`, `ui-list-card`, `ui-feedback`, `Dialog` y `AssigneePicker`. Las partes de ciclo de vida (secciones, badge, renombrado y activar/desactivar) quedan **superadas** por la sección del 2026-10-22.
 
 | Componente/patrón | Propósito, estados y comportamiento | Fuente |
 | --- | --- | --- |
@@ -86,7 +107,7 @@ Revisión estática histórica del árbol de trabajo sin commit. Tokens y clases
 
 | Componente/patrón | Presentación, variantes y estados observados | Fuente |
 | --- | --- | --- |
-| Controles `ui-*` | Botón base/primary/secondary/danger y tamaño `sm`; active, disabled, hover condicionado al dispositivo. Campo, label, placeholder, focus e invalid; feedback base/error/success, vacío, enlace, lista y avatar | `src/index.css:75-135`, `src/index.css:171-178` |
+| Controles `ui-*` | Botón base/primary/secondary/danger y tamaño `sm`; active, disabled, hover condicionado al dispositivo. Campo, label, placeholder, focus e invalid; feedback base/error/success, vacío, enlace, lista, avatar y badge numérico | `src/index.css:75-140`, `src/index.css:171-178` |
 | Login / registro | Shell centrado con halo, panel con borde/sombra; acción primaria sólida compartida. Labels asociados, autocomplete, `aria-busy`, error `role=alert` y texto de envío `role=status`; registro añade ayuda de contraseña | `src/features/auth/LoginPage.tsx:30-95`, `src/features/auth/RegisterPage.tsx:37-126`, `src/index.css:137-143` |
 | BoardPage | Carga y error con reintento; header flexible, resumen por estado, CTA y anuncios de éxito/error; columnas horizontales enfocables, busy durante movimientos y DragOverlay | `src/features/board/BoardPage.tsx:72-89`, `src/features/board/BoardPage.tsx:235-295` |
 | BoardColumn | Sección nombrada, contador, vacío con instrucción; borde/superficie de destino al arrastrar; movimientos disponibles según posición | `src/features/board/BoardColumn.tsx:19-54`, `src/index.css:163-168` |
