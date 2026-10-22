@@ -21,6 +21,7 @@ vi.mock('./api', () => ({
   useSetTaskAssignees: () => mocks.assign,
 }))
 vi.mock('./assigneesApi', () => ({ useAssignableUsers: mocks.users }))
+vi.mock('@/features/boards/api', () => ({ useMoveTaskToBoard: () => ({ mutateAsync: vi.fn(), isPending: false }) }))
 vi.mock('./commentsApi', () => ({
   useComments: () => ({ data: [], isLoading: false, error: null }),
   useCreateComment: () => mocks.comment, useDeleteComment: () => mocks.deleteComment,
@@ -35,11 +36,12 @@ vi.mock('@/features/auth/AuthContext', () => ({
 }))
 
 const task: TaskWithAssignees = {
+  board_id: 'offline',
   id: 'task-1', title: 'Revisar diseño', description: 'Contexto', status: 'backlog',
   priority: 'normal', special_notes: null, created_by: 'user-1', position: 0,
   created_at: '2026-10-16', updated_at: '2026-10-16', assignees: [],
 }
-const renderBoard = () => render(<MemoryRouter><BoardPage /></MemoryRouter>)
+const renderBoard = () => render(<MemoryRouter><BoardPage boardId="offline" boardName="Offline" boards={[]} /></MemoryRouter>)
 const ana = { id: 'ana', full_name: 'Ana', email: 'ana@example.test', avatar_url: null, role: 'usuario' as const, is_active: true }
 const bruno = { ...ana, id: 'bruno', full_name: 'Bruno', email: 'bruno@example.test' }
 
@@ -55,6 +57,16 @@ beforeEach(() => {
 })
 
 describe('Integración del tablero', () => {
+  it('consulta solo el tablero seleccionado y cierra el detalle si la tarea deja de pertenecerle', async () => {
+    const user = userEvent.setup()
+    const view = renderBoard()
+    expect(mocks.tasks).toHaveBeenCalledWith('offline')
+    await user.click(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }))
+    expect(screen.getByRole('dialog')).toBeVisible()
+    mocks.tasks.mockReturnValue({ data: [], isLoading: false, error: null, refetch: mocks.refetch })
+    view.rerender(<MemoryRouter><BoardPage boardId="offline" boardName="Offline" boards={[]} /></MemoryRouter>)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
   it('filtra por cualquiera de las personas, sin duplicados, y recupera Todos al quitar la última', async () => {
     const user = userEvent.setup()
     mocks.users.mockReturnValue({ data: [ana, bruno], isLoading: false, error: null })
@@ -260,6 +272,7 @@ describe('Integración del tablero', () => {
     await user.click(screen.getByRole('button', { name: 'Crear Tarea' }))
 
     expect(mocks.create.mutateAsync).toHaveBeenCalledExactlyOnceWith({
+      boardId: 'offline',
       title: 'Tarea con archivos', description: undefined, status: 'backlog', priority: 'normal', createdBy: 'user-1', assigneeIds: [],
     })
     expect(mocks.upload.mutateAsync).not.toHaveBeenCalled()

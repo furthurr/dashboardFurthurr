@@ -8,7 +8,7 @@ export interface TaskImagePreview {
   signedUrl: string
 }
 
-async function fetchAttachments(taskId: string): Promise<TaskAttachment[]> {
+export async function fetchAttachments(taskId: string): Promise<TaskAttachment[]> {
   const { data, error } = await supabase
     .from('task_attachments')
     .select('*')
@@ -16,7 +16,14 @@ async function fetchAttachments(taskId: string): Promise<TaskAttachment[]> {
     .order('created_at', { ascending: true })
 
   if (error) throw error
-  return (data || []) as TaskAttachment[]
+  const attachments = (data || []) as TaskAttachment[]
+  return Promise.all(attachments.map(async (attachment) => {
+    const path = getStorageObjectPath(attachment.file_url)
+    if (!path) throw new Error('Ruta de adjunto no válida')
+    const { data: signed, error: signingError } = await supabase.storage.from('task-attachments').createSignedUrl(path, 60)
+    if (signingError) throw signingError
+    return { ...attachment, signed_url: signed.signedUrl }
+  }))
 }
 
 export function useAttachments(taskId: string | null) {
@@ -24,6 +31,8 @@ export function useAttachments(taskId: string | null) {
     queryKey: ['attachments', taskId],
     queryFn: () => (taskId ? fetchAttachments(taskId) : Promise.resolve([])),
     enabled: !!taskId,
+    staleTime: 0,
+    refetchInterval: 45_000,
   })
 }
 
@@ -66,7 +75,7 @@ export async function fetchTaskImagePreviews(taskIds: string[]): Promise<Record<
 
   const { data: signedUrls, error: signedUrlError } = await supabase.storage
     .from('task-attachments')
-    .createSignedUrls(imageRows.map(({ path }) => path), 60 * 60)
+    .createSignedUrls(imageRows.map(({ path }) => path), 60)
 
   if (signedUrlError) throw signedUrlError
 
@@ -90,8 +99,8 @@ export function useTaskImagePreviews(taskIds: string[]) {
     queryKey: ['task-image-previews', normalizedTaskIds],
     queryFn: () => fetchTaskImagePreviews(normalizedTaskIds),
     enabled: normalizedTaskIds.length > 0,
-    staleTime: 50 * 60 * 1000,
-    refetchInterval: 50 * 60 * 1000,
+    staleTime: 0,
+    refetchInterval: 45_000,
   })
 }
 
@@ -109,7 +118,7 @@ export function useUploadAttachment() {
       file: File
     }) => {
       const fileExt = file.name.split('.').pop()
-      const fileName = `${crypto.randomUUID()}.${fileExt}`
+      const fileName = `${taskId}/${crypto.randomUUID()}.${fileExt?.replace(/[^a-zA-Z0-9]/g, '') || 'bin'}`
 
       const { error: uploadError } = await supabase.storage
         .from('task-attachments')
@@ -152,9 +161,10 @@ export function useDeleteAttachment() {
 
   return useMutation({
     mutationFn: async ({ attachmentId, fileUrl }: { attachmentId: string; fileUrl: string }) => {
-      const fileName = fileUrl.split('/').pop()
+      const fileName = getStorageObjectPath(fileUrl)
       if (fileName) {
-        await supabase.storage.from('task-attachments').remove([fileName])
+        const { error } = await supabase.storage.from('task-attachments').remove([fileName])
+        if (error) throw error
       }
 
       const { error } = await supabase

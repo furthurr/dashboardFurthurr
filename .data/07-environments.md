@@ -22,9 +22,9 @@ Fuente: `supabase/functions/admin-users/index.ts:20-23`. Los placeholders no rep
 - El build sube `dist` como artefacto de GitHub Pages (`.github/workflows/deploy.yml:39-53`).
 - El prefijo de hosting está fijado en `vite.config.ts:6-13`.
 - El repositorio no permite verificar si los secretos están configurados en GitHub ni qué proyecto Supabase corresponde a cada entorno.
-- El build de Pages no despliega Edge Functions, migraciones ni ajustes de Auth. Las instalaciones existentes aplican `202610190001_user_administration.sql`, `202610200001_task_assignments.sql` y `202610200002_shared_task_editing.sql` en orden; no se reejecuta el bootstrap completo (`supabase/README.md`). La tercera migración es la que habilita la edición compartida de tareas; sin ella, la interfaz permite editar pero la base de datos rechaza la escritura.
+- El build de Pages no despliega Edge Functions, migraciones ni ajustes de Auth. Las instalaciones existentes aplican `202610190001_user_administration.sql`, `202610200001_task_assignments.sql`, `202610200002_shared_task_editing.sql` y `202610210001_boards.sql` en orden; no se reejecuta el bootstrap completo (`supabase/README.md`). Sin la última migración, la UI de selección/membresías no es compatible con la base remota.
 - `supabase/config.toml` declara `auth.enable_signup = false` y `functions.admin-users.verify_jwt = false`; el segundo ajuste requiere la validación explícita implementada dentro de la función. Se conserva la confirmación global de correo: el alta administrativa confirma cada cuenta con `email_confirm: true`.
-- Evidencia previa de esta sesión registra migraciones aplicadas y función desplegada; esta sincronización documental no accedió de nuevo al servicio ni acredita publicación de la nueva SPA en Pages.
+- La migración de tableros no se aplicó ni verificó contra Supabase remoto; tampoco se comprobó publicación de esta versión de la SPA en Pages. Evidencia SQL disponible es local con PostgreSQL embebido y servicios Auth/Storage simulados.
 
 ## Higiene
 

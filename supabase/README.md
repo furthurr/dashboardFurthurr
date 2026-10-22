@@ -1,11 +1,11 @@
-# Despliegue de administración de usuarios
+# Operación y despliegue de Supabase
 
 La SPA sigue alojada en GitHub Pages. Las operaciones privilegiadas se ejecutan en la Edge Function `admin-users`, nunca en el navegador.
 
 ## Instalación existente
 
 1. Realiza una copia de seguridad y prueba primero en un proyecto de pruebas.
-2. Ejecuta las migraciones pendientes en orden: `migrations/202610190001_user_administration.sql`, después `migrations/202610200001_task_assignments.sql` y por último `migrations/202610200002_shared_task_editing.sql`. No vuelvas a ejecutar el schema bootstrap en una instalación existente. Las cuentas existentes conservan su rol y quedan activas; las asignaciones existentes se conservan.
+2. Ejecuta las migraciones pendientes en orden: `migrations/202610190001_user_administration.sql`, `migrations/202610200001_task_assignments.sql`, `migrations/202610200002_shared_task_editing.sql` y finalmente `migrations/202610210001_boards.sql`. No vuelvas a ejecutar el schema bootstrap en una instalación existente. Las tareas existentes se asignan al tablero `Offline`; las cuentas activas existentes se convierten en miembros de `Offline`; `General` inicia sin miembros. Revisa la política de asignación antes de aplicar en producción.
 3. En Supabase Auth, deshabilita **Allow new users to sign up** (registro público). La API administrativa `createUser` continúa disponible. No es necesario desactivar globalmente la confirmación por correo: esta función usa `email_confirm: true` al crear cada cuenta.
 
    Alternativamente, con CLI **2.121.0** se puede revisar y aplicar el único ajuste declarado de Auth en `config.toml`, conservando las propiedades no declaradas:
@@ -23,7 +23,23 @@ La SPA sigue alojada en GitHub Pages. Las operaciones privilegiadas se ejecutan 
    `config.toml` desactiva únicamente la validación JWT del gateway de esta función: la función valida el bearer token con `auth.getUser` y exige un perfil `admin` activo antes de cualquier operación. `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` son variables del entorno de funciones de Supabase. **Nunca** las copies a variables `VITE_*` ni a la SPA.
 5. Publica la web con `npm run build` y el flujo habitual de GitHub Pages.
 
-Para una instalación nueva, `../supabase-schema.sql` incluye el mismo endurecimiento; no hace falta aplicar además la migración.
+Para una instalación nueva, `../supabase-schema.sql` incluye el modelo de tableros y sus políticas; no apliques además las migraciones ya incluidas en el bootstrap.
+
+### Tableros y acceso por membresía
+
+`202610210001_boards.sql` crea `boards` y `board_members`, asigna las tareas/usuarios activos existentes a `Offline`, y crea `General` vacío. Admin activo accede a todos los tableros, crea tableros y sustituye miembros; usuarios e invitados solo acceden a tableros donde sean miembros. Ser responsable de una tarea no concede acceso. Las cuentas nuevas no reciben membresías automáticamente.
+
+RLS limita tareas, asignaciones, comentarios, metadata de adjuntos y Storage por tablero. Crear tarea exige rol admin/usuario activo y acceso al tablero; cambiar tablero usa `move_task_to_board`, exige acceso a origen y destino y actualiza la misma tarea conservando sus relaciones. No habilites la nueva SPA antes de aplicar y verificar la migración en el proyecto adecuado: esta actualización documental no ha aplicado SQL remoto.
+
+Las cargas nuevas usan path `<task-id>/<UUID>.<ext>`; las antiguas con path plano se resuelven desde metadata. El bucket de adjuntos permanece privado. La UI genera URLs firmadas de corta duración; accesos firmados ya emitidos o archivos descargados no se revocan retroactivamente.
+
+Prueba transaccional con fixtures revertidos:
+
+```bash
+npx supabase@2.121.0 db query --linked --project-ref <project-ref> --file supabase/tests/boards.sql
+```
+
+Prueba local documentada para esta implementación: `boards.sql`, `task_assignments.sql` y `user_access.sql` se ejecutaron sobre PostgreSQL embebido con Auth/Storage simulados, contra bootstrap y secuencia incremental. No certifica el proyecto Supabase desplegado.
 
 ## Contrato y comprobación manual
 
@@ -37,6 +53,8 @@ POST autenticado a `admin-users`, vía `supabase.functions.invoke`:
 - Errores: `{ error: string }`, HTTP 400/401/403/405/500. No se devuelven secretos ni contraseñas.
 
 Comprueba con cuentas separadas:
+
+Antes de publicar la nueva SPA, verifica además: admin ve Offline y General, usuario/invitado ve solo tableros asignados, asignar una tarea no añade membresía, miembro de ambos tableros traslada una sola tarea conservando sus relaciones, y la cuenta que no pertenece al destino recibe denegación. Al retirar una membresía, nuevas peticiones de tablas/Storage deben quedar denegadas.
 
 1. Un admin ve «Usuarios»; usuario e invitado no pueden abrir la ruta ni invocar la función (403).
 2. Alta: la sesión del admin no cambia; la cuenta nueva entra inmediatamente sin correo.

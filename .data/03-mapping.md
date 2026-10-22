@@ -2,10 +2,11 @@
 
 ## Tareas y asignados
 
-La query lee `tasks` y expande `task_assignees(profile_id, profiles(id, full_name, email, avatar_url, role, is_active))`. Añade `assignees` con cada perfil relacionado, descarta relaciones nulas y castea como `TaskWithAssignees`. El spread también conserva los campos originales del resultado; no es un DTO serializado separado (`src/features/board/api.ts:5-21`).
+La query lee tareas filtradas por `board_id` y expande `task_assignees(profile_id, profiles(id, full_name, email, avatar_url, role, is_active))`. Añade `assignees` con cada perfil relacionado, descarta relaciones nulas y castea como `TaskWithAssignees`. `board_id` viaja en el objeto de tarea (`src/features/board/api.ts:5-29`).
 
 ```text
 tasks row
+  └── board_id → boards.id
   └── task_assignees[]
         └── profiles { id, full_name, email, avatar_url, role, is_active }
               ↓ map
@@ -26,7 +27,11 @@ La query de comentarios selecciona las columnas de `comments` y relaciona `autho
 
 ## Adjuntos
 
-La fila conserva metadata y `file_url` obtenido mediante `getPublicUrl` después del upload; borrar intenta quitar el último segmento del URL y después elimina metadata (`src/features/board/attachmentsApi.ts:98-169`). Las miniaturas filtran MIME de imágenes y extraen el path tras `/task-attachments/` para emitir URLs firmadas de una hora, agrupadas por tarea. Esa transformación no sustituye el URL almacenado ni resuelve D-02/D-04 para el resto del flujo (`src/features/board/attachmentsApi.ts:30-95`). Ver [schema](04-schema.md#storage).
+El objeto nuevo se carga en `<taskId>/<UUID>.<extensión>`; la metadata guarda la URL generada por `getPublicUrl`, de la que el cliente extrae el path sin usarla como enlace. Las vistas de detalle y miniaturas solicitan URLs firmadas por 60 segundos; queries se refrescan cada 45 segundos. La eliminación quita el objeto por path, verifica el resultado y luego elimina metadata. Paths anteriores planos se resuelven contra metadata existente por la policy SQL. Persiste la discrepancia de `getPublicUrl` frente al bucket privado (D-02); la convención de path/borrado queda alineada para nuevas cargas y admite los objetos planos previos (D-04 resuelta en el árbol observado). Fuentes: `src/features/board/attachmentsApi.ts`, `supabase/migrations/202610210001_boards.sql:133-172`.
+
+## Tableros y pertenencia
+
+`Board` es la proyección directa de `boards`. `Task.board_id` enlaza cada tarea a exactamente un tablero. `board_members` se consulta como relación de perfiles; el filtro visible del catálogo de tableros se aplica en RLS, no en el cliente. El traslado ejecuta RPC y conserva el mismo `task_id`, de modo que comentarios, asignaciones y adjuntos permanecen relacionados (`src/features/boards/api.ts`, `supabase/migrations/202610210001_boards.sql:4-22,114-125`).
 
 ## Tipos y validación
 

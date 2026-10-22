@@ -1,11 +1,24 @@
 import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { LoginPage } from './LoginPage'
 
 const auth = vi.hoisted(() => ({ signInWithPassword: vi.fn() }))
 vi.mock('@/lib/supabase', () => ({ supabase: { auth } }))
+
+it('después del login lleva al selector y no entra a un tablero automáticamente', async () => {
+  const user = userEvent.setup()
+  auth.signInWithPassword.mockResolvedValueOnce({ error: null })
+  render(<MemoryRouter initialEntries={['/login']}><Routes>
+    <Route path="/login" element={<LoginPage />} />
+    <Route path="/boards" element={<h1>Seleccionar tablero</h1>} />
+  </Routes></MemoryRouter>)
+  await user.type(screen.getByLabelText('Correo electrónico'), 'equipo@example.test')
+  await user.type(screen.getByLabelText('Contraseña'), 'fixture-password')
+  await user.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
+  expect(await screen.findByRole('heading', { name: 'Seleccionar tablero' })).toBeVisible()
+})
 
 describe.each([
   { name: 'acceso', Component: LoginPage, action: 'Iniciar sesión', pending: 'Iniciando sesión…', method: 'signInWithPassword' as const },

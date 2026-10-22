@@ -29,6 +29,7 @@ export function AccountMenu() {
           <button type="button" className="ui-button" aria-label="Cerrar menú" onClick={() => setOpen(false)}>×</button>
         </div>
         <nav aria-label="Opciones de cuenta" className="flex flex-col gap-2">
+          <button type="button" className="ui-button justify-start" onClick={() => { setOpen(false); navigate('/boards') }}>Tableros</button>
           {profile?.role === 'admin' && <button type="button" className="ui-button justify-start" onClick={() => { setOpen(false); navigate('/users') }}>Usuarios</button>}
           <button type="button" className="ui-button justify-start" onClick={() => { setOpen(false); navigate('/profile') }}>Perfil</button>
           <button type="button" className="ui-button justify-start" onClick={() => { void signOut() }}>Cerrar sesión</button>

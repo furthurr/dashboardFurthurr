@@ -18,6 +18,7 @@ export interface Profile {
 
 export interface Task {
   id: string
+  board_id: string
   title: string
   description: string | null
   status: TaskStatus
@@ -27,6 +28,12 @@ export interface Task {
   position: number
   created_at: string
   updated_at: string
+}
+
+export interface Board {
+  id: string
+  name: string
+  created_at: string
 }
 
 export type AssigneeProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url' | 'role' | 'is_active'>
@@ -62,6 +69,7 @@ export interface TaskAttachment {
   uploaded_by: string
   file_name: string
   file_url: string
+  signed_url?: string
   file_size: number
   mime_type: string
   created_at: string

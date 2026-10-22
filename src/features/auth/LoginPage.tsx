@@ -23,7 +23,7 @@ export function LoginPage() {
       setError(error.message)
       setIsLoading(false)
     } else {
-      navigate('/board')
+      navigate('/boards')
     }
   }
 
@@ -37,7 +37,7 @@ export function LoginPage() {
         </div>
         <div className="auth-heading">
           <h1>Bienvenido a Furthurr</h1>
-          <p>Inicia sesión para continuar al tablero</p>
+          <p>Inicia sesión para seleccionar un tablero</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5" aria-busy={isLoading}>

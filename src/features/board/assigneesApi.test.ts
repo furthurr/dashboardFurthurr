@@ -26,9 +26,9 @@ describe('API de asignaciones', () => {
   })
   it('crea tarea y asignaciones mediante una sola llamada sin propietario enviado por el cliente', async () => {
     mocks.rpc.mockResolvedValue({ data: { id: 'task' }, error: null })
-    expect(await createTaskWithAssignees({ title: 'Nueva', status: 'backlog', priority: 'normal', assigneeIds: ['a', 'b', 'a'] })).toEqual({ id: 'task' })
+    expect(await createTaskWithAssignees({ boardId: 'offline', title: 'Nueva', status: 'backlog', priority: 'normal', assigneeIds: ['a', 'b', 'a'] })).toEqual({ id: 'task' })
     expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('create_task_with_assignees', {
-      p_title: 'Nueva', p_description: null, p_status: 'backlog', p_priority: 'normal', p_assignee_ids: ['a', 'b'],
+      p_board_id: 'offline', p_title: 'Nueva', p_description: null, p_status: 'backlog', p_priority: 'normal', p_assignee_ids: ['a', 'b'],
     })
   })
   it('permite vaciar responsables y propaga fallos de la transacción', async () => {
@@ -39,7 +39,8 @@ describe('API de asignaciones', () => {
   })
   it('recupera el id y estado de los responsables y descarta relaciones nulas', async () => {
     mocks.order.mockResolvedValueOnce({ data: [{ id: 'task', task_assignees: [{ profiles: { id: 'person', is_active: false } }, { profiles: null }] }], error: null })
-    const tasks = await fetchTasks()
+    const tasks = await fetchTasks('offline')
+    expect(mocks.eq).toHaveBeenCalledWith('board_id', 'offline')
     expect(mocks.select).toHaveBeenCalledWith(expect.stringContaining('profiles(id, full_name, email, avatar_url, role, is_active)'))
     expect(tasks[0].assignees).toEqual([{ id: 'person', is_active: false }])
   })

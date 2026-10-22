@@ -18,8 +18,9 @@ begin
   if has_column_privilege(current_user, 'public.tasks', 'created_by', 'UPDATE') then
     raise exception 'Client can rewrite task ownership';
   end if;
-  insert into public.tasks (id, title, created_by)
-    values (current_setting('app.access_probe_id')::uuid, 'Transactional access probe', auth.uid());
+  perform set_config('app.access_probe_id', public.create_task_with_assignees(
+    (select id from public.boards where name = 'Offline'), 'Transactional access probe', null, 'backlog', 'normal', '{}'
+  )->>'id', true);
   if not exists (select 1 from public.tasks where id = current_setting('app.access_probe_id')::uuid) then
     raise exception 'Active account cannot read its task';
   end if;

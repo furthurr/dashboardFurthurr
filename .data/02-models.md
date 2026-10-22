@@ -10,6 +10,14 @@ Los tipos de aplicación viven en `src/types/index.ts`; el esquema SQL es `supab
 | `TaskStatus` | `backlog`, `por_hacer`, `haciendo`, `en_revision`, `finalizadas` | `src/types/index.ts:3`, `supabase-schema.sql:12` |
 | `TaskPriority` | `urgente`, `alta`, `normal`, `baja` | `src/types/index.ts:5`, `supabase-schema.sql:14` |
 
+## `Board` y `board_members`
+
+- `Board`: `{ id: string, name: string, created_at: string }`, corresponde a `public.boards`.
+- `public.boards.name` es único sin distinguir mayúsculas, y valida nombre recortado de 1–120 caracteres.
+- `board_members` es la relación many-to-many entre `boards.id` y `profiles.id`, con PK compuesta `(board_id, profile_id)`; se representa como perfiles `AssigneeProfile[]` en el cliente, no como entidad TS independiente.
+- Solo admins activos pueden crear tableros y gestionar membresías. `Offline` y `General` se crean por migración; los miembros activos existentes se asignan a Offline y General empieza vacío.
+- Fuente: `src/types/index.ts`, `src/features/boards/api.ts`, `supabase/migrations/202610210001_boards.sql:4-22,63-80`.
+
 ## `Profile`
 
 Correspondencia: `public.profiles`; extiende la identidad de `auth.users`.
@@ -34,6 +42,7 @@ Correspondencia: `public.tasks`; `TaskWithAssignees` agrega `assignees` y contad
 | Campo | Tipo TS | Nullable en el contrato | Notas |
 | --- | --- | --- | --- |
 | `id` | `string` | No | UUID generado por SQL |
+| `board_id` | `string` | No | FK obligatoria a `boards.id`; la tarea pertenece a un solo tablero |
 | `title` | `string` | No | Requerido |
 | `description` | `string \| null` | Sí | Texto opcional |
 | `status` | `TaskStatus` | No | Default SQL `backlog` |
@@ -45,7 +54,7 @@ Correspondencia: `public.tasks`; `TaskWithAssignees` agrega `assignees` y contad
 | `assignees` | `AssigneeProfile[]` | No (en TS) | Proyección explícita con identidad/estado; relaciones nulas descartadas |
 | `comment_count`, `attachment_count` | `number?` | Opcional | Tipos definidos; no vienen en la query `useTasks` observada |
 
-Fuente: `src/types/index.ts:19-38`, `src/features/board/api.ts:5-21`.
+Fuente: `src/types/index.ts:19-45`, `src/features/board/api.ts:5-29`, `supabase/migrations/202610210001_boards.sql:19-22`.
 
 ### Proyecciones y solicitudes nuevas
 

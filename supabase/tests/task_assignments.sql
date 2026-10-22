@@ -1,4 +1,4 @@
--- Privileged connection, after both migrations. Fixtures never persist: ROLLBACK.
+-- Privileged connection, after all migrations including boards. Fixtures never persist.
 begin;
 select set_config('app.assignment_admin', gen_random_uuid()::text, true);
 select set_config('app.assignment_user', gen_random_uuid()::text, true);
@@ -15,10 +15,15 @@ update public.profiles set role = 'admin' where id = current_setting('app.assign
 update public.profiles set role = 'usuario' where id = current_setting('app.assignment_user')::uuid;
 update public.profiles set role = 'invitado' where id = current_setting('app.assignment_guest')::uuid;
 update public.profiles set is_active = false where id = current_setting('app.assignment_inactive')::uuid;
+select set_config('app.assignment_board', (select id::text from public.boards where name = 'Offline'), true);
+insert into public.board_members(board_id, profile_id)
+  select current_setting('app.assignment_board')::uuid, id from public.profiles
+  where id in (current_setting('app.assignment_user')::uuid, current_setting('app.assignment_guest')::uuid);
 
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('app.assignment_admin'), 'role', 'authenticated')::text, true);
 set local role authenticated;
 select set_config('app.assignment_task', public.create_task_with_assignees(
+  current_setting('app.assignment_board')::uuid,
   'Assignment transaction probe', 'Keep this description', 'backlog', 'normal',
   array[current_setting('app.assignment_user')::uuid, current_setting('app.assignment_guest')::uuid, current_setting('app.assignment_user')::uuid]
 )->>'id', true);
@@ -55,7 +60,7 @@ begin
   if found then raise exception 'Guest can delete another account task'; end if;
   update public.tasks set title = 'Assignment transaction probe' where id = current_setting('app.assignment_task')::uuid;
   begin
-    perform public.create_task_with_assignees('Guest creation forbidden', null, 'backlog', 'normal', '{}');
+    perform public.create_task_with_assignees(current_setting('app.assignment_board')::uuid, 'Guest creation forbidden', null, 'backlog', 'normal', '{}');
     raise exception 'Guest can create tasks';
   exception when insufficient_privilege then null;
   end;
@@ -73,12 +78,12 @@ do $$
 declare
   created_task jsonb;
 begin
-  created_task := public.create_task_with_assignees('Unassigned task probe', null, 'backlog', 'normal', '{}');
+   created_task := public.create_task_with_assignees(current_setting('app.assignment_board')::uuid, 'Unassigned task probe', null, 'backlog', 'normal', '{}');
   if (created_task->>'created_by')::uuid <> auth.uid()
     or exists(select 1 from public.task_assignees where task_id = (created_task->>'id')::uuid) then
     raise exception 'Regular user creation without assignees failed';
   end if;
-  created_task := public.create_task_with_assignees('Single assignee probe', null, 'backlog', 'normal', array[current_setting('app.assignment_guest')::uuid]);
+   created_task := public.create_task_with_assignees(current_setting('app.assignment_board')::uuid, 'Single assignee probe', null, 'backlog', 'normal', array[current_setting('app.assignment_guest')::uuid]);
   if (select count(*) from public.task_assignees where task_id = (created_task->>'id')::uuid) <> 1 then
     raise exception 'Regular user creation with one assignee failed';
   end if;
@@ -99,10 +104,10 @@ begin
   begin
     perform public.set_task_assignees(gen_random_uuid(), '{}');
     raise exception 'Nonexistent task accepted';
-  exception when no_data_found then null;
+   exception when insufficient_privilege then null;
   end;
   begin
-    perform public.create_task_with_assignees('Atomic failure probe', null, 'backlog', 'normal', array[current_setting('app.assignment_inactive')::uuid]);
+    perform public.create_task_with_assignees(current_setting('app.assignment_board')::uuid, 'Atomic failure probe', null, 'backlog', 'normal', array[current_setting('app.assignment_inactive')::uuid]);
     raise exception 'Inactive target accepted during creation';
   exception when invalid_parameter_value then null;
   end;

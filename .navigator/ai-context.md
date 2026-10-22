@@ -2,7 +2,7 @@
 
 ## Propósito
 
-- **Qué es:** SPA Kanban con cuentas, comentarios, adjuntos y asignación múltiple de responsables.
+- **Qué es:** SPA Kanban con tableros de acceso por membresía, tareas, cuentas, comentarios, adjuntos y responsables múltiples.
 - **Alcance:** web estática en GitHub Pages más backend gestionado en Supabase: Auth/Postgres/Storage, Edge Function administrativa y RPCs transaccionales. No hay servidor independiente ni SSR.
 
 ## Stack
@@ -16,21 +16,24 @@
 
 - `src/features/auth/` → login, sesión, perfil activo y rutas protegidas.
 - `src/features/users/` → listado, alta, nombre, contraseña y estado de cuentas para administradores.
-- `src/features/board/` → tablero, tareas/comentarios/adjuntos y `AssigneePicker`; contratos RPC en `api.ts`, cuentas activas en `assigneesApi.ts`.
+- `src/features/boards/` → selector, creación, gestión de miembros y autorización de rutas; contratos de tableros/RPC en `api.ts`.
+- `src/features/board/` → Kanban de un tablero, tareas/comentarios/adjuntos, traslados y `AssigneePicker`; APIs locales de tareas y adjuntos.
 - `src/shared/ui/` → Dialog/Toast y controles de cuenta compartidos.
 - `src/lib/supabase.ts` → cliente Supabase y validación de variables requeridas.
-- `src/types/index.ts` → tipos compartidos de perfiles y tareas.
+- `src/types/index.ts` → tipos compartidos de perfiles, tableros y tareas (`Task.board_id`).
 - `src/index.css` → estilos globales y variables visuales.
 - `supabase-schema.sql` → tablas, policies, buckets, vistas y grants de referencia.
 - `supabase/functions/admin-users/` → operaciones administrativas privilegiadas verificadas en servidor.
-- `supabase/migrations/` → estado/grants y RPCs incrementales; `supabase/README.md` explica despliegue y pruebas SQL.
+- `supabase/migrations/` → estado/grants, RPCs de tareas y aislamiento por membresía; `202610210001_boards.sql` es requerido por el nuevo frontend. `supabase/README.md` explica despliegue/pruebas SQL.
 - Detalle y dependencias: [`module-map.json`](module-map.json).
 
 ## Convenciones
 
 - Usa `HashRouter`; GitHub Pages no reescribe rutas internas y Vite publica bajo `/dashboardFurthurr/`.
-- `/board` exige cuenta activa; `/users` añade rol admin; `/register` redirige a `/users`. El cambio concurrente añade `/profile` y acceso desde `AccountMenu`, cuyo flujo completo queda fuera de esta revisión.
-- Cualquier cuenta activa, incluidos invitados, puede guardar responsables por separado y editar y mover cualquier tarea, sea propia o ajena. Crear tareas sigue reservado a admin/usuario; borrar, a quien creó la tarea o a un admin. No confundir la edición compartida con la creación ni con el borrado.
+- `/boards` exige cuenta activa y presenta solo tableros autorizados por RLS; `/board/:boardId` comprueba el acceso antes de cargar tareas; `/board` redirige a `/boards`. `/users` añade rol admin; `/register` redirige a `/users`; `/profile` y cuenta desde `AccountMenu`.
+- Cualquier cuenta activa, incluidos invitados, puede guardar responsables por separado y editar/mover cualquier tarea de un tablero accesible, sea propia o ajena. Crear tareas sigue reservado a admin/usuario; borrar, a quien creó la tarea o a un admin. No confundir la edición compartida con la creación ni con el borrado.
+- El acceso es por membresía explícita: admin activo ve todos los tableros; los demás solo los asignados. Ser responsable de tarea no concede acceso. Solo admin crea tableros y gestiona miembros; el traslado requiere acceso a origen y destino.
+- Migración local `supabase/migrations/202610210001_boards.sql`: existentes activos/tareas se asignan a Offline, General empieza vacío; no consta aplicada al remoto.
 - `specs/` conserva requisitos/intención de producto; actualiza la spec antes de implementar funcionalidad.
 - Contrasta cambios de persistencia con `supabase-schema.sql` y la matriz de `specs/05-auth-roles-permisos.md`.
 - Verifica comportamiento en el código y contratos: los índices de Navigator son orientación, no fuente de verdad.
@@ -55,9 +58,9 @@
 
 ## Meta
 
-- Actualizado: 2026-10-20, sincronización focalizada autorizada de la edición compartida de tareas.
+- Actualizado: 2026-10-21, contexto funcional de tableros; documentación sigue pendiente de baseline Git.
 - Source commit: omitido; working tree con cambios locales no incluidos en `HEAD`.
-- HEAD observado: `048f4deb0d3f2c0bab859bbc4d593cf7e6694714`, no baseline de los cambios documentados.
+- HEAD observado antes de actualizar: `cd8c4c0e7979be59dcc5eebcfb784f528da48ac5`, no baseline de los cambios documentados.
 - Cambios concurrentes `ProfilePage`/`AccountMenu`: localizados para evitar rutas obsoletas; comportamiento completo y nuevas pruebas no sincronizados ni validados aquí.
 - Navigator root: `.`
 - Actualizado con: documentation-orchestrator, capas 0–1; símbolos y grafo permanecen deshabilitados. `config.yaml` se conservó.

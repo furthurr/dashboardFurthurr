@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchTaskImagePreviews } from './attachmentsApi'
+import { fetchAttachments, fetchTaskImagePreviews } from './attachmentsApi'
 
 const mocks = vi.hoisted(() => {
-  const query = { select: vi.fn(), in: vi.fn(), order: vi.fn() }
-  const storageBucket = { createSignedUrls: vi.fn() }
+  const query = { select: vi.fn(), in: vi.fn(), eq: vi.fn(), order: vi.fn() }
+  const storageBucket = { createSignedUrls: vi.fn(), createSignedUrl: vi.fn() }
   return {
     query,
     storageBucket,
@@ -21,6 +21,7 @@ beforeEach(() => {
   mocks.supabase.from.mockReturnValue(mocks.query)
   mocks.query.select.mockReturnValue(mocks.query)
   mocks.query.in.mockReturnValue(mocks.query)
+  mocks.query.eq.mockReturnValue(mocks.query)
   mocks.query.order.mockResolvedValue({
     data: [
       {
@@ -57,13 +58,26 @@ beforeEach(() => {
 })
 
 describe('fetchTaskImagePreviews', () => {
+  it('firma también documentos privados sin reemplazar su ruta persistida', async () => {
+    const fileUrl = 'https://project.example/storage/v1/object/public/task-attachments/task-1/documento.pdf'
+    mocks.query.order.mockResolvedValue({ data: [{ id: 'doc', file_url: fileUrl }], error: null })
+    mocks.storageBucket.createSignedUrl.mockResolvedValue({ data: { signedUrl: 'https://signed.example/doc' }, error: null })
+    expect(await fetchAttachments('task-1')).toEqual([{ id: 'doc', file_url: fileUrl, signed_url: 'https://signed.example/doc' }])
+    expect(mocks.query.eq).toHaveBeenCalledWith('task_id', 'task-1')
+    expect(mocks.storageBucket.createSignedUrl).toHaveBeenCalledWith('task-1/documento.pdf', 60)
+  })
+  it('propaga la denegación de Storage en vez de usar una URL pública como alternativa', async () => {
+    mocks.query.order.mockResolvedValue({ data: [{ id: 'doc', file_url: 'https://project.example/task-attachments/legacy.pdf' }], error: null })
+    mocks.storageBucket.createSignedUrl.mockResolvedValue({ data: null, error: new Error('Sin acceso') })
+    await expect(fetchAttachments('task-1')).rejects.toThrow('Sin acceso')
+  })
   it('carga solo adjuntos de imagen, firma sus rutas y los agrupa por tarea', async () => {
     const result = await fetchTaskImagePreviews(['task-1', 'task-2'])
 
     expect(mocks.supabase.from).toHaveBeenCalledWith('task_attachments')
     expect(mocks.query.select).toHaveBeenCalledWith('id, task_id, file_name, file_url, mime_type')
     expect(mocks.query.in).toHaveBeenCalledWith('task_id', ['task-1', 'task-2'])
-    expect(mocks.storageBucket.createSignedUrls).toHaveBeenCalledWith(['imagen uno.png', 'foto.jpg'], 3600)
+    expect(mocks.storageBucket.createSignedUrls).toHaveBeenCalledWith(['imagen uno.png', 'foto.jpg'], 60)
     expect(result).toEqual({
       'task-1': [{ id: 'image-1', fileName: 'imagen uno.png', signedUrl: 'https://signed.example/imagen-uno' }],
       'task-2': [{ id: 'image-2', fileName: 'foto.jpg', signedUrl: 'https://signed.example/foto' }],

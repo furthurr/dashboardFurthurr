@@ -1,5 +1,7 @@
 # 06 - UI/UX Y Diseño
 
+Última actualización: 2026-10-21
+
 Estado: `borrador`
 
 ## Mejora integral implementada — pendiente de aceptación
@@ -40,6 +42,14 @@ Objetivo visual:
 - Cada columna representa un estado.
 - Cada tarea se muestra como card.
 - Modal o drawer para detalle de tarea.
+
+## Selección y acceso a tableros
+
+- Después del login se muestra una pantalla con cards de los tableros accesibles; elegir una card abre ese tablero concreto. «Cambiar tablero» devuelve al selector.
+- El selector distingue carga, error/reintento y cuenta sin tableros. Admin ve todas las cards, puede crear tableros y gestionar miembros; las cuentas no admin solo ven sus membresías.
+- La creación solicita nombre, muestra duplicados/errores y explica que el tablero nuevo inicia sin miembros.
+- Inicialmente «Offline» recibe tareas existentes y miembros activos actuales; «General» inicia vacío. Las nuevas tareas se crean en el tablero que está abierto.
+- El detalle permite elegir otro tablero accesible y confirmar el traslado; se informa que la tarea desaparecerá del origen y conserva información/relaciones. Debe evitarse perder cambios de detalle sin guardar.
 
 ## Filtro de responsables del tablero
 

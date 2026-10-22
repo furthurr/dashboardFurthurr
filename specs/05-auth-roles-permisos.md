@@ -2,7 +2,7 @@
 
 Estado: `aprobada`
 
-Última actualización: 2026-10-20
+Última actualización: 2026-10-21
 
 ## Archivo De Referencia
 
@@ -32,29 +32,29 @@ Admin:
 
 - Puede ver usuarios.
 - Puede editar roles.
-- Puede crear, editar y eliminar tareas.
+- Puede crear, editar y eliminar tareas en cualquier tablero; el borrado conserva sus reglas por creador.
 - Puede crear y editar comentarios.
 - Puede editar comentarios de otros usuarios.
 
 Usuario:
 
-- Puede ver tareas.
-- Puede crear tareas.
-- Puede editar cualquier tarea, propia o ajena.
+- Puede ver tareas en tableros donde es miembro.
+- Puede crear tareas en tableros donde es miembro.
+- Puede editar tareas propias o ajenas en tableros donde es miembro.
 - Puede crear comentarios.
 - Puede editar solo sus comentarios.
 
 Invitado:
 
-- Puede ver tareas.
-- Puede editar cualquier tarea, propia o ajena.
+- Puede ver tareas en tableros donde es miembro.
+- Puede editar tareas propias o ajenas en tableros donde es miembro.
 - No puede crear comentarios.
 - No puede editar comentarios.
 - No puede editar comentarios aunque sean propios, porque no puede crearlos.
 
 ## Decisiones Resueltas
 
-- Cualquier cuenta autenticada y activa puede editar los campos de cualquier tarea, sea propia o ajena.
+- Cualquier cuenta autenticada y activa puede editar los campos de cualquier tarea, sea propia o ajena, si tiene acceso al tablero de esa tarea.
 - Usuario puede eliminar tareas solo si es el creador o admin. El borrado no se amplía.
 - La edición compartida no permite cambiar el creador de la tarea: `created_by` no es escribible desde el cliente.
 - Invitado puede ver adjuntos (SELECT en task_attachments para authenticated).
@@ -63,31 +63,44 @@ Invitado:
 
 ## Roles: Definición Formal
 
+El alcance de las acciones sobre tareas y sus recursos asociados (asignaciones, comentarios y adjuntos) de esta matriz es **solo dentro de un tablero accesible** por membresía, salvo los administradores activos, que ven todos los tableros. Ser responsable de una tarea no concede acceso a su tablero.
+
 | Acción | Admin | Usuario | Invitado |
 |---|---|---|---|
-| Ver tareas | Sí | Sí | Sí |
+| Ver tareas | Todos los tableros | Solo miembros | Solo miembros |
 | Crear tareas | Sí | Sí | No |
 | Editar tareas propias | Sí | Sí | Sí |
 | Editar tareas ajenas | Sí | Sí | Sí |
 | Eliminar tareas propias | Sí | Sí | No |
 | Eliminar tareas ajenas | Sí | No | No |
-| Ver comentarios | Sí | Sí | Sí |
+| Ver comentarios | En cualquier tablero | Solo miembros | Solo miembros |
 | Crear comentarios | Sí | Sí | No |
 | Editar comentarios propios | Sí | Sí | No |
 | Editar comentarios ajenos | Sí | No | No |
 | Eliminar comentarios propios | Sí | Sí | No |
 | Eliminar comentarios ajenos | Sí | No | No |
 | Subir adjuntos | Sí | Sí | No |
-| Ver adjuntos | Sí | Sí | Sí |
+| Ver adjuntos | En cualquier tablero | Solo miembros | Solo miembros |
 | Eliminar adjuntos propios | Sí | Sí | No |
 | Eliminar adjuntos ajenos | Sí (de sus tareas) | No | No |
 | Editar perfil propio | Sí | Sí | Sí |
 | Editar roles de otros | Sí | No | No |
-| Asignar/desasignar responsables de cualquier tarea | Sí | Sí | Sí |
+| Asignar/desasignar responsables de tareas en tableros accesibles | Sí | Sí | Sí |
+
+## Acceso y administración de tableros
+
+- Todo usuario debe seleccionar un tablero después de iniciar sesión; la ruta de un tablero también valida su existencia y acceso.
+- Un administrador activo puede ver todos los tableros, crear tableros y asignar/quitar miembros. Un tablero nuevo comienza sin miembros.
+- Usuario e invitado activos solo ven y abren los tableros a los que están asignados. Cuentas nuevas no reciben membresías automáticamente.
+- Las cuentas activas existentes se añaden inicialmente a `Offline`; `General` queda vacío. Todas las tareas preexistentes se asignan a `Offline` durante la migración.
+- Crear tareas conserva la regla admin/usuario y exige membresía en ese tablero. Cualquier cuenta activa con acceso al tablero puede editar tareas según las reglas existentes.
+- Trasladar una tarea permite a cualquier cuenta activa con acceso tanto al tablero de origen como al destino; conserva la identidad y relaciones de la tarea. No crea una copia. La tarea deja de ser visible en origen.
+- RLS limita tareas, asignaciones, comentarios, metadatos de adjuntos y objetos de Storage al acceso del tablero. Los enlaces firmados ya emitidos permanecen utilizables hasta expirar; RLS no revoca descargas ya realizadas.
+- Implementación local observada: `supabase/migrations/202610210001_boards.sql`. No se afirma que esté desplegada en el proyecto Supabase.
 
 ## Asignaciones de tareas
 
-- Cualquier cuenta autenticada y activa, incluido `invitado`, puede asignar y desasignar responsables de cualquier tarea, sin ser creadora ni administradora.
+- Cualquier cuenta autenticada y activa, incluido `invitado`, puede asignar/desasignar responsables de tareas en tableros accesibles, sin ser creadora ni administradora.
 - Crear tareas mantiene los permisos actuales (`admin` y `usuario`). La tarea y sus responsables iniciales se guardan en una transacción.
 - Se permite cero, uno o varios responsables; no se admiten duplicados ni nuevos responsables inexistentes o inactivos.
 - Una asignación previa a una cuenta inactiva se conserva y puede retirarse. Desactivar cuentas no modifica asignaciones automáticamente.
@@ -96,12 +109,12 @@ Invitado:
 
 ## Edición compartida de tareas
 
-- Cualquier cuenta autenticada y activa, incluidos `admin`, `usuario` e `invitado`, puede editar los campos de cualquier tarea: título, descripción, estado, prioridad y posición.
+- Cualquier cuenta autenticada y activa, incluidos `admin`, `usuario` e `invitado`, puede editar los campos de cualquier tarea dentro de un tablero accesible: título, descripción, estado, prioridad y posición.
 - La creación de tareas sigue reservada a `admin` y `usuario`; la edición compartida no amplía ese permiso.
 - El borrado de tareas no se amplía: solo el creador o un `admin` pueden eliminar.
 - La interfaz no oculta el campo de edición por rol ni por autoría: el detalle muestra los campos editables y «Guardar cambios» para cualquier cuenta activa.
 - El cliente solo puede escribir `title`, `description`, `status`, `priority` y `position` en `tasks`. `created_by`, `created_at` y `updated_at` no son escribibles desde el cliente, de modo que nobody puede reclamar la propiedad de una tarea ajena para después eliminarla.
-- El movimiento entre columnas y el reordenado comparten la misma regla: cualquier cuenta activa puede mover y reordenar cualquier tarea.
+- El movimiento entre columnas, reordenado y traslado de tablero comparten la regla de acceso: cualquier cuenta activa mueve/reordena en un tablero accesible y cambia a otro solo si también tiene acceso al destino.
 - La base de datos es la frontera efectiva de esta regla; la interfaz solo refleja el permiso y no lo restringe.
 
 ## Administración de usuarios

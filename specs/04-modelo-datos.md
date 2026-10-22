@@ -2,7 +2,7 @@
 
 Estado: `aprobada`
 
-Última actualización: 2026-04-28
+Última actualización: 2026-10-21
 
 ## Archivo De Referencia
 
@@ -31,6 +31,7 @@ Campos propuestos:
 Campos propuestos:
 
 - `id`: uuid, primary key.
+- `board_id`: uuid, referencia obligatoria a `boards.id`; una tarea pertenece a un único tablero. Las tareas existentes se asignan a Offline durante la migración.
 - `title`: text, requerido.
 - `description`: text, opcional.
 - `status`: enum de estados.
@@ -50,6 +51,22 @@ Campos propuestos:
 - `created_at`: timestamp.
 
 Llave primaria compuesta: `task_id`, `profile_id`.
+
+## Tableros
+
+### `boards`
+
+- `id`: uuid, primary key.
+- `name`: text, requerido, único sin distinguir mayúsculas; entre 1 y 120 caracteres tras recortar espacios.
+- `created_at`: timestamptz.
+
+### `board_members`
+
+- `board_id`: uuid, referencia a `boards.id`.
+- `profile_id`: uuid, referencia a `profiles.id`.
+- Llave primaria compuesta `(board_id, profile_id)`.
+- La relación determina acceso; una asignación de tarea no crea una membresía.
+- La migración crea `Offline` y `General`, asigna a cuentas activas existentes a `Offline`; `General` empieza vacío.
 
 ## Tabla `comments`
 

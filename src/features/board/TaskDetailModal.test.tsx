@@ -5,10 +5,45 @@ import { TaskDetailModal } from './TaskDetailModal'
 import type { TaskWithAssignees } from '@/types'
 
 const task: TaskWithAssignees = {
+  board_id: 'offline',
   id: 'task-1', title: 'Revisar diseño', description: 'Descripción original',
   status: 'backlog', priority: 'normal', special_notes: null, created_by: 'user-1',
   position: 0, created_at: '2026-10-16', updated_at: '2026-10-16', assignees: [],
 }
+
+describe('Traslado de tareas entre tableros', () => {
+  const boards = [{ id: 'general', name: 'General', created_at: '2026-10-21' }]
+  it('exige destino y confirmación, espera el traslado y cierra al completarlo', async () => {
+    const user = userEvent.setup()
+    const move = vi.fn().mockResolvedValue(undefined)
+    const close = vi.fn()
+    render(<TaskDetailModal task={task} comments={[]} attachments={[]} isOpen onClose={close} boards={boards} onMoveToBoard={move} />)
+    expect(screen.getByRole('button', { name: 'Trasladar tarea' })).toBeDisabled()
+    await user.selectOptions(screen.getByLabelText('Tablero de destino'), 'general')
+    await user.click(screen.getByRole('button', { name: 'Trasladar tarea' }))
+    expect(move).not.toHaveBeenCalled()
+    expect(screen.getByText(/Los cambios sin guardar se descartarán/)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Confirmar traslado' }))
+    expect(move).toHaveBeenCalledExactlyOnceWith('general')
+    expect(close).toHaveBeenCalledOnce()
+  })
+  it('conserva el detalle y el destino si el servidor rechaza el traslado', async () => {
+    const user = userEvent.setup()
+    const close = vi.fn()
+    render(<TaskDetailModal task={task} comments={[]} attachments={[]} isOpen onClose={close} boards={boards} onMoveToBoard={vi.fn().mockRejectedValue(new Error('denegado'))} />)
+    await user.selectOptions(screen.getByLabelText('Tablero de destino'), 'general')
+    await user.click(screen.getByRole('button', { name: 'Trasladar tarea' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar traslado' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('No se pudo trasladar la tarea')
+    expect(screen.getByLabelText('Tablero de destino')).toHaveValue('general')
+    expect(close).not.toHaveBeenCalled()
+  })
+  it('no ofrece destinos si no hay otros tableros accesibles', () => {
+    render(<TaskDetailModal task={task} comments={[]} attachments={[]} isOpen onClose={vi.fn()} boards={[]} onMoveToBoard={vi.fn()} />)
+    expect(screen.getByText('No tienes otros tableros disponibles.')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Trasladar tarea' })).not.toBeInTheDocument()
+  })
+})
 const base = { task, comments: [], attachments: [], isOpen: true, onClose: vi.fn() }
 
 describe('Detalle de tarea', () => {

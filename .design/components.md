@@ -2,6 +2,22 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
+## Actualización — tableros y pertenencia, 2026-10-21
+
+Esta sección describe el flujo local de selección/gestión de tableros y movimiento de tareas. No añade tokens, paleta, tema ni componente visual base; reutiliza `board-header`, `ui-button`, `ui-list-card`, `ui-feedback`, `Dialog` y `AssigneePicker`.
+
+| Componente/patrón | Propósito, estados y comportamiento | Fuente |
+| --- | --- | --- |
+| Selector `BoardsPage` | Cards enlazan a `/board/:boardId`; carga, error/reintento y vacío. Admin ve todas las cards y puede crear/gestionar miembros; usuarios e invitados solo reciben las accesibles desde RLS. | `src/features/boards/BoardsPage.tsx:11-36` |
+| Crear tablero | `Dialog` con nombre 1–120, estado pendiente, error general y duplicado con mensaje específico. El texto aclara que se crea sin miembros. Visible solo para admin. | `src/features/boards/BoardsPage.tsx:39-62` |
+| Gestionar miembros | Diálogo usa `AssigneePicker`, lista actual, selección múltiple, estados de carga/error y guardado separado; solo admin accede al control. Los asignados a tareas no obtienen automáticamente acceso. | `src/features/boards/BoardsPage.tsx:64-88` |
+| Entrada al tablero | Ruta concreta valida que el catálogo accesible contenga el ID; inexistente o no autorizado presenta aviso y vuelta al selector sin montar tareas. La cabecera ofrece «Cambiar tablero». | `src/features/boards/BoardRoute.tsx`, `src/features/board/BoardPage.tsx` |
+| Traslado en detalle | Selector de destino, confirmación explícita y mensaje de salida del origen; destino solo entre tableros accesibles. Error mantiene el detalle y destino; éxito cierra el modal. No se añaden estilos base. | `src/features/board/TaskDetailModal.tsx` |
+
+### Verificación y límites
+
+111 pruebas Vitest, lint y build correctos; Chromium con backend simulado comprobó selector, gestión de miembros y traslado a 360/768/1440 px, sin errores de página ni desbordamiento de documento/diálogo. No es E2E con cuentas reales, ni auditoría WCAG, lectores de pantalla u otros navegadores. No hubo cambios de tokens ni pruebas de contraste necesarias por cambio visual.
+
 ## Estado actual — edición compartida de tareas, 2026-10-20
 
 Esta sección prevalece sobre el historial inferior para las áreas modificadas. Describe el árbol de trabajo sin commit; no altera tokens ni convierte las revisiones históricas en baseline Git. El antiguo `RegisterPage` fue eliminado y las referencias inferiores a él son **históricas**, no rutas/archivos actuales.
@@ -17,7 +33,7 @@ Esta sección prevalece sobre el historial inferior para las áreas modificadas.
 | Responsables inactivos | Asignación previa se muestra con «(inactivo)» y permite retirarla; no aparece como nueva opción. Sin selección muestra «Sin usuarios asignados» | `src/features/board/AssigneePicker.tsx:21-48` |
 | Creación con responsables | Selector mantiene IDs en el borrador y los envía con el resto de datos; usa el mismo estado de bloqueo de creación/adjuntos. Un fallo de creación conserva selección y archivos | `src/features/board/CreateTaskModal.tsx`, `src/features/board/CreateTaskModal.test.tsx` |
 | Detalle / guardado independiente | Precarga IDs y conserva borradores de campos/responsables por separado. «Guardar asignaciones» no cierra el detalle ni guarda título/estado. Cambios pendientes avisan y deshabilitan «Guardar cambios» para evitar descartarlos. Durante una operación bloquea selección/cierre/doble envío; ante error conserva selección; éxito muestra toast | `src/features/board/TaskDetailModal.tsx:54-97`, `:167-176` |
-| Edición compartida en detalle | Cualquier cuenta activa, incluida `invitado`, recibe `onSave` y ve los campos de título, descripción, estado y prioridad editables sobre cualquier tarea, propia o ajena. «Eliminar tarea» solo se ofrece al creador o a un admin: sin ese permiso el botón no aparece. La interfaz ya no refleja roles ni autoría para la edición; el permiso efectivo sigue en SQL | `src/features/board/BoardPage.tsx:61-65`, `:423-434`, `src/features/board/TaskDetailModal.tsx:150-165`, `:235-239` |
+| Edición compartida en detalle | Cualquier cuenta activa, incluida `invitado`, recibe `onSave` y puede editar título, descripción, estado y prioridad de tareas propias o ajenas en el tablero accesible. «Eliminar tarea» solo se ofrece al creador o admin. La interfaz no restringe edición por rol/autoría; SQL añade el ámbito de membresía | `src/features/board/BoardPage.tsx`, `src/features/board/TaskDetailModal.tsx`, `supabase/migrations/202610210001_boards.sql` |
 
 ### Verificación de esta entrega y límites
 

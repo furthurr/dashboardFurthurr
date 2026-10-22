@@ -45,7 +45,7 @@ export function AttachmentsList({ attachments, onDeleteAttachment, canDelete }: 
           </div>
           <div className="flex flex-wrap gap-2">
             <a
-              href={attachment.file_url}
+              href={attachment.signed_url}
               target="_blank"
               rel="noopener noreferrer"
               className="ui-button ui-button--secondary ui-button--sm"

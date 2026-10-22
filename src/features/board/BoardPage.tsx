@@ -1,4 +1,7 @@
 import { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import type { Board } from '@/types'
+import { useMoveTaskToBoard } from '@/features/boards/api'
 import {
   DndContext,
   DragOverlay,
@@ -31,9 +34,10 @@ import { AccountMenu } from '@/shared/ui/AccountMenu'
 import { Toast } from '@/shared/ui/Toast'
 import { useToast } from '@/shared/ui/useToast'
 
-export function BoardPage() {
+export function BoardPage({ boardId, boardName, boards }: { boardId: string; boardName: string; boards: Board[] }) {
   const { user, profile } = useAuth()
-  const { data: tasks = [], isLoading, error, refetch } = useTasks()
+  const { data: tasks = [], isLoading, error, refetch } = useTasks(boardId)
+  const moveToBoard = useMoveTaskToBoard()
   const { data: taskImages = {} } = useTaskImagePreviews(tasks.map((task) => task.id))
   const updateTaskStatus = useUpdateTaskStatus()
   const createTask = useCreateTask()
@@ -66,7 +70,8 @@ export function BoardPage() {
     error: Boolean(assignableUsers.error), onRetry: () => { void assignableUsers.refetch() },
   }
 
-  const selectedTaskId = selectedTask?.id ?? null
+  // A transfer/deletion by another session must not leave a stale detail open.
+  const selectedTaskId = tasks.some((task) => task.id === selectedTask?.id) ? selectedTask?.id ?? null : null
   const { data: comments = [], isLoading: commentsLoading, error: commentsError } = useComments(selectedTaskId)
   const { data: attachments = [], isLoading: attachmentsLoading, error: attachmentsError } = useAttachments(selectedTaskId)
   const createComment = useCreateComment()
@@ -265,7 +270,7 @@ export function BoardPage() {
 
     try {
       const { files, ...taskData } = data
-      const createdTask = await createTask.mutateAsync({ ...taskData, createdBy: user.id })
+      const createdTask = await createTask.mutateAsync({ ...taskData, boardId, createdBy: user.id })
       const failedFiles: string[] = []
 
       // La tarea debe existir antes de subir archivos porque sus metadatos requieren task_id.
@@ -319,10 +324,11 @@ export function BoardPage() {
         <header className="board-header">
           <div className="min-w-0">
             <p className="text-xs font-semibold text-[var(--color-text-muted)]">Dashboard Furthurr</p>
-            <h1>Tablero de equipo</h1>
+            <h1 className="break-words">{boardName}</h1>
             <p className="text-sm text-[var(--color-text-muted)]">Organiza las tareas y sigue el trabajo del equipo.</p>
           </div>
           <div className="flex max-w-full flex-wrap items-center gap-2">
+            <Link to="/boards" className="ui-button">Cambiar tablero</Link>
             {user && <span className="max-w-48 truncate text-sm text-[var(--color-text-muted)]" title={user.email}>{user.email}</span>}
             <AccountMenu />
           </div>
@@ -335,7 +341,7 @@ export function BoardPage() {
           </dl>
           <div className="flex max-w-full flex-wrap items-center gap-2">
             <AssigneeFilter {...assigneeOptions} value={filterUserIds} onChange={setFilterUserIds} />
-            <button type="button" className="ui-button ui-button--primary" onClick={() => setIsModalOpen(true)}>+ Nueva Tarea</button>
+            {profile?.role !== 'invitado' && <button type="button" className="ui-button ui-button--primary" onClick={() => setIsModalOpen(true)}>+ Nueva Tarea</button>}
           </div>
         </div>
         <div className="px-4 sm:px-8">
@@ -402,7 +408,13 @@ export function BoardPage() {
         />
 
         <TaskDetailModal
-          task={selectedTask}
+          boards={boards.filter((board) => board.id !== boardId)}
+          onMoveToBoard={selectedTask ? async (destinationId) => {
+            await moveToBoard.mutateAsync({ taskId: selectedTask.id, boardId: destinationId })
+            setOptimisticTasks(null)
+            setNotice('Tarea trasladada al tablero seleccionado.')
+          } : undefined}
+          task={selectedTaskId ? selectedTask : null}
           comments={comments}
           attachments={attachments}
           commentsLoading={commentsLoading}

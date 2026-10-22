@@ -5,7 +5,8 @@ import { AuthProvider } from '@/features/auth/AuthContext'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { UsersPage } from '@/features/users/UsersPage'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
-import { BoardPage } from '@/features/board/BoardPage'
+import { BoardRoute } from '@/features/boards/BoardRoute'
+import { BoardsPage } from '@/features/boards/BoardsPage'
 import { ProfilePage } from '@/features/auth/ProfilePage'
 
 const queryClient = new QueryClient({
@@ -23,17 +24,19 @@ function App() {
       <AuthProvider>
         <HashRouter>
           <Routes>
-            <Route path="/" element={<Navigate to="/board" replace />} />
+            <Route path="/" element={<Navigate to="/boards" replace />} />
+            <Route path="/boards" element={<ProtectedRoute><BoardsPage /></ProtectedRoute>} />
+            <Route path="/board" element={<Navigate to="/boards" replace />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<Navigate to="/users" replace />} />
             <Route path="/users" element={<ProtectedRoute adminOnly><UsersPage /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route
-              path="/board"
+              path="/board/:boardId"
               element={
                 <ProtectedRoute>
-                  <BoardPage />
+                  <BoardRoute />
                 </ProtectedRoute>
               }
             />
@@ -52,7 +55,7 @@ function AuthCallback() {
     }
   }, [])
 
-  return <Navigate to="/board" replace />
+  return <Navigate to="/boards" replace />
 }
 
 export default App

@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from 'react'
-import type { TaskWithAssignees, TaskStatus, TaskPriority, CommentWithAuthor, TaskAttachment } from '@/types'
+import type { Board, TaskWithAssignees, TaskStatus, TaskPriority, CommentWithAuthor, TaskAttachment } from '@/types'
 import { Dialog } from '@/shared/ui/Dialog'
 import { Toast } from '@/shared/ui/Toast'
 import { useToast } from '@/shared/ui/useToast'
@@ -29,6 +29,8 @@ interface TaskDetailModalProps {
   attachmentsError?: boolean
   onSaveAssignees?: (ids: string[]) => Operation
   assigneeOptions?: AssigneeOptions
+  boards?: Board[]
+  onMoveToBoard?: (boardId: string) => Operation
 }
 
 // Unmounting on close also discards draft, tab and delete-confirmation state.
@@ -43,7 +45,7 @@ type Tab = typeof tabs[number]
 function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDelete,
   onAddComment, onDeleteComment, onUploadAttachment, onDeleteAttachment,
   canDeleteComments, canDeleteAttachments, commentsLoading, attachmentsLoading,
-  commentsError, attachmentsError, onSaveAssignees, assigneeOptions,
+  commentsError, attachmentsError, onSaveAssignees, assigneeOptions, boards = [], onMoveToBoard,
 }: TaskDetailModalProps & { task: TaskWithAssignees }) {
   const id = useId()
   const [activeTab, setActiveTab] = useState<Tab>('details')
@@ -51,6 +53,8 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
   const [description, setDescription] = useState(task.description ?? '')
   const [status, setStatus] = useState(task.status)
   const [priority, setPriority] = useState(task.priority)
+  const [destinationId, setDestinationId] = useState('')
+  const [confirmMove, setConfirmMove] = useState(false)
   const [assigneeIds, setAssigneeIds] = useState(task.assignees.map((person) => person.id))
   const [savedAssigneeIds, setSavedAssigneeIds] = useState(assigneeIds)
   const assignmentsDirty = assigneeIds.length !== savedAssigneeIds.length || assigneeIds.some((personId) => !savedAssigneeIds.includes(personId))
@@ -175,6 +179,24 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
             {task.assignees.map((person, index) => <span key={`${person.full_name}-${index}`} className="ui-feedback py-1">{person.full_name}</span>)}
           </div></div>}
           {task.special_notes && <p className="ui-feedback mt-5 text-[var(--color-warning)]">{task.special_notes}</p>}
+          {onMoveToBoard && <fieldset disabled={busy} className="mt-6 space-y-3">
+            <legend className="ui-label">Cambiar tarea de tablero</legend>
+            <p className="text-sm text-[var(--color-text-muted)]">La tarea dejará de aparecer aquí. Se conservarán sus datos, responsables, comentarios y adjuntos. Guarda tus cambios antes de trasladarla.</p>
+            {boards.length === 0 ? <p className="text-sm">No tienes otros tableros disponibles.</p> : <>
+              <label htmlFor={`${id}-board`} className="ui-label">Tablero de destino</label>
+              <select id={`${id}-board`} className="ui-field" value={destinationId} onChange={(event) => { setDestinationId(event.target.value); setConfirmMove(false) }}>
+                <option value="">Selecciona un tablero</option>
+                {boards.map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}
+              </select>
+              {!confirmMove ? <button type="button" className="ui-button" disabled={!destinationId || assignmentsDirty} onClick={() => setConfirmMove(true)}>Trasladar tarea</button>
+                : <div className="ui-feedback space-y-3"><p>¿Trasladar la tarea a «{boards.find((board) => board.id === destinationId)?.name}»? Los cambios sin guardar se descartarán.</p>
+                  <button type="button" className="ui-button ui-button--primary" onClick={async () => {
+                    if (await perform('transfer', () => onMoveToBoard(destinationId), 'No se pudo trasladar la tarea.')) onClose()
+                  }}>{pending === 'transfer' ? 'Trasladando…' : 'Confirmar traslado'}</button>
+                  <button type="button" className="ui-button" onClick={() => setConfirmMove(false)}>Cancelar traslado</button>
+                </div>}
+            </>}
+          </fieldset>}
         </section>
         <section role="tabpanel" id={`${id}-comments-panel`} aria-labelledby={`${id}-comments-tab`} hidden={activeTab !== 'comments'} className="space-y-5">
           {onAddComment && <form onSubmit={(event) => { event.preventDefault(); void sendComment() }}>

@@ -75,13 +75,15 @@ El schema completo está en `supabase-schema.sql` (ejecutado en SQL Editor de Su
 - [`README.md`](README.md) es la entrada humana: configuración, ejecución, rutas y enlaces.
 - [`specs/`](specs/README.md) es la fuente de verdad de requisitos e intención de producto; actualiza la spec correspondiente antes de implementar una funcionalidad.
 - `.sdd/` y `.release/` pertenecen a workflows externos a este orquestador; `specs/` conserva la fuente de requisitos del producto y `supabase/README.md` la guía operativa de publicación.
-- [`supabase-schema.sql`](supabase-schema.sql) es la fuente de verdad local del schema Postgres. Contrástalo con `specs/04-modelo-datos.md` y `specs/05-auth-roles-permisos.md`.
-- [`supabase/migrations/`](supabase/migrations/) contiene cambios incrementales para instalaciones existentes; [`supabase/README.md`](supabase/README.md) describe orden, despliegue de Edge Functions, configuración de Auth y pruebas SQL. El bootstrap completo no debe reejecutarse sobre una BD existente.
+- [`supabase-schema.sql`](supabase-schema.sql) es la fuente de verdad local del schema Postgres para instalaciones nuevas. Contrástalo con `specs/04-modelo-datos.md` y `specs/05-auth-roles-permisos.md`.
+- [`supabase/migrations/`](supabase/migrations/) contiene cambios incrementales para instalaciones existentes; [`supabase/README.md`](supabase/README.md) describe orden, despliegue de Edge Functions, configuración de Auth y pruebas SQL. En una BD existente aplica únicamente las migraciones pendientes en orden; no reejecutes el bootstrap completo.
 - [`supabase/functions/admin-users/`](supabase/functions/admin-users/) contiene backend administrativo gestionado por Supabase; las asignaciones usan RPCs Postgres autenticadas. «Sin servidor propio» no significa ausencia de código servidor. Publicar la SPA en Pages no despliega esas funciones ni las migraciones; las claves privilegiadas nunca van al frontend.
 - [`.architecture/`](.architecture/README.md) documenta la arquitectura implementada y sus ADRs.
 - [`.data/`](.data/README.md) cataloga contratos, modelos y persistencia observados; no sustituye la spec ni el SQL.
 - [`.design/`](.design/README.md) inventaría tokens y componentes visuales; `specs/06-ui-ux-diseno.md` conserva la intención UX.
 - [`.navigator/`](.navigator/ai-context.md) y [`module-map.json`](.navigator/module-map.json) son índices auxiliares de orientación; verifica siempre decisiones en código y contratos.
+- `src/features/boards/` gestiona selector, creación y miembros; `src/features/board/` presenta el Kanban del tablero elegido. `supabase/migrations/202610210001_boards.sql` aplica pertenencia y RLS a los recursos; comprueba su despliegue antes de publicar la SPA compatible.
+- El acceso a tableros se basa en membresías, no en asignaciones de tareas. Admin activo ve todos; la ruta y RLS determinan el acceso efectivo. La SPA desplegada no aplica migraciones automáticamente.
 - [`arquitectura.md`](arquitectura.md) es un acceso legado a la arquitectura canónica, no una segunda fuente.
 
 Para la estructura de ejecución actual consulta el mapa de módulos y el código; el árbol de carpetas descrito en la sección `Folder Structure` de este archivo puede ser anterior a la implementación vigente.
