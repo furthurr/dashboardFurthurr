@@ -4,6 +4,7 @@ export type AdminAction =
   | { action: 'password'; userId: string; password: string }
   | { action: 'rename'; userId: string; fullName: string }
   | { action: 'set-active'; userId: string; active: boolean }
+  | { action: 'promote-admin'; userId: string }
 
 export function parseAction(input: unknown): AdminAction {
   if (!input || typeof input !== 'object') throw new Error('Solicitud no válida.')
@@ -29,5 +30,6 @@ export function parseAction(input: unknown): AdminAction {
   if (body.action === 'password') return { action: 'password', userId: body.userId, password: body.password as string }
   if (body.action === 'rename') return { action: 'rename', userId: body.userId, fullName: (body.fullName as string).trim() }
   if (body.action === 'set-active' && typeof body.active === 'boolean') return { action: 'set-active', userId: body.userId, active: body.active }
+  if (body.action === 'promote-admin') return { action: 'promote-admin', userId: body.userId }
   throw new Error('Operación no válida.')
 }

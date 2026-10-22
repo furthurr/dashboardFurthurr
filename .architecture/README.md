@@ -7,10 +7,10 @@ Documentación canónica de arquitectura. Lee este archivo antes de cambiar lím
 - Tecnología detectada: SPA React 19/TypeScript 6/Vite 8, Supabase Auth/PostgreSQL/Storage, Edge Function administrativa y RPCs Postgres.
 - Modo: `lite`.
 - Commit base revisado: `81335b92bc1962a47c9c3bb963271c3667bc7b63` (2026-05-04). Es una referencia, no un baseline que incluya los cambios locales.
-- Última actualización documental: 2026-10-21, incorporación local del modelo y flujo de tableros.
+- Última actualización documental: 2026-10-21, flujo de tableros y promoción local de cuentas a admin; refleja el árbol de trabajo y no establece un baseline Git nuevo.
 - Commit base de implementación y primera sincronización: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`.
 - Actualización operativa posterior: la migración de tableros y los tres probes SQL se aplicaron/pasaron en el proyecto Supabase elegido el 2026-10-21. Este registro de despliegue sigue pendiente de commit; no se declara sincronizado con HEAD.
-- Alcance: selección post-login, gestión de membresías, autorización RLS por tablero, aislamiento de recursos y traslado atómico.
+- Alcance: selección post-login, administración de cuentas y promoción de roles vía Edge Function, gestión de membresías, autorización RLS por tablero, aislamiento de recursos y traslado atómico.
 
 ## Contexto para IA
 
@@ -53,14 +53,14 @@ flowchart LR
 | --- | --- | --- |
 | Entrada y composición | Monta React, providers, `HashRouter` y rutas | `src/main.tsx:6-10`, `src/App.tsx:1-40` |
 | Auth | Sesión, perfil activo, limpieza de caché y refresco a los 30 s/al recuperar foco | `src/features/auth/AuthContext.tsx:27-98`, `src/features/auth/ProtectedRoute.tsx:9-34` |
-| Users | Listado paginado, alta confirmada, nombre, contraseña y estado; sin edición de roles en UI | `src/features/users/UsersPage.tsx`, `src/features/users/api.ts` |
+| Users | Listado paginado, alta confirmada, nombre, contraseña, estado y promoción confirmada de cuentas no admin a admin | `src/features/users/UsersPage.tsx`, `src/features/users/api.ts` |
 | Boards | Selector de tableros accesibles; creación admin; gestión de miembros; ruta valida el acceso | `src/features/boards/BoardsPage.tsx`, `src/features/boards/BoardRoute.tsx`, `src/features/boards/api.ts` |
 | Board | Columnas, tarjetas, modales, ordenamiento y mutaciones de tareas | `src/features/board/BoardPage.tsx:30-53`, `src/features/board/api.ts:5-29`, `src/features/board/BoardPage.tsx:97-147` |
 | Comentarios y adjuntos | Hooks/API asociados a tareas y Storage para ficheros | `src/features/board/commentsApi.ts:5-24`, `src/features/board/attachmentsApi.ts:5-22`, `src/features/board/attachmentsApi.ts:24-72` |
 | Cliente Supabase | Crea el cliente con las variables de entorno públicas requeridas | `src/lib/supabase.ts:1-10` |
 | Tipos compartidos | Roles, estados, prioridades y modelos de perfil/tablero/tarea/comentario/adjunto | `src/types/index.ts` |
 | Servicio gestionado | Auth, persistencia, Storage y políticas RLS | `supabase-schema.sql:10-168`, `supabase-schema.sql:349-424` |
-| Administración privilegiada | Verifica JWT con `auth.getUser`, exige admin activo y ejecuta API administrativa | `supabase/functions/admin-users/index.ts:20-72`, `supabase/functions/admin-users/validation.ts` |
+| Administración privilegiada | Verifica JWT con `auth.getUser`, exige admin activo y ejecuta API administrativa, incluida la promoción de rol | `supabase/functions/admin-users/index.ts:20-72`, `supabase/functions/admin-users/validation.ts` |
 | Funciones transaccionales | Alta de tarea con responsables y sustitución completa de asignaciones | `supabase/migrations/202610200001_task_assignments.sql:7-76` |
 | Políticas de edición compartida | Permisos por columna en `tasks` y policy de `UPDATE` para todo autenticado activo | `supabase/migrations/202610200002_shared_task_editing.sql:1-22` |
 | Políticas de tableros | Membresías, aislamiento RLS de datos/Storage y RPCs para creación, traslado y gestión de miembros | `supabase/migrations/202610210001_boards.sql` |
@@ -83,7 +83,7 @@ La creación usa `create_task_with_assignees(p_board_id, ...)`: deriva propietar
 
 ### Administración de cuentas
 
-`UsersPage` llama a `admin-users`. La función verifica el token y el perfil admin activo antes de procesar cualquier acción. El alta usa `email_confirm: true` y fuerza rol `usuario`/estado activo; un fallo del perfil intenta compensarse eliminando el alta incompleta. `rename` solo cambia `profiles.full_name`; contraseñas se gestionan en Auth. Desactivar modifica `is_active`, no borra contenido ni invalida criptográficamente los JWT. RLS bloquea solicitudes nuevas con tokens antiguos; no retira archivos ya descargados ni URLs firmadas ya emitidas (`supabase/functions/admin-users/index.ts:24-72`, `supabase/migrations/202610190001_user_administration.sql`).
+`UsersPage` llama a `admin-users`. La función verifica el token y el perfil admin activo antes de procesar cualquier acción. El alta usa `email_confirm: true` y fuerza rol `usuario`/estado activo; un fallo del perfil intenta compensarse eliminando el alta incompleta. `rename` solo cambia `profiles.full_name`; contraseñas se gestionan en Auth. La acción `promote-admin` asigna únicamente `profiles.role = 'admin'` a la cuenta objetivo, sin modificar `is_active`; la UI la ofrece para cuentas no admin y exige confirmación, sin opción de degradar. Desactivar modifica `is_active`, no borra contenido ni invalida criptográficamente los JWT. RLS bloquea solicitudes nuevas con tokens antiguos; no retira archivos ya descargados ni URLs firmadas ya emitidas (`supabase/functions/admin-users/index.ts:24-72`, `supabase/functions/admin-users/validation.ts:1-34`, `supabase/migrations/202610190001_user_administration.sql`).
 
 ## 5. Despliegue y operación
 
@@ -109,6 +109,8 @@ El selector y las nuevas operaciones requieren `202610210001_boards.sql` además
 En revisiones previas al cambio de tableros se registraron 79 pruebas Vitest, 9 pruebas Deno de `admin-users`, build/lint correctos y aviso de bundle superior a 500 kB. Las pruebas SQL de las migraciones entonces existentes se ejecutaron con `ROLLBACK`, y Chromium verificó alta/detalle/asignaciones con respuestas simuladas. Esa evidencia previa no prueba el flujo de tableros ni la aplicación de su migración.
 
 Para tableros se registraron 111 pruebas Vitest, lint/build correctos y advertencia de chunk principal >500 kB. Los probes SQL pasaron en PostgreSQL local embebido con Auth/Storage simulados y en el proyecto Supabase elegido; los fixtures terminan en `ROLLBACK`. Chromium con backend simulado verificó selector, miembros y traslado a 360/768/1440 px. La SPA aún no se desplegó; no es auditoría de seguridad completa ni accesibilidad WCAG.
+
+La promoción de rol quedó implementada en el árbol de trabajo y se verificó con 115 pruebas Vitest, 11 pruebas Deno de `admin-users`, lint y build correctos. El build mantiene la advertencia de chunk principal >500 kB. No se comprobó el despliegue de la versión actualizada de la Edge Function ni de la SPA.
 
 ## Decisiones
 

@@ -133,3 +133,21 @@ Deno.test('rename rejects unauthorized actors and invalid names or identifiers',
   assert((await fixture().send({ ...payload, userId: 'invalid' })).status === 400)
   assert((await fixture().send({ ...payload, userId: actorId })).status === 200)
 })
+
+Deno.test('promotes a profile to admin without changing its state or other fields', async () => {
+  const f = fixture()
+  const response = await f.send({ action: 'promote-admin', userId: otherId, role: 'usuario', is_active: false })
+  assert(response.status === 200)
+  assert(f.calls.length === 1)
+  assert(JSON.stringify(f.calls[0]) === JSON.stringify({ role: 'admin' }))
+  assert((await fixture('admin', true, true, { profile: true }).send({ action: 'promote-admin', userId: otherId })).status === 400)
+})
+
+Deno.test('promotion requires an active admin and a valid target identifier', async () => {
+  for (const [role, active] of [['usuario', true], ['invitado', true], ['admin', false]] as const) {
+    const f = fixture(role, active)
+    assert((await f.send({ action: 'promote-admin', userId: otherId })).status === 403)
+    assert(f.calls.length === 0)
+  }
+  assert((await fixture().send({ action: 'promote-admin', userId: 'invalid' })).status === 400)
+})

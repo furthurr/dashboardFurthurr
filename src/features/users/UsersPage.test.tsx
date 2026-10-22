@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -79,6 +79,35 @@ describe('Administración de usuarios', () => {
     setup()
     expect(await screen.findByText('person@example.test')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Desactivar a admin@example.test' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Promover a administrador a person@example.test' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Promover a administrador a admin@example.test' })).not.toBeInTheDocument()
+  })
+  it('confirma la promoción de una cuenta no administradora y actualiza el listado', async () => {
+    const user = userEvent.setup()
+    mocks.request.mockImplementationOnce(async () => {
+      mocks.list.mockResolvedValue({ users: [{ ...account, role: 'admin' }], total: 1, pageSize: 50 })
+      return { success: true }
+    })
+    setup()
+    await user.click(await screen.findByRole('button', { name: 'Promover a administrador a person@example.test' }))
+    const dialogElement = screen.getByRole('dialog')
+    const dialog = within(dialogElement)
+    expect(dialogElement).toHaveTextContent('obtendrá permisos de administrador')
+    expect(mocks.request).not.toHaveBeenCalled()
+    await user.click(dialog.getByRole('button', { name: 'Promover a administrador' }))
+    expect(mocks.request).toHaveBeenCalledWith({ action: 'promote-admin', userId: 'person' })
+    expect(await screen.findByText('La cuenta ahora tiene rol de administrador.')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Promover a administrador a person@example.test' })).not.toBeInTheDocument())
+  })
+  it('ofrece promoción a invitados inactivos sin cambiar su estado', async () => {
+    mocks.list.mockResolvedValue({ users: [{ ...account, role: 'invitado', is_active: false }], total: 1, pageSize: 50 })
+    const user = userEvent.setup()
+    setup()
+    await user.click(await screen.findByRole('button', { name: 'Promover a administrador a person@example.test' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('El estado activo o inactivo no cambiará')
+    await user.click(within(dialog).getByRole('button', { name: 'Promover a administrador' }))
+    expect(mocks.request).toHaveBeenCalledWith({ action: 'promote-admin', userId: 'person' })
   })
   it('crea sin selector de rol y anuncia acceso inmediato', async () => {
     const user = userEvent.setup()

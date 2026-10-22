@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-10-21T22:09:06Z",
+  "generated_at": "2026-10-22T04:01:18Z",
   "root": ".",
   "modules": [
     {
@@ -49,7 +49,7 @@
       "id": "users",
       "name": "Administración de usuarios",
       "path": "src/features/users",
-      "responsibility": "Presenta listado administrativo, alta, nombre, contraseña y activación de cuentas.",
+      "responsibility": "Presenta listado administrativo, alta, nombre, contraseña, activación y promoción unidireccional de cuentas no admin a admin.",
       "kind": "feature",
       "tech": ["React", "TypeScript", "TanStack Query"],
       "entrypoints": ["src/features/users/UsersPage.tsx", "src/features/users/api.ts"],
@@ -121,7 +121,7 @@
       "id": "admin-users",
       "name": "Función administrativa de cuentas",
       "path": "supabase/functions/admin-users",
-      "responsibility": "Verifica identidad y admin activo antes de ejecutar acciones privilegiadas de cuentas.",
+      "responsibility": "Verifica identidad y admin activo antes de ejecutar acciones privilegiadas de cuentas, incluida la promoción a admin.",
       "kind": "service",
       "tech": ["Deno", "TypeScript", "Supabase Edge Functions", "Supabase Auth"],
       "entrypoints": ["supabase/functions/admin-users/index.ts"],

@@ -5,7 +5,7 @@ import { useAuth } from '@/features/auth/AuthContext'
 import { Dialog } from '@/shared/ui/Dialog'
 import { adminRequest, listUsers, type ManagedUser, type UserAction } from './api'
 
-type Editor = { kind: 'create' } | { kind: 'password' | 'set-active' | 'rename'; user: ManagedUser }
+type Editor = { kind: 'create' } | { kind: 'password' | 'set-active' | 'rename' | 'promote-admin'; user: ManagedUser }
 
 export function UsersPage() {
   const { user } = useAuth()
@@ -44,6 +44,8 @@ export function UsersPage() {
                     <button className="ui-button" disabled={account.id === user?.id} title={account.id === user?.id ? 'No puedes desactivar tu propia cuenta' : undefined}
                       aria-label={`${account.is_active ? 'Desactivar' : 'Activar'} a ${account.email}`}
                       onClick={() => { setNotice(''); setEditor({ kind: 'set-active', user: account }) }}>{account.is_active ? 'Desactivar' : 'Activar'}</button>
+                    {account.role !== 'admin' && <button className="ui-button" aria-label={`Promover a administrador a ${account.email}`}
+                      onClick={() => { setNotice(''); setEditor({ kind: 'promote-admin', user: account }) }}>Hacer administrador</button>}
                   </div>
                 </li>)}
               </ul>}
@@ -55,7 +57,7 @@ export function UsersPage() {
           </>}
       </section>
       {editor && <UserEditor editor={editor} onClose={() => setEditor(null)} onSuccess={() => {
-        setNotice(editor.kind === 'create' ? 'Cuenta creada. Ya puede iniciar sesión sin confirmar su correo.' : editor.kind === 'password' ? 'Contraseña actualizada.' : editor.kind === 'rename' ? 'Nombre actualizado.' : 'Estado del usuario actualizado.')
+        setNotice(editor.kind === 'create' ? 'Cuenta creada. Ya puede iniciar sesión sin confirmar su correo.' : editor.kind === 'password' ? 'Contraseña actualizada.' : editor.kind === 'rename' ? 'Nombre actualizado.' : editor.kind === 'promote-admin' ? 'La cuenta ahora tiene rol de administrador.' : 'Estado del usuario actualizado.')
         if (editor.kind === 'rename') {
           void client.invalidateQueries({ queryKey: ['tasks'] })
           void client.invalidateQueries({ queryKey: ['comments'] })
@@ -74,7 +76,7 @@ function UserEditor({ editor, onClose, onSuccess }: { editor: Editor; onClose: (
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const submitting = useRef(false)
-  const title = editor.kind === 'create' ? 'Alta de usuario' : editor.kind === 'password' ? 'Cambiar contraseña' : editor.kind === 'rename' ? 'Editar nombre' : editor.user.is_active ? 'Desactivar usuario' : 'Activar usuario'
+  const title = editor.kind === 'create' ? 'Alta de usuario' : editor.kind === 'password' ? 'Cambiar contraseña' : editor.kind === 'rename' ? 'Editar nombre' : editor.kind === 'promote-admin' ? 'Promover a administrador' : editor.user.is_active ? 'Desactivar usuario' : 'Activar usuario'
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -89,7 +91,8 @@ function UserEditor({ editor, onClose, onSuccess }: { editor: Editor; onClose: (
     const action: UserAction = editor.kind === 'create' ? { action: 'create', fullName: fullName.trim(), email, password }
       : editor.kind === 'password' ? { action: 'password', userId: editor.user.id, password }
         : editor.kind === 'rename' ? { action: 'rename', userId: editor.user.id, fullName: fullName.trim() }
-        : { action: 'set-active', userId: editor.user.id, active: !editor.user.is_active }
+          : editor.kind === 'promote-admin' ? { action: 'promote-admin', userId: editor.user.id }
+            : { action: 'set-active', userId: editor.user.id, active: !editor.user.is_active }
     try {
       await adminRequest(action)
       setPassword('')
@@ -107,6 +110,7 @@ function UserEditor({ editor, onClose, onSuccess }: { editor: Editor; onClose: (
       <div className="dialog-body space-y-5">
         {editor.kind !== 'create' && <p className="break-all">{editor.user.full_name} · {editor.user.email}</p>}
         {error && <p role="alert" className="ui-feedback ui-feedback--error">{error}</p>}
+        {editor.kind === 'promote-admin' && <p>Esta cuenta obtendrá permisos de administrador. El estado activo o inactivo no cambiará.</p>}
         <fieldset disabled={busy} className="space-y-5">
           {(editor.kind === 'create' || editor.kind === 'rename') && <>
             <div><label className="ui-label" htmlFor="user-name">Nombre completo</label><input id="user-name" className="ui-field" value={fullName} onChange={(e) => setFullName(e.target.value)} required maxLength={120} /></div>

@@ -8,13 +8,13 @@ Documentación canónica de datos y contratos consumidos por la aplicación. Lé
 - Modo: `full`.
 - ¿BD interna?: No. La persistencia es PostgreSQL gestionado externamente por Supabase; el schema de referencia está en `supabase-schema.sql`.
 - Commit base revisado: `81335b92bc1962a47c9c3bb963271c3667bc7b63` (2026-05-04), no representa cambios locales posteriores.
-- Última actualización documental: 2026-10-21, sincronización de tableros, membresías, aislamiento de datos y acceso a adjuntos.
+- Última actualización documental: 2026-10-21, sincronización de tableros y del contrato de promoción de cuentas a admin; describe el árbol de trabajo sin fijar un nuevo baseline Git.
 - Commit base de implementación y primera sincronización: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`, incluye el código, la migración y la documentación funcional inicial.
 - Actualización operativa posterior: la secuencia de migraciones y las pruebas SQL `boards.sql`, `task_assignments.sql` y `user_access.sql` se ejecutaron correctamente en el proyecto Supabase seleccionado el 2026-10-21. El registro documental de ese despliegue y la release `v0.4.0` siguen sin commit; baseline de esta actualización **pendiente**.
 
 ## Contexto para IA
 
-- **Qué consume:** SDK para Auth/tablas/Storage, `functions.invoke('admin-users')` para administración y RPCs para crear/trasladar tareas, reemplazar responsables y gestionar miembros. No se encontró OpenAPI; [el catálogo](01-endpoints.md) documenta los contratos observados.
+- **Qué consume:** SDK para Auth/tablas/Storage, `functions.invoke('admin-users')` para administración (incluida la promoción a admin) y RPCs para crear/trasladar tareas, reemplazar responsables y gestionar miembros. No se encontró OpenAPI; [el catálogo](01-endpoints.md) documenta los contratos observados.
 - **Auth:** `AuthProvider` verifica el perfil activo, lo refresca cada 30 s/al recuperar foco y limpia la caché ante cambio de identidad o pérdida de acceso. RLS/grants y verificaciones explícitas en Edge/RPC autorizan las operaciones; `is_active` no es revocación criptográfica de JWT (`src/features/auth/AuthContext.tsx:27-98`).
 - **Modelos clave:** `Board`, `Task.board_id`, `board_members`, `AssigneeProfile`, `TaskWithAssignees.assignees` y `ManagedUser` (`src/types/index.ts`, `supabase/migrations/202610210001_boards.sql`).
 - **Fuentes de datos:** Supabase Auth, PostgreSQL administrado, Storage y caché de TanStack Query. No se encontró una base de datos local.
@@ -55,3 +55,5 @@ Estas observaciones registran deuda restante, no certifican el entorno desplegad
 Se reutiliza evidencia previa de implementación en esta sesión: 79 pruebas Vitest, 9 Deno, build/lint correctos, pruebas SQL con `ROLLBACK` y comprobación HTTP de denegación anónima de RPC. Las migraciones y la Edge Function se registraron como desplegadas antes de esta sincronización.
 
 Para tableros se registraron 111 pruebas Vitest, lint y build correctos. Los tres probes SQL pasaron con Auth/Storage simulados contra bootstrap+migración incremental local y contra el proyecto Supabase seleccionado; sus fixtures se revierten. Chromium con backend simulado cubrió selector, miembros y traslado a 360/768/1440 px. Esto no es E2E completo ni auditoría de seguridad. El build informa que el chunk principal supera 500 kB.
+
+La acción local `promote-admin` se verificó con 115 pruebas Vitest, 11 pruebas Deno de `admin-users`, lint y build correctos. No requiere migración SQL; el despliegue de esta versión de la Edge Function no se comprobó. El baseline Git de esta actualización queda pendiente mientras haya cambios locales sin commit.

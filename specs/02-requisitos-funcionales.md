@@ -17,7 +17,7 @@ Estado: `borrador`
 - Usuario puede gestionar tareas y comentarios según permisos definidos.
 - Invitado puede visualizar, pero no crear ni editar comentarios.
 - Cualquier cuenta activa puede editar los campos de cualquier tarea, propia o ajena; el borrado sigue reservado a su creador o a un administrador.
-- Administración de usuarios: listado, alta como `usuario`, edición del nombre completo, cambio de contraseña y activación/desactivación. Un administrador no puede desactivarse a sí mismo.
+- Administración de usuarios: listado, alta como `usuario`, edición del nombre completo, cambio de contraseña, activación/desactivación y promoción a `admin`. Solo un administrador activo puede promover cualquier cuenta no administradora (`usuario` o `invitado`, activa o inactiva); la acción requiere confirmación, solo cambia el rol y no ofrece degradar administradores.
 
 ## Tareas
 

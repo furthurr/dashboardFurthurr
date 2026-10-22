@@ -65,6 +65,11 @@ return async (request: Request) => {
       if (error) return reply(400, { error: 'No se pudo actualizar el nombre. Comprueba que el usuario exista e inténtalo de nuevo.' })
       return reply(200, { success: true })
     }
+    if (action.action === 'promote-admin') {
+      const { error } = await client.from('profiles').update({ role: 'admin' }).eq('id', action.userId).select('id').single()
+      if (error) return reply(400, { error: 'No se pudo promover al usuario. Comprueba que la cuenta exista e inténtalo de nuevo.' })
+      return reply(200, { success: true })
+    }
     if (!action.active && action.userId === identity.user.id) return reply(400, { error: 'No puedes desactivar tu propia cuenta.' })
     // is_active is authoritative: RLS checks it on every request, even with old JWTs.
     const { error } = await client.from('profiles').update({ is_active: action.active }).eq('id', action.userId).select('id').single()

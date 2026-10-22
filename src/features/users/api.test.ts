@@ -15,6 +15,11 @@ it('muestra el error seguro de autorización de la función', async () => {
   invoke.mockResolvedValue({ data: null, error: { context: new Response(JSON.stringify({ error: 'Acceso denegado' }), { status: 403 }) } })
   await expect(listUsers(1)).rejects.toThrow('Acceso denegado')
 })
+it('envía la acción de promoción con el identificador de la cuenta', async () => {
+  invoke.mockResolvedValue({ data: { success: true }, error: null })
+  await expect(adminRequest({ action: 'promote-admin', userId: 'user' })).resolves.toEqual({ success: true })
+  expect(invoke).toHaveBeenCalledWith('admin-users', { body: { action: 'promote-admin', userId: 'user' } })
+})
 it('maneja errores de conexión y respuestas no JSON', async () => {
   invoke.mockResolvedValue({ data: null, error: { context: new Response('Gateway unavailable', { status: 503 }) } })
   await expect(adminRequest({ action: 'set-active', userId: 'user', active: false })).rejects.toThrow('Comprueba la conexión')

@@ -31,7 +31,7 @@ Campos requeridos por producto:
 Admin:
 
 - Puede ver usuarios.
-- Puede editar roles.
+- Puede promover cuentas no administradoras a `admin` desde la administración de usuarios.
 - Puede crear, editar y eliminar tareas en cualquier tablero; el borrado conserva sus reglas por creador.
 - Puede crear y editar comentarios.
 - Puede editar comentarios de otros usuarios.
@@ -84,7 +84,7 @@ El alcance de las acciones sobre tareas y sus recursos asociados (asignaciones, 
 | Eliminar adjuntos propios | Sí | Sí | No |
 | Eliminar adjuntos ajenos | Sí (de sus tareas) | No | No |
 | Editar perfil propio | Sí | Sí | Sí |
-| Editar roles de otros | Sí | No | No |
+| Promover cuentas no administradoras a `admin` | Sí | No | No |
 | Asignar/desasignar responsables de tareas en tableros accesibles | Sí | Sí | Sí |
 
 ## Acceso y administración de tableros
@@ -122,10 +122,11 @@ El alcance de las acciones sobre tareas y sus recursos asociados (asignaciones, 
 - La cabecera ofrece «Usuarios» únicamente a administradores activos; la ruta también está protegida.
 - El listado muestra nombre, correo, rol y estado activo/inactivo.
 - Los administradores activos pueden editar el nombre completo de cualquier cuenta desde «Editar nombre». Se precarga el nombre actual, se recortan espacios exteriores y se exige entre 1 y 120 caracteres. Esta acción solo modifica `profiles.full_name`, no el correo, rol, contraseña ni estado.
+- Un administrador activo puede promover a `admin` cualquier cuenta no administradora (`usuario` o `invitado`), esté activa o inactiva, desde «Usuarios» y tras confirmar la acción. Solo cambia `profiles.role`; `is_active` permanece igual. La interfaz no ofrece degradar administradores.
 - Solo un administrador activo puede dar de alta cuentas, establecer una nueva contraseña o activar/desactivar cuentas mediante una Edge Function con autorización verificada en servidor.
 - El alta solicita nombre, correo y contraseña; no cambia la sesión del administrador y no permite elegir roles.
 - Cambiar contraseña no requiere la anterior ni un correo de recuperación. No se muestran ni almacenan contraseñas en la aplicación.
 - Desactivar conserva cuentas y contenido, bloquea el acceso a la aplicación y a datos/Storage privados incluso con un token anterior. Reactivar restablece el acceso.
 - Un administrador no puede desactivarse a sí mismo.
-- El rol y el estado no son editables desde el cliente de tablas. No hay edición de roles en esta sección.
+- El cliente no actualiza `profiles.role` ni `profiles.is_active` directamente mediante PostgREST. La promoción usa una acción específica de `admin-users`, que verifica en servidor el rol activo del actor; no hay selección arbitraria de rol ni degradación desde esta sección.
 - El registro público de Supabase debe deshabilitarse en el despliegue; las cuentas se crean con la API administrativa.

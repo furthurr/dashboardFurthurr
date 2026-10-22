@@ -50,6 +50,7 @@ POST autenticado a `admin-users`, vía `supabase.functions.invoke`:
 - `{ action: 'password', userId, password }`: establece contraseña (8–128 caracteres, además de la política de Supabase).
 - `{ action: 'rename', userId, fullName }`: administrador activo actualiza solo el nombre en `profiles` (1–120 caracteres tras recortar espacios exteriores); no cambia metadata de Auth ni otros campos de la cuenta.
 - `{ action: 'set-active', userId, active }`: cambia el estado; prohíbe desactivarse a sí mismo.
+- `{ action: 'promote-admin', userId }`: solo un administrador activo puede promover cualquier cuenta no administradora (`usuario` o `invitado`, activa o inactiva); fija `profiles.role = 'admin'` y conserva `is_active`. No existe acción de degradación.
 - Errores: `{ error: string }`, HTTP 400/401/403/405/500. No se devuelven secretos ni contraseñas.
 
 Comprueba con cuentas separadas:
@@ -62,6 +63,7 @@ Antes de publicar la nueva SPA, verifica además: admin ve Offline y General, us
 4. Desactiva una cuenta ya conectada: con su JWT anterior, tareas, comentarios, asignaciones, vistas y Storage privado dejan de ser accesibles. La UI comprueba el perfil cada 30 segundos y al volver a la ventana. Reactiva y verifica el acceso.
 5. Intenta cambiar `role` o `is_active` directamente con el cliente autenticado: debe ser rechazado por permisos de columnas.
 6. Verifica que las tareas, comentarios y adjuntos del usuario desactivado se conservan.
+- Desde «Usuarios», confirma la promoción de una cuenta `usuario` o `invitado`; verifica que el rol cambia a `admin`, que `is_active` no cambia y que una cuenta no administradora recibe 403 si intenta invocar directamente la operación. Re-despliega `admin-users` para que la acción nueva esté disponible en Supabase.
 
 `is_active` es el estado de acceso a **esta plataforma**: no elimina el usuario de Auth ni invalida criptográficamente sus JWT. La protección inmediata es RLS, que consulta el estado en cada petición. El cliente autenticado puede leer su propio perfil inactivo para mostrar el bloqueo, pero no modificarlo. Los avatares del bucket público siguen siendo públicos; archivos ya descargados o URLs firmadas emitidas previamente no pueden retirarse retroactivamente mediante RLS.
 

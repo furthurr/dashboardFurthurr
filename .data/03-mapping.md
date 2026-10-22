@@ -19,7 +19,7 @@ El formulario envía IDs, no perfiles completos. El cliente y SQL deduplican; SQ
 
 ## Administración y perfil
 
-La Edge Function normaliza nombre/email y no aplica campos extra de rol/estado del alta. El perfil inicial toma el nombre de metadata de Auth por trigger. La acción `rename` posterior actualiza únicamente `profiles.full_name`, no `auth.users.user_metadata`; consumidores deben usar el perfil como nombre de la aplicación (`supabase/functions/admin-users/validation.ts:21-30`, `supabase/functions/admin-users/index.ts:43-66`). `ManagedUser` y `AssigneeProfile` son proyecciones distintas del mismo perfil.
+La Edge Function normaliza nombre/email y en el alta fuerza `role: 'usuario'` e `is_active: true`, ignorando campos adicionales del cliente. El perfil inicial toma el nombre de metadata de Auth por trigger. La acción `rename` posterior actualiza únicamente `profiles.full_name`, no `auth.users.user_metadata`; consumidores deben usar el perfil como nombre de la aplicación. La acción `promote-admin` fija únicamente `profiles.role = 'admin'`; se autoriza mediante la comprobación previa de administrador activo y deja `is_active` sin cambios (`supabase/functions/admin-users/validation.ts:22-34`, `supabase/functions/admin-users/index.ts:24-28,43-72`). `ManagedUser` y `AssigneeProfile` son proyecciones distintas del mismo perfil.
 
 ## Comentarios y autor
 

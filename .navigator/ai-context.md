@@ -15,7 +15,7 @@
 ## Mapa rápido
 
 - `src/features/auth/` → login, sesión, perfil activo y rutas protegidas.
-- `src/features/users/` → listado, alta, nombre, contraseña y estado de cuentas para administradores.
+- `src/features/users/` → gestión para admins: listado, alta, nombre, contraseña, estado y promoción de cuentas no admin a admin.
 - `src/features/boards/` → selector, creación, gestión de miembros y autorización de rutas; contratos de tableros/RPC en `api.ts`.
 - `src/features/board/` → Kanban de un tablero, tareas/comentarios/adjuntos, traslados y `AssigneePicker`; APIs locales de tareas y adjuntos.
 - `src/shared/ui/` → Dialog/Toast y controles de cuenta compartidos.
@@ -23,7 +23,7 @@
 - `src/types/index.ts` → tipos compartidos de perfiles, tableros y tareas (`Task.board_id`).
 - `src/index.css` → estilos globales y variables visuales.
 - `supabase-schema.sql` → tablas, policies, buckets, vistas y grants de referencia.
-- `supabase/functions/admin-users/` → operaciones administrativas privilegiadas verificadas en servidor.
+- `supabase/functions/admin-users/` → operaciones administrativas privilegiadas verificadas en servidor, incluida la promoción de rol a admin.
 - `supabase/migrations/` → estado/grants, RPCs de tareas y aislamiento por membresía; `202610210001_boards.sql` es requerido por el nuevo frontend. `supabase/README.md` explica despliegue/pruebas SQL.
 - Detalle y dependencias: [`module-map.json`](module-map.json).
 
@@ -58,7 +58,7 @@
 
 ## Meta
 
-- Actualizado: 2026-10-21, contexto funcional de tableros; documentación sigue pendiente de baseline Git.
+- Actualizado: 2026-10-21, contexto funcional de tableros y promoción de cuentas a admin; documentación sigue pendiente de baseline Git.
 - Source commit: omitido; working tree con cambios locales no incluidos en `HEAD`.
 - Commit base de implementación: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`; el estado operativo de Supabase y la release preparada después siguen sin commit.
 - Cambios concurrentes `ProfilePage`/`AccountMenu`: localizados para evitar rutas obsoletas; comportamiento completo y nuevas pruebas no sincronizados ni validados aquí.

@@ -7,6 +7,7 @@ export type UserAction =
   | { action: 'password'; userId: string; password: string }
   | { action: 'rename'; userId: string; fullName: string }
   | { action: 'set-active'; userId: string; active: boolean }
+  | { action: 'promote-admin'; userId: string }
 
 export async function adminRequest<T>(body: UserAction | { action: 'list'; page: number }): Promise<T> {
   const { data, error } = await supabase.functions.invoke('admin-users', { body })
