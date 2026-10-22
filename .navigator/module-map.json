@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-10-22T21:52:48Z",
-  "source_commit": "21a44df45258f8b7ebc030ec95a4c5189d69dade",
+  "generated_at": "2026-10-22T22:39:10Z",
+  "source_commit": "93c1db2b6826b25d46aee08b112593cd608a4188",
   "root": ".",
   "modules": [
     {
@@ -128,7 +128,7 @@
       "tech": ["Deno", "TypeScript", "Supabase Edge Functions", "Supabase Auth"],
       "entrypoints": ["supabase/functions/admin-users/index.ts"],
       "depends_on": ["database-schema"],
-      "notes": "Despliegue separado de GitHub Pages; instrucciones en supabase/README.md. El redeploy de la versión con promote-admin (v0.5.0) no está verificado en remoto."
+      "notes": "Despliegue separado de GitHub Pages; instrucciones en supabase/README.md. Verificado el 2026-10-22 en el proyecto Supabase remoto: función en versión 4, ACTIVE, con el código descargado idéntico byte a byte al del repo; el código anterior (versión 3) no contenía la acción promote-admin."
     },
     {
       "id": "product-specs",

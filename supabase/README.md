@@ -21,6 +21,8 @@ La SPA sigue alojada en GitHub Pages. Las operaciones privilegiadas se ejecutan 
    ```
 
    `config.toml` desactiva únicamente la validación JWT del gateway de esta función: la función valida el bearer token con `auth.getUser` y exige un perfil `admin` activo antes de cualquier operación. `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` son variables del entorno de funciones de Supabase. **Nunca** las copies a variables `VITE_*` ni a la SPA.
+
+   Estado del proyecto de producción (2026-10-22): `admin-users` está desplegada en la **versión 4, ACTIVE**, y el código descargado del remoto es **idéntico byte a byte** a `functions/admin-users/` del repositorio. La versión anterior (3) no contenía la acción `promote-admin`, por lo que «Hacer administrador» habría fallado; tras el redespliegue la función responde sin sesión con `401 {"error":"Inicia sesión para continuar."}`, es decir, valida el bearer en su propio código y no en el gateway. `supabase config diff` informa **0 cambios aplicables**: `auth.enable_signup` ya está deshabilitado en remoto y `functions list` confirma `verify_jwt: false`. Las diferencias que reporta el diff son propiedades solo remotas (site_url, correo, MFA, pooler, storage vector) que `config push` conservaría y que no requieren acción.
 5. Publica la web con `npm run build` y el flujo habitual de GitHub Pages.
 
 Para una instalación nueva, `../supabase-schema.sql` incluye el modelo de tableros y sus políticas; no apliques además las migraciones ya incluidas en el bootstrap.

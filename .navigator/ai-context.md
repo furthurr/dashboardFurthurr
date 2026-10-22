@@ -23,7 +23,7 @@
 - `src/types/index.ts` → tipos compartidos de perfiles, tableros (`Board.is_active`, `Board.pending_count`) y tareas (`Task.board_id`).
 - `src/index.css` → estilos globales y variables visuales.
 - `supabase-schema.sql` → tablas, policies, buckets, vistas y grants de referencia; ya incluye `boards.is_active` y las RPCs de ciclo de vida.
-- `supabase/functions/admin-users/` → operaciones administrativas privilegiadas verificadas en servidor, incluida la promoción de rol a admin.
+- `supabase/functions/admin-users/` → operaciones administrativas privilegiadas verificadas en servidor, incluida la promoción de rol a admin; desplegada en el proyecto Supabase remoto en **versión 4, ACTIVE** (2026-10-22) con código **idéntico byte a byte** al del repo.
 - `supabase/migrations/` → estado/grants, RPCs de tareas y aislamiento por membresía; `202610210001_boards.sql` es requerido por el nuevo frontend y `202610220001`/`202610220002` por el ciclo de vida de tableros (aplicadas el 2026-10-22 en el proyecto Supabase remoto). `supabase/README.md` explica despliegue/pruebas SQL.
 - Detalle y dependencias: [`module-map.json`](module-map.json).
 
@@ -59,15 +59,16 @@
 - Nunca usar claves privilegiadas en la SPA. La Edge Function usa su entorno servidor; RLS/grants y comprobaciones Edge/RPC autorizan acciones, no la UI. `is_active` no invalida criptográficamente JWTs ni archivos ya descargados.
 - No indexar ni copiar `.env`, `.env.*`, credenciales o datos personales. Variables permitidas por nombre: `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`; no registrar sus valores.
 - La policy de lectura de `boards` es sensible: no debe invocar funciones que lean `boards` (recursión RLS en `INSERT ... RETURNING`).
-- El baseline Git es verificable (`v0.6.0` / `21a44df`): el árbol de trabajo no contiene cambios de producto ni migraciones sin trackear, por lo que `source_commit` queda registrado.
+- El baseline Git es verificable (`v0.6.0` / `21a44df`); el árbol de trabajo solo contiene la actualización documental de este ciclo, sin cambios de producto ni migraciones sin trackear, y `source_commit` (`93c1db2`) no incluye ese contenido sin commit.
 
 ## Meta
 
-- Actualizado: 2026-10-22, ciclo de vida de tableros (renombrado, activar/desactivar, tareas pendientes) con sus RPCs y policies, la aplicación verificada de `202610220001`/`202610220002` en el proyecto Supabase remoto y la publicación de la SPA con `v0.6.0` en GitHub Pages. El baseline Git ya no está pendiente.
-- Source commit: `21a44df45258f8b7ebc030ec95a4c5189d69dade` (release `v0.6.0`, 2026-10-22). `main` está sincronizada con `origin/main` en ese commit.
-- `HEAD` actual: `21a44df45258f8b7ebc030ec95a4c5189d69dade` (2026-10-22, `chore(release): preparar versión v0.6.0`); **incluye** el ciclo de vida de tableros, sus migraciones y la documentación. El árbol de trabajo no tiene cambios de producto ni migraciones sin trackear; la única diferencia local es una edición sin commitear en `specs/05-auth-roles-permisos.md`, ajena a esta sincronización.
+- Actualizado: 2026-10-22, **cierre de los dos pendientes de despliegue** (redeploy verificado de `admin-users` en versión 4 con código idéntico al repo; `config diff` con `update: 0` y `auth.enable_signup` ya deshabilitado en remoto), ciclo de vida de tableros (renombrado, activar/desactivar, tareas pendientes) con sus RPCs y policies, la aplicación verificada de `202610220001`/`202610220002` en el proyecto Supabase remoto y la publicación de la SPA con `v0.6.0` en GitHub Pages. El baseline Git ya no está pendiente.
+- Source commit: `93c1db2b6826b25d46aee08b112593cd608a4188` (2026-10-22, `docs(canonica): actualizar baseline tras la publicación de v0.6.0`), sobre el release `v0.6.0` (`21a44df`). `main` está sincronizada con `origin/main` en ese commit y la edición de `specs/05-auth-roles-permisos.md` ya está commiteada.
+- `HEAD` actual: `93c1db2b6826b25d46aee08b112593cd608a4188` (2026-10-22, `docs(canonica): actualizar baseline tras la publicación de v0.6.0`), sobre el release `v0.6.0` (`21a44df`); **incluye** el ciclo de vida de tableros, sus migraciones, la documentación y la edición de `specs/05-auth-roles-permisos.md`. El árbol de trabajo solo contiene la actualización documental de este ciclo (cierre de los pendientes de despliegue de `admin-users` y de la configuración de Auth), pendiente de commit: no hay cambios de producto ni migraciones sin trackear.
 - Commit base de implementación: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`.
-- Pendientes que el repositorio no puede cerrar: el redeploy de la Edge Function `admin-users` (acción `promote-admin` de `v0.5.0`) no está verificado en remoto, la configuración de Auth remota (`supabase/config.toml`) no es verificable desde el repo y no hay E2E con cuentas reales ni auditoría de accesibilidad.
+- El redeploy de la Edge Function `admin-users` (acción `promote-admin` de `v0.5.0`) y la configuración de Auth remota (`supabase/config.toml`) **ya no están pendientes**: se verificaron el 2026-10-22 en el proyecto Supabase remoto (función en **versión 4, ACTIVE**, con el código descargado del remoto **idéntico byte a byte** al del repo; `supabase config diff` con **0 cambios aplicables** —`update: 0`—, `auth.enable_signup` ya deshabilitado en remoto y `functions list` confirmando `verify_jwt: false`).
+- Límites que siguen vigentes: **no hay E2E con cuentas reales ni auditoría de accesibilidad**, y la verificación funcional de `promote-admin` en producción **no se ha ejecutado con una sesión real de administrador** (la comprobación fue de equivalencia de código desplegado y de rechazo sin sesión: 401 con el mensaje propio de la función, no del gateway).
 - Cambios concurrentes `ProfilePage`/`AccountMenu`: localizados para evitar rutas obsoletas; comportamiento completo y nuevas pruebas no sincronizados ni validados aquí.
 - Navigator root: `.`
 - Actualizado con: documentation-orchestrator, capas 0–1; símbolos y grafo permanecen deshabilitados. `config.yaml` se conservó.
