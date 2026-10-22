@@ -1,6 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-10-22T21:38:23Z",
+  "generated_at": "2026-10-22T21:52:48Z",
+  "source_commit": "21a44df45258f8b7ebc030ec95a4c5189d69dade",
   "root": ".",
   "modules": [
     {
@@ -116,7 +117,7 @@
       "tech": ["PostgreSQL", "SQL"],
       "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql", "supabase/migrations/202610200002_shared_task_editing.sql", "supabase/migrations/202610210001_boards.sql", "supabase/migrations/202610220001_board_access_returning.sql", "supabase/migrations/202610220002_board_lifecycle.sql"],
       "depends_on": ["database-schema"],
-      "notes": "Las dos migraciones de 202610220002 se aplicaron el 2026-10-22 en el proyecto Supabase remoto, en ese orden; las tres suites SQL remotas pasan y revierten sus fixtures con ROLLBACK. La SPA compatible aún no está publicada en GitHub Pages."
+      "notes": "Las dos migraciones de 202610220002 se aplicaron el 2026-10-22 en el proyecto Supabase remoto, en ese orden; las tres suites SQL remotas pasan y revierten sus fixtures con ROLLBACK. La SPA compatible ya está publicada en GitHub Pages con v0.6.0 el 2026-10-22 (run 39860177282)."
     },
     {
       "id": "admin-users",
@@ -127,7 +128,7 @@
       "tech": ["Deno", "TypeScript", "Supabase Edge Functions", "Supabase Auth"],
       "entrypoints": ["supabase/functions/admin-users/index.ts"],
       "depends_on": ["database-schema"],
-      "notes": "Despliegue separado de GitHub Pages; instrucciones en supabase/README.md."
+      "notes": "Despliegue separado de GitHub Pages; instrucciones en supabase/README.md. El redeploy de la versión con promote-admin (v0.5.0) no está verificado en remoto."
     },
     {
       "id": "product-specs",
@@ -147,7 +148,8 @@
       "kind": "other",
       "tech": ["GitHub Actions", "Node.js", "Vite"],
       "entrypoints": [".github/workflows/deploy.yml"],
-      "depends_on": ["web-app"]
+      "depends_on": ["web-app"],
+      "notes": "Publicación verificada: run 39860177282, conclusión success, headSha 21a44df (release v0.6.0, 2026-10-22); la SPA se sirve en https://furthurr.github.io/dashboardFurthurr/. El workflow no despliega SQL ni Edge Functions."
     }
   ]
 }

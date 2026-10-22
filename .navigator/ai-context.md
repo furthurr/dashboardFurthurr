@@ -36,8 +36,8 @@
 - Ciclo de vida de tableros: solo admin activo renombra o activa/desactiva. `boards.is_active` desactiva sin borrar tareas, comentarios, adjuntos ni membresías; mientras está desactivado sus miembros dejan de verlo y de acceder a sus tareas (también por URL), pero el admin activo conserva el acceso y puede reactivarlo. Un tablero desactivado no es destino de traslado.
 - El catálogo de tableros se obtiene por RPC `list_boards_with_pending_counts`; la visibilidad la aplica esa RPC replicando RLS, no el cliente. El badge «Tareas pendientes» suma `backlog`, `por_hacer` y `haciendo`.
 - Anti-recursión: la policy de lectura de `boards` no invoca funciones que lean `boards`; `INSERT ... RETURNING` de PostgREST evalúa esa policy y una llamada de ese tipo provocaría recursión infinita.
-- Migración `supabase/migrations/202610210001_boards.sql`: aplicada al proyecto Supabase elegido para Pages; tareas/cuentas activas existentes se asignaron a Offline y General empezó vacío. La SPA aún no está desplegada.
-- `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql` están en el árbol de trabajo **sin commit**, pero **aplicadas el 2026-10-22 en el proyecto Supabase remoto**, en ese orden; las tres suites SQL remotas (`boards.sql`, `task_assignments.sql`, `user_access.sql`) pasan y revierten sus fixtures con `ROLLBACK`. La SPA compatible aún no está publicada en GitHub Pages.
+- Migración `supabase/migrations/202610210001_boards.sql`: aplicada al proyecto Supabase elegido para Pages; tareas/cuentas activas existentes se asignaron a Offline y General empezó vacío. La SPA con este contrato está publicada en GitHub Pages.
+- `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql` están versionadas en el release `v0.6.0` (commit `21a44df`) y **aplicadas el 2026-10-22 en el proyecto Supabase remoto**, en ese orden; las tres suites SQL remotas (`boards.sql`, `task_assignments.sql`, `user_access.sql`) pasan y revierten sus fixtures con `ROLLBACK`. La SPA compatible **ya está publicada en GitHub Pages** con `v0.6.0` el 2026-10-22 (workflow «Deploy to GitHub Pages», run `39860177282`, `headSha=21a44df`), servida en <https://furthurr.github.io/dashboardFurthurr/>.
 - `specs/` conserva requisitos/intención de producto; actualiza la spec antes de implementar funcionalidad.
 - Contrasta cambios de persistencia con `supabase-schema.sql` y la matriz de `specs/05-auth-roles-permisos.md`.
 - Verifica comportamiento en el código y contratos: los índices de Navigator son orientación, no fuente de verdad.
@@ -59,14 +59,15 @@
 - Nunca usar claves privilegiadas en la SPA. La Edge Function usa su entorno servidor; RLS/grants y comprobaciones Edge/RPC autorizan acciones, no la UI. `is_active` no invalida criptográficamente JWTs ni archivos ya descargados.
 - No indexar ni copiar `.env`, `.env.*`, credenciales o datos personales. Variables permitidas por nombre: `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`; no registrar sus valores.
 - La policy de lectura de `boards` es sensible: no debe invocar funciones que lean `boards` (recursión RLS en `INSERT ... RETURNING`).
-- El working tree contiene cambios locales de producto/documentación; no se asigna `source_commit` hasta que exista un baseline Git verificable.
+- El baseline Git es verificable (`v0.6.0` / `21a44df`): el árbol de trabajo no contiene cambios de producto ni migraciones sin trackear, por lo que `source_commit` queda registrado.
 
 ## Meta
 
-- Actualizado: 2026-10-22, ciclo de vida de tableros (renombrado, activar/desactivar, tareas pendientes) con sus RPCs y policies, y en la misma fecha la aplicación verificada de `202610220001`/`202610220002` en el proyecto Supabase remoto; documentación sigue pendiente de baseline Git y la SPA compatible sigue sin publicar en Pages.
-- Source commit: omitido; working tree con cambios locales no incluidos en `HEAD`.
-- `HEAD` actual: `b42a4d2fd6b1eebae82305eb4aa3402e995078c5` (2026-10-22, `chore(release): preparar versión v0.5.0`); no incluye el ciclo de vida de tableros. El árbol de trabajo tiene 31 archivos modificados y 2 migraciones sin trackear.
-- Commit base de implementación: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`; el estado operativo de Supabase y la release preparada después siguen sin commit.
+- Actualizado: 2026-10-22, ciclo de vida de tableros (renombrado, activar/desactivar, tareas pendientes) con sus RPCs y policies, la aplicación verificada de `202610220001`/`202610220002` en el proyecto Supabase remoto y la publicación de la SPA con `v0.6.0` en GitHub Pages. El baseline Git ya no está pendiente.
+- Source commit: `21a44df45258f8b7ebc030ec95a4c5189d69dade` (release `v0.6.0`, 2026-10-22). `main` está sincronizada con `origin/main` en ese commit.
+- `HEAD` actual: `21a44df45258f8b7ebc030ec95a4c5189d69dade` (2026-10-22, `chore(release): preparar versión v0.6.0`); **incluye** el ciclo de vida de tableros, sus migraciones y la documentación. El árbol de trabajo no tiene cambios de producto ni migraciones sin trackear; la única diferencia local es una edición sin commitear en `specs/05-auth-roles-permisos.md`, ajena a esta sincronización.
+- Commit base de implementación: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`.
+- Pendientes que el repositorio no puede cerrar: el redeploy de la Edge Function `admin-users` (acción `promote-admin` de `v0.5.0`) no está verificado en remoto, la configuración de Auth remota (`supabase/config.toml`) no es verificable desde el repo y no hay E2E con cuentas reales ni auditoría de accesibilidad.
 - Cambios concurrentes `ProfilePage`/`AccountMenu`: localizados para evitar rutas obsoletas; comportamiento completo y nuevas pruebas no sincronizados ni validados aquí.
 - Navigator root: `.`
 - Actualizado con: documentation-orchestrator, capas 0–1; símbolos y grafo permanecen deshabilitados. `config.yaml` se conservó.

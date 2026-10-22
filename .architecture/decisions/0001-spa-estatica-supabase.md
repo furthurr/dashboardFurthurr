@@ -13,7 +13,7 @@ Mantener una SPA React/Vite estática en GitHub Pages y usar Supabase como servi
 
 ### Extensión observada — 2026-10-20
 
-La SPA permanece estática, pero el repositorio ahora incluye código backend desplegable en Supabase: `admin-users` para operaciones administrativas y funciones Postgres para creación/asignación transaccional de tareas. «Sin servidor propio» no debe interpretarse como «sin código servidor». La autorización combina RLS/grants con comprobaciones explícitas en estas funciones; nunca se coloca la clave privilegiada en el navegador (`supabase/functions/admin-users/index.ts:20-28`, `supabase/migrations/202610200001_task_assignments.sql:7-76`). Esta nota describe implementación local sin commit, no una fecha de adopción histórica ni un nuevo baseline.
+La SPA permanece estática, pero el repositorio ahora incluye código backend desplegable en Supabase: `admin-users` para operaciones administrativas y funciones Postgres para creación/asignación transaccional de tareas. «Sin servidor propio» no debe interpretarse como «sin código servidor». La autorización combina RLS/grants con comprobaciones explícitas en estas funciones; nunca se coloca la clave privilegiada en el navegador (`supabase/functions/admin-users/index.ts:20-28`, `supabase/migrations/202610200001_task_assignments.sql:7-76`). Esa implementación ya está versionada (baseline `v0.6.0` / `21a44df`); la nota no fija una fecha de adopción histórica.
 
 ## Alternativas consideradas
 

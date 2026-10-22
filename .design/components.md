@@ -4,7 +4,7 @@ Catálogo de componentes actuales, no una promesa de API reutilizable fuera de s
 
 ## Actualización — ciclo de vida de tableros, 2026-10-22
 
-Describe el árbol de trabajo **sin commit**: `HEAD` (`b42a4d2`) no incluye esta feature y el baseline Git queda pendiente. No añade tokens, paleta, tema ni tipografía: la única clase visual nueva es `.ui-badge`, que reutiliza `--color-border`, `--radius-sm`, `--color-surface-elevated`, `--color-text`, `--space-2` y `--text-xs` (`src/index.css:139`).
+Describe el release `v0.6.0` (commit `21a44df`), ya versionado: el baseline Git no queda pendiente. No añade tokens, paleta, tema ni tipografía: la única clase visual nueva es `.ui-badge`, que reutiliza `--color-border`, `--radius-sm`, `--color-surface-elevated`, `--color-text`, `--space-2` y `--text-xs` (`src/index.css:139`).
 
 | Componente/patrón | Propósito, estados y comportamiento | Fuente |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ Describe el árbol de trabajo **sin commit**: `HEAD` (`b42a4d2`) no incluye esta
 
 128 pruebas Vitest en 15 archivos, lint y build correctos (persiste el aviso preexistente de chunk principal >500 kB). Comprobación en Chrome headless con CDP contra `npm run dev`, interceptando las llamadas a Supabase con datos simulados: se verificaron las dos secciones, el badge, el renombrado (diálogo precargado y actualización de la lista), el ciclo desactivar/reactivar y la vista de rol no administrador sin acciones ni sección de desactivados.
 
-Límites: no es E2E con cuentas reales ni auditoría WCAG/lector de pantalla; la verificación SQL del ciclo de vida se hizo en local con Auth/Storage simulados. El contrato que sostiene esta UI **sí está aplicado en el proyecto Supabase remoto** desde el 2026-10-22 (`202610220001` y `202610220002`, en ese orden; las tres suites SQL remotas pasan y revierten sus fixtures con `ROLLBACK`), pero la **SPA compatible aún no está publicada en GitHub Pages**, por lo que la UI sigue sin verificarse contra el servicio real (ver [datos](../.data/README.md)). No se comprobaron viewports adicionales ni contraste calculado en esta revisión.
+Límites: no es E2E con cuentas reales ni auditoría WCAG/lector de pantalla; la verificación SQL del ciclo de vida se hizo en local con Auth/Storage simulados. El contrato que sostiene esta UI **sí está aplicado en el proyecto Supabase remoto** desde el 2026-10-22 (`202610220001` y `202610220002`, en ese orden; las tres suites SQL remotas pasan y revierten sus fixtures con `ROLLBACK`) y la **SPA compatible ya está publicada en GitHub Pages** con `v0.6.0` el 2026-10-22 (workflow «Deploy to GitHub Pages», run `39860177282`, `headSha=21a44df`), pero esa publicación no aporta evidencia funcional nueva: la UI sigue sin verificarse contra el servicio real (ver [datos](../.data/README.md)). No se comprobaron viewports adicionales ni contraste calculado en esta revisión.
 
 ## Actualización — tableros y pertenencia, 2026-10-21
 
@@ -41,7 +41,7 @@ Esta sección describe el flujo local de selección/gestión de tableros y movim
 
 ## Estado actual — edición compartida de tareas, 2026-10-20
 
-Esta sección prevalece sobre el historial inferior para las áreas modificadas. Describe el árbol de trabajo sin commit; no altera tokens ni convierte las revisiones históricas en baseline Git. El antiguo `RegisterPage` fue eliminado y las referencias inferiores a él son **históricas**, no rutas/archivos actuales.
+Esta sección prevalece sobre el historial inferior para las áreas modificadas. Describe el release `v0.6.0` (commit `21a44df`), ya versionado; no altera tokens ni convierte las revisiones históricas en baseline Git. El antiguo `RegisterPage` fue eliminado y las referencias inferiores a él son **históricas**, no rutas/archivos actuales.
 
 | Componente/patrón | Propósito, variantes y estados | Fuente |
 | --- | --- | --- |
@@ -103,7 +103,7 @@ Verificación de la implementación local: `npm run test -- --run` (48 pruebas c
 
 ## Revisión estática — rediseño local, 2026-10-16
 
-Revisión estática histórica del árbol de trabajo sin commit. Tokens y clases compartidas proceden de `src/index.css:4-169`; no se verificó su apariencia en navegador. La revisión focalizada del 2026-10-19 anterior complementa el estado de `CreateTaskModal`.
+Revisión estática histórica, realizada sobre código entonces sin commit y hoy versionado en `v0.6.0` / `21a44df`. Tokens y clases compartidas proceden de `src/index.css:4-169`; no se verificó su apariencia en navegador. La revisión focalizada del 2026-10-19 anterior complementa el estado de `CreateTaskModal`.
 
 | Componente/patrón | Presentación, variantes y estados observados | Fuente |
 | --- | --- | --- |

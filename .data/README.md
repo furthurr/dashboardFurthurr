@@ -7,12 +7,12 @@ Documentación canónica de datos y contratos consumidos por la aplicación. Lé
 - Tecnología detectada: cliente TypeScript `@supabase/supabase-js`, Auth/PostgREST/PostgreSQL/Storage, Edge Function `admin-users` y RPCs de tareas/asignaciones/tableros.
 - Modo: `full`.
 - ¿BD interna?: No. La persistencia es PostgreSQL gestionado externamente por Supabase; el schema de referencia está en `supabase-schema.sql`.
-- Commit base revisado: `81335b92bc1962a47c9c3bb963271c3667bc7b63` (2026-05-04), no representa cambios locales posteriores.
-- Última actualización documental: 2026-10-22, ciclo de vida de tableros (`is_active`, renombrado, activación/desactivación y conteo de pendientes) y, en la misma fecha, **aplicación verificada de `202610220001` y `202610220002` en el proyecto Supabase remoto**; describe el **árbol de trabajo sin commit** y no fija un nuevo baseline Git.
-- `HEAD` actual: `b42a4d2fd6b1eebae82305eb4aa3402e995078c5` (2026-10-22, `chore(release): preparar versión v0.5.0`). El árbol de trabajo tiene 31 archivos modificados y 2 migraciones sin trackear (`202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql`): **esta documentación no declara `HEAD` como fuente sincronizada**. Baseline Git pendiente.
+- Commit base revisado (referencia histórica): `81335b92bc1962a47c9c3bb963271c3667bc7b63` (2026-05-04).
+- Baseline vigente: release `v0.6.0`, commit `21a44df45258f8b7ebc030ec95a4c5189d69dade` (2026-10-22, `chore(release): preparar versión v0.6.0`), con tag anotado `v0.6.0` apuntando a ese commit. La rama `main` está sincronizada con `origin/main` en ese commit y el árbol de trabajo no contiene cambios de producto ni migraciones sin trackear; la única diferencia local es una edición sin commitear en `specs/05-auth-roles-permisos.md` (documentación de requisitos, ajena a esta sincronización). **Esta documentación declara `21a44df` como fuente sincronizada.**
+- Última actualización documental: 2026-10-22, ciclo de vida de tableros (`is_active`, renombrado, activación/desactivación y conteo de pendientes), **aplicación verificada de `202610220001` y `202610220002` en el proyecto Supabase remoto** y **publicación de la SPA con `v0.6.0` en GitHub Pages**; el baseline ya está versionado en `21a44df`.
 - Commit base de implementación y primera sincronización: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`, incluye el código, la migración y la documentación funcional inicial.
-- Actualización operativa posterior: la secuencia de migraciones y las pruebas SQL `boards.sql`, `task_assignments.sql` y `user_access.sql` se ejecutaron correctamente en el proyecto Supabase seleccionado el 2026-10-21. El registro documental de ese despliegue y la release `v0.4.0` siguen sin commit; baseline de esta actualización **pendiente**.
-- Estado de despliegue del ciclo de vida: `202610220001` y `202610220002` **aplicadas el 2026-10-22 en el proyecto Supabase remoto**, en ese orden. Las tres suites SQL remotas (`boards.sql`, `task_assignments.sql`, `user_access.sql`) pasan y revierten sus fixtures con `ROLLBACK`. Siguen pendientes: la publicación de la SPA en GitHub Pages (ocurre al hacer push a `main`) y el baseline Git.
+- Registro de despliegue: la secuencia de migraciones y las pruebas SQL `boards.sql`, `task_assignments.sql` y `user_access.sql` se ejecutaron correctamente en el proyecto Supabase seleccionado el 2026-10-21, y el 2026-10-22 se aplicaron además `202610220001` y `202610220002` con las tres suites remotas en `PASS`. Ese registro está versionado en `21a44df`; el baseline de esta actualización **no queda pendiente**.
+- Estado de despliegue del ciclo de vida: `202610220001` y `202610220002` **aplicadas el 2026-10-22 en el proyecto Supabase remoto**, en ese orden. Las tres suites SQL remotas (`boards.sql`, `task_assignments.sql`, `user_access.sql`) pasan y revierten sus fixtures con `ROLLBACK`. La SPA se **publicó en GitHub Pages con `v0.6.0` el 2026-10-22** (workflow «Deploy to GitHub Pages», run `39860177282`, `headSha=21a44df`, conclusión `success`) y está servida en <https://furthurr.github.io/dashboardFurthurr/>. Siguen pendientes: el redeploy de la Edge Function `admin-users` (acción `promote-admin` de `v0.5.0`), que no está verificado en remoto, y la configuración de Auth remota (`supabase/config.toml`), que no es verificable desde el repo.
 
 ## Contexto para IA
 
@@ -59,11 +59,11 @@ Se reutiliza evidencia previa de implementación en esta sesión: 79 pruebas Vit
 
 Para tableros se registraron 111 pruebas Vitest, lint y build correctos. Los tres probes SQL pasaron con Auth/Storage simulados contra bootstrap+migración incremental local y contra el proyecto Supabase seleccionado; sus fixtures se revierten. Chromium con backend simulado cubrió selector, miembros y traslado a 360/768/1440 px. Esto no es E2E completo ni auditoría de seguridad. El build informa que el chunk principal supera 500 kB.
 
-La acción local `promote-admin` se verificó con 115 pruebas Vitest, 11 pruebas Deno de `admin-users`, lint y build correctos. No requiere migración SQL; el despliegue de esta versión de la Edge Function no se comprobó. El baseline Git de esta actualización queda pendiente mientras haya cambios locales sin commit.
+La acción local `promote-admin` se verificó con 115 pruebas Vitest, 11 pruebas Deno de `admin-users`, lint y build correctos. No requiere migración SQL; el despliegue de esta versión de la Edge Function no se comprobó y **sigue sin verificarse en remoto**. El baseline Git vigente es `v0.6.0` / `21a44df`.
 
 ### Ciclo de vida de tableros (2026-10-22)
 
-Evidencia de la implementación en el árbol de trabajo, **no comandos repetidos durante esta sincronización documental**:
+Evidencia de la implementación en la release `v0.6.0` (commit `21a44df`), **no comandos repetidos durante esta sincronización documental**:
 
 - Vitest: 128 pruebas en 15 archivos, todas correctas. Cubren el selector (secciones, badge, renombrado, activar/desactivar, vista sin acciones para no admin) en `src/features/boards/BoardsPage.test.tsx:117-200`, los contratos RPC en `src/features/boards/api.test.ts:23-58` y el filtrado de destinos en `src/features/board/TaskDetailModal.test.tsx:15`.
 - `npm run lint` y `npm run build` correctos; persiste el aviso preexistente de chunk principal >500 kB.
@@ -76,7 +76,7 @@ Límites de esta evidencia:
 - La verificación SQL descrita arriba es local, con PostgreSQL 16 en Docker y Auth/Storage simulados; la aplicación y la verificación remotas se documentan en el apartado siguiente.
 - No hay E2E con cuentas reales ni auditoría de accesibilidad.
 - La verificación SQL local usa un harness propio con Auth/Storage simulados, no el entorno Supabase: no certifica el comportamiento del servicio Supabase, sus grants efectivos ni sus políticas Storage.
-- El baseline Git sigue pendiente: el árbol de trabajo contiene 31 archivos modificados y 2 migraciones sin trackear, y `HEAD` (`b42a4d2`) no incluye esta feature.
+- El baseline Git es `v0.6.0` / `21a44df` y ya no está pendiente: el commit incluye esta feature, las dos migraciones y esta documentación.
 
 ### Aplicación remota y verificación (2026-10-22)
 
@@ -92,6 +92,7 @@ Hecho verificado sobre el proyecto Supabase remoto (proyecto «furthurr'sDashboa
 
 Lo que este hecho **no** cierra:
 
-- La SPA compatible **sigue sin publicar en GitHub Pages**; el despliegue ocurre al hacer push a `main`.
-- El **baseline Git sigue pendiente** (31 archivos modificados y 2 migraciones sin trackear), así que ninguna carpeta declara `HEAD` como fuente sincronizada.
-- La verificación remota cubre SQL; no sustituye una comprobación de la UI contra el servicio real ni una auditoría de seguridad.
+- La SPA compatible **ya se publicó en GitHub Pages** con `v0.6.0` el 2026-10-22 (workflow «Deploy to GitHub Pages», run `39860177282`, `headSha=21a44df`, conclusión `success`) y está servida en <https://furthurr.github.io/dashboardFurthurr/>.
+- El **baseline Git ya no está pendiente**: es `v0.6.0` / `21a44df`, con `main` sincronizada con `origin/main`.
+- La publicación no aporta evidencia funcional nueva: la verificación remota sigue cubriendo solo SQL y **no sustituye una comprobación de la UI contra el servicio real, ni una auditoría de seguridad, ni E2E con cuentas reales**.
+- El **redeploy de la Edge Function `admin-users`** (acción `promote-admin` de `v0.5.0`) no está verificado en remoto, y la **configuración de Auth remota** (`supabase/config.toml`) no es verificable desde el repo.
