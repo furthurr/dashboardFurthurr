@@ -1,5 +1,24 @@
 # Changelog
 
+## [v0.5.0] - 2026-10-22
+
+### Funcionalidades
+
+- Permitir que un administrador activo promueva cuentas `usuario` o `invitado` a `admin` desde «Usuarios», sin alterar el estado de la cuenta.
+
+### Permisos y backend
+
+- Añadir una acción específica en `admin-users`, protegida por autorización del administrador activo y sin permitir degradar administradores.
+
+### Documentación y verificación
+
+- Actualizar especificaciones, contratos y guías operativas sobre la promoción administrativa.
+- Verificar 115 pruebas Vitest, 11 pruebas Deno, lint, build y diff-check. El build mantiene la advertencia de chunk superior a 500 kB.
+
+### Notas de despliegue
+
+- Re-desplegar la Edge Function `admin-users` para habilitar la acción. No se ha hecho deploy del backend.
+
 ## [v0.4.0] - 2026-10-21
 
 ### Funcionalidades
