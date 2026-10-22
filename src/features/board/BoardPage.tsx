@@ -408,7 +408,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
         />
 
         <TaskDetailModal
-          boards={boards.filter((board) => board.id !== boardId)}
+          boards={boards.filter((board) => board.id !== boardId && board.is_active)}
           onMoveToBoard={selectedTask ? async (destinationId) => {
             await moveToBoard.mutateAsync({ taskId: selectedTask.id, boardId: destinationId })
             setOptimisticTasks(null)

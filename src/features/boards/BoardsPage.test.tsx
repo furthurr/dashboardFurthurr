@@ -2,11 +2,12 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BoardsPage } from './BoardsPage'
+import { BoardsPage, getBoardUpdateErrorMessage, getCreateBoardErrorMessage } from './BoardsPage'
 import { BoardRoute } from './BoardRoute'
 
 const mocks = vi.hoisted(() => ({
   role: 'admin', boards: vi.fn(), members: vi.fn(), users: vi.fn(), create: vi.fn(), save: vi.fn(),
+  rename: vi.fn(), setActive: vi.fn(),
   createError: null as unknown, saveError: null as unknown, boardId: 'offline',
 }))
 vi.mock('@/features/auth/AuthContext', () => ({ useAuth: () => ({ profile: { role: mocks.role }, signOut: vi.fn() }) }))
@@ -14,12 +15,15 @@ vi.mock('./api', () => ({
   useBoards: mocks.boards, useBoardMembers: mocks.members,
   useCreateBoard: () => ({ mutateAsync: mocks.create, isPending: false, error: mocks.createError }),
   useSetBoardMembers: () => ({ mutateAsync: mocks.save, isPending: false, error: mocks.saveError }),
+  useRenameBoard: () => ({ mutateAsync: mocks.rename, isPending: false, error: null }),
+  useSetBoardActive: () => ({ mutateAsync: mocks.setActive, isPending: false, error: null }),
 }))
 vi.mock('@/features/board/assigneesApi', () => ({ useAssignableUsers: mocks.users }))
 vi.mock('@/features/board/BoardPage', () => ({ BoardPage: ({ boardId, boardName }: { boardId: string; boardName: string }) => <h1>{boardName} · {boardId}</h1> }))
 vi.mock('react-router-dom', async (original) => ({ ...await original<typeof import('react-router-dom')>(), useParams: () => ({ boardId: mocks.boardId }) }))
 
-const board = { id: 'offline', name: 'Offline', created_at: '2026-10-21' }
+const board = { id: 'offline', name: 'Offline', is_active: true, pending_count: 3, created_at: '2026-10-21' }
+const archivedBoard = { id: 'archived', name: 'Archivo 2025', is_active: false, pending_count: 7, created_at: '2026-10-21' }
 const ana = { id: 'ana', full_name: 'Ana', email: 'ana@example.test', role: 'usuario' as const, is_active: true, avatar_url: null }
 const renderPage = () => render(<MemoryRouter><BoardsPage /></MemoryRouter>)
 
@@ -31,10 +35,20 @@ beforeEach(() => {
   mocks.users.mockReturnValue({ data: [ana], isLoading: false, error: null })
   mocks.create.mockResolvedValue(board)
   mocks.save.mockResolvedValue(undefined)
+  mocks.rename.mockResolvedValue(undefined)
+  mocks.setActive.mockResolvedValue(undefined)
   mocks.saveError = null
 })
 
 describe('Selección y gestión de tableros', () => {
+  it('explica errores de permisos/sesión y aporta el código seguro en fallos no clasificados', () => {
+    expect(getCreateBoardErrorMessage({ code: '42501' })).toMatch(/permisos.*administrador/i)
+    expect(getCreateBoardErrorMessage({ status: 401 })).toMatch(/sesión caducó/i)
+    expect(getCreateBoardErrorMessage({ code: 'PGRST205' })).toContain('código PGRST205')
+    expect(getCreateBoardErrorMessage({ code: '23514' })).toMatch(/1 y 120 caracteres/i)
+    expect(getBoardUpdateErrorMessage({ code: '23505' })).toMatch(/Ya existe un tablero/i)
+    expect(getBoardUpdateErrorMessage({ code: 'P0002' })).toMatch(/ya no existe/i)
+  })
   it('muestra cards con enlace al tablero y gestión solo para administradores', () => {
     renderPage()
     expect(screen.getByRole('link', { name: 'Offline' })).toHaveAttribute('href', '/board/offline')
@@ -46,6 +60,8 @@ describe('Selección y gestión de tableros', () => {
     renderPage()
     expect(screen.queryByRole('button', { name: 'Crear tablero' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Gestionar miembros/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Cambiar nombre/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Desactivar/ })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Offline' })).toBeVisible()
   })
   it('explica el estado sin membresías sin mostrar tableros ajenos', () => {
@@ -95,6 +111,91 @@ describe('Selección y gestión de tableros', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Gestionar miembros de Offline' }))
     expect(screen.getByRole('alert')).toHaveTextContent('No se pudieron cargar los miembros')
     expect(screen.queryByRole('button', { name: 'Guardar miembros' })).not.toBeInTheDocument()
+  })
+})
+
+describe('Resumen de tareas pendientes', () => {
+  it('muestra la suma de tareas pendientes en cada tablero', () => {
+    renderPage()
+    const card = screen.getByRole('link', { name: 'Offline' }).closest('li') as HTMLElement
+    expect(within(card).getByText('Tareas pendientes:')).toBeVisible()
+    expect(within(card).getByText('3')).toBeVisible()
+  })
+})
+
+describe('Ciclo de vida de los tableros', () => {
+  it('separa los tableros desactivados y ofrece reactivarlos al administrador', () => {
+    mocks.boards.mockReturnValue({ data: [board, archivedBoard], isLoading: false, error: null })
+    renderPage()
+    expect(screen.getByRole('heading', { name: 'Tableros activos' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Tableros desactivados' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Archivo 2025' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Desactivar Offline' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Activar Archivo 2025' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Desactivar Archivo 2025' })).not.toBeInTheDocument()
+  })
+  it.each(['usuario', 'invitado'])('no muestra la sección de desactivados a %s', (role) => {
+    mocks.role = role
+    mocks.boards.mockReturnValue({ data: [board, archivedBoard], isLoading: false, error: null })
+    renderPage()
+    expect(screen.queryByRole('heading', { name: 'Tableros desactivados' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Archivo 2025' })).not.toBeInTheDocument()
+  })
+  it('explica que no hay tableros activos cuando solo existen desactivados', () => {
+    mocks.boards.mockReturnValue({ data: [archivedBoard], isLoading: false, error: null })
+    renderPage()
+    expect(screen.getByText('No hay tableros en esta sección.')).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Tableros desactivados' })).toBeVisible()
+  })
+  it('renombra un tablero con el nombre precargado', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Cambiar nombre de Offline' }))
+    const field = screen.getByLabelText('Nombre del tablero')
+    expect(field).toHaveValue('Offline')
+    await user.clear(field)
+    await user.type(field, 'Marketing')
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Guardar nombre' }))
+    expect(mocks.rename).toHaveBeenCalledWith({ boardId: 'offline', name: 'Marketing' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+  it('conserva el borrador y explica el error si el nombre está duplicado', async () => {
+    const user = userEvent.setup()
+    mocks.rename.mockRejectedValueOnce({ code: '23505' })
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Cambiar nombre de Offline' }))
+    const field = screen.getByLabelText('Nombre del tablero')
+    await user.clear(field)
+    await user.type(field, 'General')
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Guardar nombre' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Ya existe un tablero')
+    expect(screen.getByLabelText('Nombre del tablero')).toHaveValue('General')
+  })
+  it('desactiva un tablero confirmando la acción', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Desactivar Offline' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('dejarán de verlo')
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Desactivar tablero' }))
+    expect(mocks.setActive).toHaveBeenCalledWith({ boardId: 'offline', active: false })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+  it('reactiva un tablero desactivado', async () => {
+    const user = userEvent.setup()
+    mocks.boards.mockReturnValue({ data: [board, archivedBoard], isLoading: false, error: null })
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Activar Archivo 2025' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('recuperarán el acceso')
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Activar tablero' }))
+    expect(mocks.setActive).toHaveBeenCalledWith({ boardId: 'archived', active: true })
+  })
+  it('explica el rechazo del servidor al desactivar', async () => {
+    const user = userEvent.setup()
+    mocks.setActive.mockRejectedValueOnce({ code: '42501' })
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Desactivar Offline' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Desactivar tablero' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('permisos')
   })
 })
 

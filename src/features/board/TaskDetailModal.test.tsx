@@ -12,7 +12,7 @@ const task: TaskWithAssignees = {
 }
 
 describe('Traslado de tareas entre tableros', () => {
-  const boards = [{ id: 'general', name: 'General', created_at: '2026-10-21' }]
+  const boards = [{ id: 'general', name: 'General', is_active: true, pending_count: 0, created_at: '2026-10-21' }]
   it('exige destino y confirmación, espera el traslado y cierra al completarlo', async () => {
     const user = userEvent.setup()
     const move = vi.fn().mockResolvedValue(undefined)

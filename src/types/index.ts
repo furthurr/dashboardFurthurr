@@ -33,6 +33,8 @@ export interface Task {
 export interface Board {
   id: string
   name: string
+  is_active: boolean
+  pending_count: number
   created_at: string
 }
 

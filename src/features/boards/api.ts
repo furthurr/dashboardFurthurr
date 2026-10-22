@@ -2,10 +2,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { AssigneeProfile, Board } from '@/types'
 
+type BoardRow = { id: string; name: string; is_active: boolean; pending_count: number | string; created_at: string }
+
 export async function fetchBoards(): Promise<Board[]> {
-  const { data, error } = await supabase.from('boards').select('*').order('name')
+  // The RPC applies the same visibility as RLS and adds the pending task count.
+  const { data, error } = await supabase.rpc('list_boards_with_pending_counts')
   if (error) throw error
-  return data ?? []
+  return (data ?? []).map((row: BoardRow) => ({
+    id: String(row.id),
+    name: String(row.name),
+    is_active: Boolean(row.is_active),
+    pending_count: Number(row.pending_count ?? 0),
+    created_at: String(row.created_at),
+  }))
 }
 
 export function useBoards() {
@@ -22,6 +31,32 @@ export function useCreateBoard() {
     },
     onSuccess: () => { void cache.invalidateQueries({ queryKey: ['boards'] }) },
   })
+}
+
+export function useRenameBoard() {
+  const cache = useQueryClient()
+  return useMutation({
+    mutationFn: ({ boardId, name }: { boardId: string; name: string }) => renameBoard(boardId, name),
+    onSuccess: () => { void cache.invalidateQueries({ queryKey: ['boards'] }) },
+  })
+}
+
+export async function renameBoard(boardId: string, name: string): Promise<void> {
+  const { error } = await supabase.rpc('rename_board', { p_board_id: boardId, p_name: name.trim() })
+  if (error) throw error
+}
+
+export function useSetBoardActive() {
+  const cache = useQueryClient()
+  return useMutation({
+    mutationFn: ({ boardId, active }: { boardId: string; active: boolean }) => setBoardActive(boardId, active),
+    onSuccess: () => { void cache.invalidateQueries({ queryKey: ['boards'] }) },
+  })
+}
+
+export async function setBoardActive(boardId: string, active: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_board_active', { p_board_id: boardId, p_active: active })
+  if (error) throw error
 }
 
 export async function fetchBoardMembers(boardId: string): Promise<AssigneeProfile[]> {
