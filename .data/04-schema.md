@@ -1,6 +1,6 @@
 # Schema de persistencia Supabase
 
-La persistencia es PostgreSQL gestionado fuera de la SPA. `supabase-schema.sql` es el bootstrap completo; `supabase/migrations/` contiene los cambios incrementales para instalaciones existentes. Este documento recoge el contrato de tableros del bootstrap y la migración `202610210001_boards.sql`; no afirma que la secuencia nueva esté aplicada remotamente.
+La persistencia es PostgreSQL gestionado fuera de la SPA. `supabase-schema.sql` es el bootstrap completo; `supabase/migrations/` contiene los cambios incrementales para instalaciones existentes. La secuencia hasta `202610210001_boards.sql` se aplicó y verificó en el proyecto Supabase seleccionado para GitHub Pages el 2026-10-21; esto no certifica otros proyectos/entornos.
 
 ## Modelo relacional
 

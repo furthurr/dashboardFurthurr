@@ -29,7 +29,7 @@ Para una instalación nueva, `../supabase-schema.sql` incluye el modelo de table
 
 `202610210001_boards.sql` crea `boards` y `board_members`, asigna las tareas/usuarios activos existentes a `Offline`, y crea `General` vacío. Admin activo accede a todos los tableros, crea tableros y sustituye miembros; usuarios e invitados solo acceden a tableros donde sean miembros. Ser responsable de una tarea no concede acceso. Las cuentas nuevas no reciben membresías automáticamente.
 
-RLS limita tareas, asignaciones, comentarios, metadata de adjuntos y Storage por tablero. Crear tarea exige rol admin/usuario activo y acceso al tablero; cambiar tablero usa `move_task_to_board`, exige acceso a origen y destino y actualiza la misma tarea conservando sus relaciones. No habilites la nueva SPA antes de aplicar y verificar la migración en el proyecto adecuado: esta actualización documental no ha aplicado SQL remoto.
+RLS limita tareas, asignaciones, comentarios, metadata de adjuntos y Storage por tablero. Crear tarea exige rol admin/usuario activo y acceso al tablero; cambiar tablero usa `move_task_to_board`, exige acceso a origen y destino y actualiza la misma tarea conservando sus relaciones. La secuencia se aplicó en el proyecto Supabase seleccionado y los probes SQL remotos pasaron el 2026-10-21. El push y publicación de la SPA siguen pendientes.
 
 Las cargas nuevas usan path `<task-id>/<UUID>.<ext>`; las antiguas con path plano se resuelven desde metadata. El bucket de adjuntos permanece privado. La UI genera URLs firmadas de corta duración; accesos firmados ya emitidos o archivos descargados no se revocan retroactivamente.
 
@@ -39,7 +39,7 @@ Prueba transaccional con fixtures revertidos:
 npx supabase@2.121.0 db query --linked --project-ref <project-ref> --file supabase/tests/boards.sql
 ```
 
-Prueba local documentada para esta implementación: `boards.sql`, `task_assignments.sql` y `user_access.sql` se ejecutaron sobre PostgreSQL embebido con Auth/Storage simulados, contra bootstrap y secuencia incremental. No certifica el proyecto Supabase desplegado.
+Verificación local: `boards.sql`, `task_assignments.sql` y `user_access.sql` pasan contra PostgreSQL embebido con Auth/Storage simulados, bootstrap y secuencia incremental. Verificación remota: las mismas suites pasaron contra el proyecto Supabase seleccionado; cada fixture se revierte con `ROLLBACK`. Ninguna prueba es auditoría de seguridad completa ni valida otros entornos.
 
 ## Contrato y comprobación manual
 

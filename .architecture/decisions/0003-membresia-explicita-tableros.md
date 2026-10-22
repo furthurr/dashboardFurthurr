@@ -25,4 +25,4 @@ El producto necesita separar actividades en tableros y restringir la visibilidad
 
 - Positivas: autorización coherente en tablas y recursos, una única pertenencia por tarea y traslados sin duplicación.
 - Negativas / trade-offs: la asignación inicial y gestión manual de miembros son necesarias; retirar membresía corta nuevas solicitudes, pero no revoca contenido descargado ni URLs firmadas ya emitidas.
-- Operación: instalaciones existentes deben aplicar `202610210001_boards.sql` antes de publicar el frontend compatible; esta migración no se aplicó al Supabase remoto en esta revisión.
+- Operación: instalaciones existentes deben aplicar `202610210001_boards.sql` antes de publicar el frontend compatible. Se aplicó y verificó con probes en el proyecto Supabase elegido el 2026-10-21; Pages aún no recibió esta versión.

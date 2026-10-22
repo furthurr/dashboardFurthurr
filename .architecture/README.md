@@ -8,8 +8,9 @@ Documentación canónica de arquitectura. Lee este archivo antes de cambiar lím
 - Modo: `lite`.
 - Commit base revisado: `81335b92bc1962a47c9c3bb963271c3667bc7b63` (2026-05-04). Es una referencia, no un baseline que incluya los cambios locales.
 - Última actualización documental: 2026-10-21, incorporación local del modelo y flujo de tableros.
-- HEAD observado antes de sincronizar: `cd8c4c0e7979be59dcc5eebcfb784f528da48ac5`. **No es un commit de sincronización:** implementación, migración y pruebas de tableros continúan sin commit. El árbol de trabajo queda documentado, pendiente de baseline Git.
-- Alcance: selección post-login, gestión de membresías y autorización RLS por tablero, aislamiento de recursos y traslado de tareas. La migración no se verificó en Supabase remoto.
+- Commit base de implementación y primera sincronización: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`.
+- Actualización operativa posterior: la migración de tableros y los tres probes SQL se aplicaron/pasaron en el proyecto Supabase elegido el 2026-10-21. Este registro de despliegue sigue pendiente de commit; no se declara sincronizado con HEAD.
+- Alcance: selección post-login, gestión de membresías, autorización RLS por tablero, aislamiento de recursos y traslado atómico.
 
 ## Contexto para IA
 
@@ -88,9 +89,9 @@ La creación usa `create_task_with_assignees(p_board_id, ...)`: deriva propietar
 
 El workflow `.github/workflows/deploy.yml` compila la SPA en GitHub Actions y publica `dist` en Pages (`.github/workflows/deploy.yml:17-53`). Para trabajo local, `npm run dev` inicia Vite, `npm run build` ejecuta TypeScript y Vite, `npm run lint` ejecuta ESLint y `npm run preview` sirve el build local (`package.json:6-10`). La configuración de Pages y el prefijo de URL están acoplados al `base` de Vite y al `HashRouter` (`vite.config.ts:6-13`, `src/App.tsx:1-37`).
 
-Ese workflow **no despliega SQL ni Edge Functions**. En instalaciones existentes se aplican migraciones en orden y se mantiene configuración de Auth según [la guía operativa](../supabase/README.md). No reejecutar el bootstrap sobre una BD existente. La migración de tableros no se aplicó al remoto en esta revisión.
+Ese workflow **no despliega SQL ni Edge Functions**. En instalaciones existentes se aplican migraciones en orden y se mantiene configuración de Auth según [la guía operativa](../supabase/README.md). No reejecutar el bootstrap sobre una BD existente. La secuencia de tableros ya se aplicó al proyecto elegido; el push a Pages está pendiente.
 
-El selector y las nuevas operaciones requieren `202610210001_boards.sql` además de las migraciones anteriores. Hasta que se aplique en Supabase, el frontend y backend tienen contratos incompatibles; no publicar la SPA como una entrega completa.
+El selector y las nuevas operaciones requieren `202610210001_boards.sql` además de las migraciones anteriores. Esa secuencia ya se aplicó al proyecto elegido; el frontend compatible aún no se desplegó a Pages.
 
 ## 6. Riesgos y límites conocidos
 
@@ -107,7 +108,7 @@ El selector y las nuevas operaciones requieren `202610210001_boards.sql` además
 
 En revisiones previas al cambio de tableros se registraron 79 pruebas Vitest, 9 pruebas Deno de `admin-users`, build/lint correctos y aviso de bundle superior a 500 kB. Las pruebas SQL de las migraciones entonces existentes se ejecutaron con `ROLLBACK`, y Chromium verificó alta/detalle/asignaciones con respuestas simuladas. Esa evidencia previa no prueba el flujo de tableros ni la aplicación de su migración.
 
-Para tableros, la implementación local registró 111 pruebas Vitest, lint/build correctos y advertencia de chunk principal >500 kB. Los probes SQL de tableros, asignaciones y acceso pasaron con esquema bootstrap y migración incremental en PostgreSQL embebido con Auth/Storage simulados. Chromium con backend simulado verificó selector, gestión de miembros y traslado en 360/768/1440 px. No se aplicó SQL remoto ni se desplegó la SPA; esta evidencia no certifica el entorno Supabase, seguridad completa ni accesibilidad WCAG.
+Para tableros se registraron 111 pruebas Vitest, lint/build correctos y advertencia de chunk principal >500 kB. Los probes SQL pasaron en PostgreSQL local embebido con Auth/Storage simulados y en el proyecto Supabase elegido; los fixtures terminan en `ROLLBACK`. Chromium con backend simulado verificó selector, miembros y traslado a 360/768/1440 px. La SPA aún no se desplegó; no es auditoría de seguridad completa ni accesibilidad WCAG.
 
 ## Decisiones
 

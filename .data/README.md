@@ -9,8 +9,8 @@ Documentación canónica de datos y contratos consumidos por la aplicación. Lé
 - ¿BD interna?: No. La persistencia es PostgreSQL gestionado externamente por Supabase; el schema de referencia está en `supabase-schema.sql`.
 - Commit base revisado: `81335b92bc1962a47c9c3bb963271c3667bc7b63` (2026-05-04), no representa cambios locales posteriores.
 - Última actualización documental: 2026-10-21, sincronización de tableros, membresías, aislamiento de datos y acceso a adjuntos.
-- HEAD observado antes de la sincronización: `cd8c4c0e7979be59dcc5eebcfb784f528da48ac5`; **no** es commit de sincronización. El código, SQL y documentación de tableros están en el árbol de trabajo sin commit; estado final **pendiente de baseline Git**.
-- El árbol local documentado incorpora la migración `202610210001_boards.sql`; no se aplicó ni verificó contra Supabase remoto.
+- Commit base de implementación y primera sincronización: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`, incluye el código, la migración y la documentación funcional inicial.
+- Actualización operativa posterior: la secuencia de migraciones y las pruebas SQL `boards.sql`, `task_assignments.sql` y `user_access.sql` se ejecutaron correctamente en el proyecto Supabase seleccionado el 2026-10-21. El registro documental de ese despliegue y la release `v0.4.0` siguen sin commit; baseline de esta actualización **pendiente**.
 
 ## Contexto para IA
 
@@ -54,4 +54,4 @@ Estas observaciones registran deuda restante, no certifican el entorno desplegad
 
 Se reutiliza evidencia previa de implementación en esta sesión: 79 pruebas Vitest, 9 Deno, build/lint correctos, pruebas SQL con `ROLLBACK` y comprobación HTTP de denegación anónima de RPC. Las migraciones y la Edge Function se registraron como desplegadas antes de esta sincronización.
 
-Para tableros se registraron 111 pruebas Vitest, lint y build correctos. `supabase/tests/boards.sql`, `task_assignments.sql` y `user_access.sql` pasaron contra el bootstrap y la migración incremental en PostgreSQL embebido con Auth/Storage simulados; Chromium con backend simulado cubrió selector, gestión de miembros y traslado a 360/768/1440 px. Esto **no** es ejecución contra Supabase remoto, E2E con cuentas reales ni auditoría de seguridad. El build informa que el chunk principal supera 500 kB.
+Para tableros se registraron 111 pruebas Vitest, lint y build correctos. Los tres probes SQL pasaron con Auth/Storage simulados contra bootstrap+migración incremental local y contra el proyecto Supabase seleccionado; sus fixtures se revierten. Chromium con backend simulado cubrió selector, miembros y traslado a 360/768/1440 px. Esto no es E2E completo ni auditoría de seguridad. El build informa que el chunk principal supera 500 kB.

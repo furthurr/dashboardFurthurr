@@ -96,7 +96,7 @@ El alcance de las acciones sobre tareas y sus recursos asociados (asignaciones, 
 - Crear tareas conserva la regla admin/usuario y exige membresía en ese tablero. Cualquier cuenta activa con acceso al tablero puede editar tareas según las reglas existentes.
 - Trasladar una tarea permite a cualquier cuenta activa con acceso tanto al tablero de origen como al destino; conserva la identidad y relaciones de la tarea. No crea una copia. La tarea deja de ser visible en origen.
 - RLS limita tareas, asignaciones, comentarios, metadatos de adjuntos y objetos de Storage al acceso del tablero. Los enlaces firmados ya emitidos permanecen utilizables hasta expirar; RLS no revoca descargas ya realizadas.
-- Implementación local observada: `supabase/migrations/202610210001_boards.sql`. No se afirma que esté desplegada en el proyecto Supabase.
+- Implementación: `supabase/migrations/202610210001_boards.sql`; aplicada y comprobada con probes SQL en el proyecto Supabase seleccionado el 2026-10-21. La SPA aún no está publicada en Pages.
 
 ## Asignaciones de tareas
 

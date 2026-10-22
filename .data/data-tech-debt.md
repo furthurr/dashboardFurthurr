@@ -2,7 +2,7 @@
 
 Hallazgos de contrato restantes después de la implementación local de tableros. Esta sincronización documenta evidencia; no modifica producto, ejecuta SQL remoto ni es una auditoría de seguridad.
 
-Revisión focalizada 2026-10-21: D-03 sigue **parcialmente resuelta** por `AssigneeProfile`. D-04 queda **resuelta para el contrato local observado**: path de tareas, comprobación del resultado de eliminación y soporte de paths previos en la policy. D-02 se reduce: vistas de archivos usan URLs firmadas, pero `file_url` sigue persistiendo una URL generada por `getPublicUrl` aunque el bucket sea privado. Sin auditoría de seguridad ni prueba remota.
+Revisión focalizada 2026-10-21: D-03 sigue **parcialmente resuelta** por `AssigneeProfile`. D-04 queda **resuelta para el contrato observado**: path de tareas, comprobación del resultado de eliminación y soporte de paths previos en la policy. D-02 se reduce: vistas de archivos usan URLs firmadas, pero `file_url` sigue persistiendo una URL generada por `getPublicUrl` aunque el bucket sea privado. La migración y probes se ejecutaron en el proyecto Supabase seleccionado; esto no es auditoría de seguridad ni certifica otros entornos.
 
 ## 🔴 Crítica
 

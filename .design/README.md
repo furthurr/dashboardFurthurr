@@ -5,11 +5,10 @@ Documentación canónica de lo visual. Léela antes de añadir pantallas, compon
 ## Estado de sincronización
 
 - Tecnología detectada: React + TypeScript, Tailwind CSS v4 y CSS custom properties.
-- Commit base revisado: `81335b92bc1962a47c9c3bb963271c3667bc7b63` (2026-05-04); no incorpora los cambios locales.
+- Commit base revisado: `eb25418de42c045d6be32a3091f8bb3f36b24ba0` (2026-10-21), contiene el selector y los componentes de tableros documentados aquí.
 - Última actualización documental: 2026-10-21 (selección de tableros, gestión de miembros y traslado).
-- Estado: **pendiente de baseline Git**. La revisión describe el árbol local sin commit; no declara HEAD sincronizado ni sustituye el commit base revisado.
-- HEAD observado antes de la sincronización: `cd8c4c0e7979be59dcc5eebcfb784f528da48ac5`; no contiene los cambios locales documentados y no se registra como commit de sincronización.
-- Cambios concurrentes `ProfilePage`/`AccountMenu` localizados al cierre: solo se corrige la orientación de acceso a Usuarios; el inventario/validación completo de perfil y menú queda pendiente.
+- Sin cambios visuales relevantes posteriores a ese commit. El baseline cubre el selector de tableros; la revisión completa de `ProfilePage` y `AccountMenu` queda fuera de ese alcance.
+- La documentación de despliegue remoto y la release `v0.4.0` se preparan aparte; no alteran el sistema visual.
 - Revisión focalizada de notificaciones: cambios locales sobre `dfbf1be` (2026-10-16), documentados en [componentes](components.md#actualización--notificaciones-temporales-2026-10-16). No sustituye el baseline del inventario completo.
 - Revisión focalizada de adjuntos durante el alta de tareas (2026-10-19): selector múltiple, límite por archivo, estados de envío y fallos parciales documentados en [componentes](components.md). Se documenta el árbol de trabajo; no se registra un baseline Git nuevo.
 

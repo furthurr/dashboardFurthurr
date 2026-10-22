@@ -33,7 +33,7 @@
 - `/boards` exige cuenta activa y presenta solo tableros autorizados por RLS; `/board/:boardId` comprueba el acceso antes de cargar tareas; `/board` redirige a `/boards`. `/users` añade rol admin; `/register` redirige a `/users`; `/profile` y cuenta desde `AccountMenu`.
 - Cualquier cuenta activa, incluidos invitados, puede guardar responsables por separado y editar/mover cualquier tarea de un tablero accesible, sea propia o ajena. Crear tareas sigue reservado a admin/usuario; borrar, a quien creó la tarea o a un admin. No confundir la edición compartida con la creación ni con el borrado.
 - El acceso es por membresía explícita: admin activo ve todos los tableros; los demás solo los asignados. Ser responsable de tarea no concede acceso. Solo admin crea tableros y gestiona miembros; el traslado requiere acceso a origen y destino.
-- Migración local `supabase/migrations/202610210001_boards.sql`: existentes activos/tareas se asignan a Offline, General empieza vacío; no consta aplicada al remoto.
+- Migración `supabase/migrations/202610210001_boards.sql`: aplicada al proyecto Supabase elegido para Pages; tareas/cuentas activas existentes se asignaron a Offline y General empezó vacío. La SPA aún no está desplegada.
 - `specs/` conserva requisitos/intención de producto; actualiza la spec antes de implementar funcionalidad.
 - Contrasta cambios de persistencia con `supabase-schema.sql` y la matriz de `specs/05-auth-roles-permisos.md`.
 - Verifica comportamiento en el código y contratos: los índices de Navigator son orientación, no fuente de verdad.
@@ -60,7 +60,7 @@
 
 - Actualizado: 2026-10-21, contexto funcional de tableros; documentación sigue pendiente de baseline Git.
 - Source commit: omitido; working tree con cambios locales no incluidos en `HEAD`.
-- HEAD observado antes de actualizar: `cd8c4c0e7979be59dcc5eebcfb784f528da48ac5`, no baseline de los cambios documentados.
+- Commit base de implementación: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`; el estado operativo de Supabase y la release preparada después siguen sin commit.
 - Cambios concurrentes `ProfilePage`/`AccountMenu`: localizados para evitar rutas obsoletas; comportamiento completo y nuevas pruebas no sincronizados ni validados aquí.
 - Navigator root: `.`
 - Actualizado con: documentation-orchestrator, capas 0–1; símbolos y grafo permanecen deshabilitados. `config.yaml` se conservó.

@@ -24,7 +24,7 @@ Fuente: `supabase/functions/admin-users/index.ts:20-23`. Los placeholders no rep
 - El repositorio no permite verificar si los secretos están configurados en GitHub ni qué proyecto Supabase corresponde a cada entorno.
 - El build de Pages no despliega Edge Functions, migraciones ni ajustes de Auth. Las instalaciones existentes aplican `202610190001_user_administration.sql`, `202610200001_task_assignments.sql`, `202610200002_shared_task_editing.sql` y `202610210001_boards.sql` en orden; no se reejecuta el bootstrap completo (`supabase/README.md`). Sin la última migración, la UI de selección/membresías no es compatible con la base remota.
 - `supabase/config.toml` declara `auth.enable_signup = false` y `functions.admin-users.verify_jwt = false`; el segundo ajuste requiere la validación explícita implementada dentro de la función. Se conserva la confirmación global de correo: el alta administrativa confirma cada cuenta con `email_confirm: true`.
-- La migración de tableros no se aplicó ni verificó contra Supabase remoto; tampoco se comprobó publicación de esta versión de la SPA en Pages. Evidencia SQL disponible es local con PostgreSQL embebido y servicios Auth/Storage simulados.
+- La secuencia de migraciones, incluida la de tableros, se aplicó al proyecto Supabase seleccionado y los probes remotos finalizaron con `PASS`; esta versión aún no se ha publicado en Pages. También se ejecutaron probes locales con PostgreSQL embebido y Auth/Storage simulados.
 
 ## Higiene
 
