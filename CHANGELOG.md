@@ -1,5 +1,31 @@
 # Changelog
 
+## [v0.4.0] - 2026-10-21
+
+### Funcionalidades
+
+- Seleccionar un tablero después del inicio de sesión y volver al selector desde el Kanban.
+- Crear tableros como administrador y asignar o retirar miembros por tablero.
+- Trasladar tareas a otro tablero accesible conservando la tarea y sus relaciones.
+
+### Permisos y backend
+
+- Añadir las tablas `boards` y `board_members`, exigir `board_id` en cada tarea y restringir tareas y recursos asociados por RLS.
+- Crear `Offline` y `General`; las tareas existentes y cuentas activas existentes se asignan a `Offline`, mientras `General` empieza vacío.
+- Hacer que los traslados y la gestión de miembros se validen en RPCs; las asignaciones de tareas no conceden acceso a un tablero.
+- Usar Storage privado y enlaces firmados breves para adjuntos, incluyendo compatibilidad de lectura para paths anteriores.
+
+### Documentación y verificación
+
+- Actualizar modelos, contratos, permisos, flujo visual, arquitectura, índices y guía operativa de Supabase.
+- Verificar con `npm ci`, build, lint y 111 pruebas Vitest. Los probes SQL pasaron contra bootstrap y migración incremental en PostgreSQL local embebido con Auth/Storage simulados; Chromium verificó el flujo a 360/768/1440 px con backend simulado.
+
+### Notas de despliegue
+
+- En instalaciones existentes, aplicar `supabase/migrations/202610210001_boards.sql` después de las migraciones previas y antes de publicar esta SPA. El build de GitHub Pages no aplica SQL.
+- La secuencia de migraciones se aplicó y los probes SQL pasaron en el proyecto Supabase seleccionado el 2026-10-21. El push a `main` y la publicación en Pages siguen pendientes.
+- El build informa que el chunk JavaScript principal supera 500 kB. `npm ci` informa 11 vulnerabilidades en dependencias (1 baja, 1 moderada y 9 altas).
+
 ## [v0.3.0] - 2026-10-20
 
 ### Funcionalidades
