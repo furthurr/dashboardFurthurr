@@ -9,6 +9,7 @@ interface TaskCardProps {
   images?: TaskImagePreview[]
   isDragging?: boolean
   onClick?: () => void
+  onCommentClick?: () => void
   dragHandle?: ReactNode
   onMoveLeft?: () => void
   onMoveRight?: () => void
@@ -25,6 +26,7 @@ export function TaskCard({
   images = [],
   isDragging,
   onClick,
+  onCommentClick,
   dragHandle,
   onMoveLeft,
   onMoveRight,
@@ -35,7 +37,9 @@ export function TaskCard({
   canMoveUp,
   canMoveDown,
 }: TaskCardProps) {
-  const [previewImage, setPreviewImage] = useState<TaskImagePreview | null>(null)
+  const [previewImageId, setPreviewImageId] = useState<string | null>(null)
+  const previewIndex = previewImageId === null ? -1 : images.findIndex((image) => image.id === previewImageId)
+  const previewImage = previewIndex < 0 ? null : images[previewIndex]
 
   return (
     <>
@@ -81,7 +85,7 @@ export function TaskCard({
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation()
-                  setPreviewImage(image)
+                  setPreviewImageId(image.id)
                 }}
                 aria-label={`Ampliar imagen: ${image.fileName}`}
                 title={`Ampliar imagen: ${image.fileName}`}
@@ -93,7 +97,7 @@ export function TaskCard({
           </div>
         )}
 
-        {(task.assignees.length > 0 || task.comment_count !== undefined) && (
+        {(task.assignees.length > 0 || onCommentClick) && (
           <div className="mt-3 flex min-h-8 items-center justify-between gap-2">
             <div className="flex -space-x-2">
               {task.assignees.slice(0, 3).map((assignee, index) => (
@@ -113,20 +117,26 @@ export function TaskCard({
                 </div>
               )}
             </div>
-            {task.comment_count !== undefined && (
-              <span
-                role="img"
-                aria-label={`${task.comment_count} ${task.comment_count === 1 ? 'comentario' : 'comentarios'}`}
-                title={`${task.comment_count} ${task.comment_count === 1 ? 'comentario' : 'comentarios'}`}
-                className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center text-[var(--color-text-muted)]"
+            {onCommentClick && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onCommentClick()
+                }}
+                aria-label={`Ver comentarios de ${task.title}${task.comment_count === undefined ? '' : ` (${task.comment_count} ${task.comment_count === 1 ? 'comentario' : 'comentarios'})`}`}
+                title={task.comment_count === undefined ? 'Ver comentarios' : `${task.comment_count} ${task.comment_count === 1 ? 'comentario' : 'comentarios'}`}
+                className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]"
               >
                 <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-9.5A7.5 7.5 0 0 1 10.5 4h2A7.5 7.5 0 0 1 20 11.5Z" />
                 </svg>
-                <span aria-hidden="true" className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-[var(--color-surface)] bg-[var(--color-primary)] px-1 text-[9px] font-semibold leading-none tabular-nums text-[var(--color-on-primary)]">
-                  {task.comment_count}
-                </span>
-              </span>
+                {task.comment_count !== undefined && task.comment_count > 0 && (
+                  <span aria-hidden="true" className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-[var(--color-surface)] bg-[var(--color-primary)] px-1 text-[9px] font-semibold leading-none tabular-nums text-[var(--color-on-primary)]">
+                    {task.comment_count}
+                  </span>
+                )}
+              </button>
             )}
           </div>
         )}
@@ -208,13 +218,53 @@ export function TaskCard({
       </div>
 
       {previewImage && (
-        <Dialog title={previewImage.fileName} onClose={() => setPreviewImage(null)} className="max-w-6xl">
-          <div className="dialog-body grid place-items-center">
-            <img
-              src={previewImage.signedUrl}
-              alt={previewImage.fileName}
-              className="max-h-[75dvh] max-w-full rounded-[var(--radius-md)] object-contain"
-            />
+        <Dialog title={task.title} subtitle={previewImage.fileName} onClose={() => setPreviewImageId(null)} className="max-w-6xl">
+          <div className="dialog-body space-y-5">
+            <div className="relative flex min-h-56 w-full items-center justify-center overflow-hidden rounded-[var(--radius-md)] bg-[var(--color-surface)]">
+              <img
+                src={previewImage.signedUrl}
+                alt={previewImage.fileName}
+                className="max-h-[65dvh] max-w-full object-contain"
+              />
+              {images.length > 1 && <>
+                <button
+                  type="button"
+                  aria-label={`Imagen anterior de ${task.title}`}
+                  title="Imagen anterior"
+                  disabled={previewIndex <= 0}
+                  onClick={() => {
+                    const previousImage = images[previewIndex - 1]
+                    if (previousImage) setPreviewImageId(previousImage.id)
+                  }}
+                  className="ui-button ui-button--secondary absolute left-3 top-1/2 z-10 h-11 w-11 -translate-y-1/2 justify-center rounded-full p-0 shadow-lg"
+                >
+                  <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Imagen siguiente de ${task.title}`}
+                  title="Imagen siguiente"
+                  disabled={previewIndex >= images.length - 1}
+                  onClick={() => {
+                    const nextImage = images[previewIndex + 1]
+                    if (nextImage) setPreviewImageId(nextImage.id)
+                  }}
+                  className="ui-button ui-button--secondary absolute right-3 top-1/2 z-10 h-11 w-11 -translate-y-1/2 justify-center rounded-full p-0 shadow-lg"
+                >
+                  <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" />
+                  </svg>
+                </button>
+              </>}
+            </div>
+            <section aria-label="Descripción de la actividad" className="space-y-2">
+              <h3 className="text-sm font-semibold text-[var(--color-text)]">Descripción de la actividad</h3>
+              <p className="whitespace-pre-wrap text-sm text-[var(--color-text-muted)] [overflow-wrap:anywhere]">
+                {task.description?.trim() ? task.description : 'Esta tarea no tiene descripción.'}
+              </p>
+            </section>
           </div>
         </Dialog>
       )}

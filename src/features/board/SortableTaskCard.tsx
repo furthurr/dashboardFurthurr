@@ -8,6 +8,7 @@ interface SortableTaskCardProps {
   task: TaskWithAssignees
   images?: TaskImagePreview[]
   onClick?: () => void
+  onCommentClick?: () => void
   onMoveLeft?: () => void
   onMoveRight?: () => void
   onMoveUp?: () => void
@@ -22,6 +23,7 @@ export function SortableTaskCard({
   task,
   images,
   onClick,
+  onCommentClick,
   onMoveLeft,
   onMoveRight,
   onMoveUp,
@@ -54,6 +56,7 @@ export function SortableTaskCard({
         images={images}
         isDragging={isDragging}
         onClick={onClick}
+        onCommentClick={onCommentClick}
         dragHandle={
           <button
             ref={setActivatorNodeRef}

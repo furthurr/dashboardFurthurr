@@ -15,6 +15,7 @@ interface TaskDetailModalProps {
   comments: CommentWithAuthor[]
   attachments: TaskAttachment[]
   isOpen: boolean
+  initialTab?: 'details' | 'comments' | 'attachments'
   onClose: () => void
   onSave?: (data: { title: string; description: string; status: TaskStatus; priority: TaskPriority }) => Operation
   onDelete?: () => Operation
@@ -46,10 +47,10 @@ type Tab = typeof tabs[number]
 function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDelete,
   onAddComment, onDeleteComment, onUploadAttachment, onDeleteAttachment,
   canDeleteComments, canDeleteAttachments, commentsLoading, attachmentsLoading,
-  commentsError, attachmentsError, onSaveAssignees, assigneeOptions, boards = [], onMoveToBoard,
+  commentsError, attachmentsError, onSaveAssignees, assigneeOptions, boards = [], onMoveToBoard, initialTab = 'details',
 }: TaskDetailModalProps & { task: TaskWithAssignees }) {
   const id = useId()
-  const [activeTab, setActiveTab] = useState<Tab>('details')
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab)
   const [title, setTitle] = useState(task.title)
   const [description, setDescription] = useState(task.description ?? '')
   const [status, setStatus] = useState(task.status)

@@ -2,9 +2,13 @@
 
 Hallazgos visuales/documentales detectados en los componentes y estilos revisados. Esta revisión es documental: no se modificó UI ni se ejecutó una auditoría automatizada de accesibilidad.
 
+## Revisión focalizada — visor de imágenes de tareas, 2026-10-23
+
+El diálogo usa el título de tarea como nombre accesible y asocia el nombre del archivo como descripción (`src/shared/ui/Dialog.tsx:87-94`). La navegación usa botones con nombres accesibles, solo aparece con varias imágenes y deshabilita el sentido que no corresponde en los extremos; la descripción de la tarea queda debajo de la imagen (`src/features/board/TaskCard.tsx:220-267`). No se introduce un hallazgo de accesibilidad verificable nuevo ni tokens/clases CSS propios; las flechas SVG inline quedan dentro del hallazgo opcional R-02. Evidencia: 140 pruebas Vitest, TypeScript/build y lint correctos. No hubo revisión visual en navegador, prueba con lector de pantalla ni auditoría de contraste para este cambio.
+
 ## Revisión focalizada — indicador de comentarios, 2026-10-23
 
-`TaskCard` reutiliza colores existentes y nombra accesiblemente el conteo; el SVG declara `aria-hidden` (`src/features/board/TaskCard.tsx:116-127`). No aparece un hallazgo nuevo verificable de accesibilidad y las pruebas DOM no se presentan como auditoría visual, de contraste ni lector de pantalla. El SVG y la geometría local añaden un ejemplo al hallazgo opcional R-02 (iconografía inline y tamaños locales); no se propone una abstracción nueva para un único indicador. Evidencia: 135 pruebas Vitest, build y lint correctos; no hubo comprobación en navegador para esta entrega.
+`TaskCard` presenta el icono como botón con nombre accesible y foco visible; al activarlo abre el detalle en Comentarios. El badge se oculta con cero (`src/features/board/TaskCard.tsx:118-138`, `src/features/board/BoardPage.tsx:384-387`). No aparece un hallazgo nuevo verificable de accesibilidad, pero las pruebas DOM no se presentan como auditoría visual, de contraste ni lector de pantalla. El SVG y la geometría local siguen siendo un ejemplo del hallazgo opcional R-02; no se propone una abstracción nueva para un único icono. Evidencia: 139 pruebas Vitest, TypeScript, build y lint correctos; no hubo comprobación visual en navegador para esta entrega.
 
 ## Revisión focalizada — CTA de alta y pegado de imágenes, 2026-10-22
 
@@ -39,7 +43,7 @@ Estado basado en lectura del código en esa fecha; ese código ya está versiona
 | ID | Prioridad | Hallazgo y evidencia | Seguimiento documental/técnico |
 | --- | --- | --- | --- |
 | R-01 (U-03) | Baja | Excepciones directas: hover danger `#492636`, halo auth y backdrop (`src/index.css:175`, `src/index.css:137`, `src/index.css:146`); radios locales en adjunto/avatar excedente (`src/features/board/AttachmentsList.tsx:35`, `src/features/board/TaskCard.tsx:83`). | Evaluar consolidación si se reutilizan; la centralización actual no es total. |
-| R-02 (U-04) | Baja | Paths/trazos/tamaños SVG locales; el icono de comentarios también es inline y decorativo, mientras el indicador padre nombra el total (`src/features/board/TaskCard.tsx:116-127,136-138,159-203`). | Queda consolidación opcional de estilos de icono; no exige una abstracción compartida sin reutilización demostrada. |
+| R-02 (U-04) | Baja | Paths/trazos/tamaños SVG locales; el icono del botón de comentarios y las flechas anterior/siguiente son inline y decorativos, mientras sus botones ofrecen nombres accesibles (`src/features/board/TaskCard.tsx:129-138,145-147,167-211,241-258`). | Queda consolidación opcional de estilos de icono; no exige una abstracción compartida sin reutilización demostrada. |
 | R-03 | Corregida | En Chromium se reprodujo transición de tarjetas de 0s por duración inválida; `src/features/board/TaskCard.tsx:39` usa ahora `duration-150 ease-out`. | GREEN de estilo computado: 0,15s y 0,00001s con movimiento reducido. Evidencia en spec de entrega. |
 
 ### Evidencia de pruebas y límites

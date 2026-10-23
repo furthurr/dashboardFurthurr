@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useId, useRef, type ReactNode } from 'react'
 
 interface DialogProps {
   title: string
+  subtitle?: string
   onClose: () => void
   children: ReactNode
   busy?: boolean
@@ -20,8 +21,9 @@ function focusableElements(panel: HTMLElement) {
 }
 
 // Mount only while open; the consumer owns the dialog-body and dialog-footer children.
-export function Dialog({ title, onClose, children, busy = false, className = '', onPaste }: DialogProps) {
+export function Dialog({ title, subtitle, onClose, children, busy = false, className = '', onPaste }: DialogProps) {
   const titleId = useId()
+  const subtitleId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
   const closeFromKeyboard = useEffectEvent(() => {
     if (!busy) onClose()
@@ -83,9 +85,13 @@ export function Dialog({ title, onClose, children, busy = false, className = '',
       if (event.target === event.currentTarget) requestClose()
     }}>
       <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
+        aria-describedby={subtitle ? subtitleId : undefined}
         aria-busy={busy} tabIndex={-1} className={`dialog-panel ${className}`} onPaste={onPaste}>
         <header className="dialog-header">
-          <h2 id={titleId}>{title}</h2>
+          <div className="min-w-0 flex-1">
+            <h2 id={titleId}>{title}</h2>
+            {subtitle && <p id={subtitleId} className="mt-1 text-sm font-normal text-[var(--color-text-muted)] [overflow-wrap:anywhere]">{subtitle}</p>}
+          </div>
           <button type="button" aria-label="Cerrar diálogo" disabled={busy} onClick={requestClose}
             className="ui-button ui-button--secondary shrink-0 px-2">
             <svg aria-hidden="true" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

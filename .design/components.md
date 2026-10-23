@@ -2,19 +2,34 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
-## Actualización focalizada — globo de comentarios en tarjetas, 2026-10-23
+## Actualización focalizada — visor de imágenes y descripción de tarea, 2026-10-23
 
-Describe cambios locales de UI aún sin commit. `HEAD`, `main` y `origin/main` están en `01dc80c2180932c1e22d824638110f1b7df28e61`; la última publicación verificada sigue siendo `v0.6.0` (`21a44df`). Esta entrada describe el árbol de trabajo y no afirma que el indicador esté incluido en `HEAD` o publicado.
+Describe cambios de UI locales aún sin commit. `HEAD`, `main` y `origin/main` están en `9444ced119b66271530b5e8f0c0ba4260a6c0ced`; la SPA publicada verificada sigue en `v0.8.1` (workflow «Deploy to GitHub Pages», run `40004615822`). Esta entrada describe el árbol de trabajo, no afirma que el visor esté incluido en `HEAD` o publicado.
 
-No se añaden tokens, tema, paleta ni clases CSS propias. El icono es SVG inline; el globo usa tamaño y posición con utilities de Tailwind, borde del color de superficie y fondo/texto con las propiedades `--color-primary` y `--color-on-primary`. El icono y el número componen un indicador no interactivo con nombre accesible.
+No se añaden tokens ni clases CSS propias. El visor reutiliza `Dialog` y controles `ui-button`; sus flechas son SVG inline. El `Dialog` acepta un subtítulo opcional y lo asocia como descripción accesible, manteniendo el título de tarea como nombre del diálogo.
 
 | Componente/patrón | Propósito, estados y comportamiento | Fuente |
 | --- | --- | --- |
-| Indicador de comentarios de `TaskCard` | Alineado a la derecha de la fila de avatares, muestra icono de globo y el total de comentarios de la tarea, incluido `0`. `role="img"`, `aria-label` y `title` informan el conteo con singular/plural; el SVG decorativo y el número duplicado visualmente quedan ocultos a tecnologías de asistencia | `src/features/board/TaskCard.tsx:96-131`, `src/features/board/TaskCard.test.tsx:102-123` |
+| Visor de imágenes de `TaskCard` | Al abrir una miniatura, muestra el título de la tarea en el encabezado del diálogo y el nombre del archivo como subtítulo. La imagen ampliada conserva como texto alternativo su nombre; debajo aparece «Descripción de la actividad» con el texto completo y saltos de línea, o «Esta tarea no tiene descripción.» si está vacía. Cuando la tarea tiene varias imágenes, muestra controles accesibles anterior/siguiente que recorren solo la colección de esa tarea; se ocultan con una imagen y se deshabilitan en los extremos | `src/features/board/TaskCard.tsx:80-95,220-267`, `src/shared/ui/Dialog.tsx:3-10,24-26,87-94` |
+| Subtítulo opcional de `Dialog` | Se renderiza bajo el título, con tipografía `text-sm` y color muted existentes; `aria-labelledby` identifica el título y `aria-describedby` asocia el subtítulo. Los diálogos sin `subtitle` conservan su presentación y semántica previas | `src/shared/ui/Dialog.tsx:3-10,24-26,87-94` |
 
 ### Verificación y límites
 
-135 pruebas Vitest en 16 archivos, `npm run build` y `npm run lint` correctos; persiste el aviso de chunk principal >500 kB. Las pruebas DOM comprueban el cero, un valor de dos cifras, la ubicación en la fila y el nombre accesible. No se hizo revisión visual en navegador, prueba con lector de pantalla ni auditoría de contraste para este indicador.
+140 pruebas Vitest en 16 archivos, `npm run build` y `npm run lint` correctos; el build conserva el aviso de chunk principal >500 kB. Las pruebas DOM comprueban título/subtítulo, descripción, ausencia de flechas con una imagen y navegación/estados de extremos con varias imágenes (`src/features/board/TaskCard.test.tsx:143-190`, `src/features/board/BoardPage.test.tsx:279-289`). No se hizo una nueva revisión visual en navegador, auditoría de contraste ni prueba con lector de pantalla para este cambio. El visor no está publicado.
+
+## Actualización focalizada — acción y badge de comentarios en tarjetas, 2026-10-23
+
+Describe cambios locales de UI aún sin commit. `HEAD`, `main` y `origin/main` están en `9444ced119b66271530b5e8f0c0ba4260a6c0ced`; la última publicación verificada es `v0.8.1` (workflow de Pages, run `40004615822`). Esta entrada describe el árbol de trabajo y no afirma que la nueva interacción esté incluida en `HEAD` o publicada.
+
+No se añaden tokens, tema, paleta ni clases CSS propias. El icono es SVG inline; el botón usa colores y foco existentes. El botón permanece disponible con cero o con conteo desconocido, y su nombre accesible incluye el total cuando está disponible. El badge visual se omite con cero y solo se superpone cuando hay comentarios.
+
+| Componente/patrón | Propósito, estados y comportamiento | Fuente |
+| --- | --- | --- |
+| Botón de comentarios de `TaskCard` | Alineado a la derecha de la fila de avatares. Al activarlo, selecciona la tarea y abre su detalle en la pestaña «Comentarios»; evita propagar el clic al botón del título. `aria-label` nombra la acción y el total con singular/plural. El badge superpuesto aparece solo si el conteo es mayor que cero; con cero queda el icono sin badge | `src/features/board/TaskCard.tsx:98-138`, `src/features/board/BoardColumn.tsx:12-18,40-50`, `src/features/board/BoardPage.tsx:74-80,384-387`, `src/features/board/TaskDetailModal.tsx:15-16,50-55,158-174`, `src/features/board/TaskCard.test.tsx:102-136`, `src/features/board/BoardPage.test.tsx:90-101` |
+
+### Verificación y límites
+
+139 pruebas Vitest en 16 archivos, `npm run build`, TypeScript y `npm run lint` correctos. Las pruebas DOM comprueban el clic y la pestaña inicial, el nombre accesible, la posición junto a avatares y que cero no genere badge. No se hizo revisión visual en navegador, prueba con lector de pantalla ni auditoría de contraste para este cambio. Esta interacción todavía no está publicada.
 
 ## Actualización focalizada — alta rápida y pegado de imágenes, 2026-10-22
 

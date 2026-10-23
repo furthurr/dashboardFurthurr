@@ -86,6 +86,19 @@ describe('Integración del tablero', () => {
     view.rerender(<MemoryRouter><BoardPage boardId="offline" boardName="Offline" boards={[]} /></MemoryRouter>)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
+
+  it('abre directamente la pestaña Comentarios desde el icono de la tarjeta', async () => {
+    const user = userEvent.setup()
+    mocks.tasks.mockReturnValue({ data: [{ ...task, comment_count: 0 }], isLoading: false, error: null, refetch: mocks.refetch })
+    renderBoard()
+
+    await user.click(screen.getByRole('button', { name: `Ver comentarios de ${task.title} (0 comentarios)` }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Detalle de tarea' })
+    expect(within(dialog).getByRole('tab', { name: 'Comentarios (0)' })).toHaveAttribute('aria-selected', 'true')
+    expect(within(dialog).getByLabelText('Nuevo comentario')).toBeVisible()
+  })
+
   it('filtra por cualquiera de las personas, sin duplicados, y recupera Todos al quitar la última', async () => {
     const user = userEvent.setup()
     mocks.users.mockReturnValue({ data: [ana, bruno], isLoading: false, error: null })
@@ -271,7 +284,7 @@ describe('Integración del tablero', () => {
     renderBoard()
 
     await user.click(screen.getByRole('button', { name: 'Ampliar imagen: referencia.png' }))
-    expect(screen.getByRole('dialog', { name: 'referencia.png' })).toBeVisible()
+    expect(screen.getByRole('dialog', { name: task.title, description: 'referencia.png' })).toBeVisible()
     expect(screen.getByRole('img', { name: 'referencia.png' })).toHaveAttribute('src', 'https://example.test/referencia.png')
   })
 

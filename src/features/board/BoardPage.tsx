@@ -48,6 +48,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
   const [optimisticTasks, setOptimisticTasks] = useState<TaskWithAssignees[] | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [initialDetailTab, setInitialDetailTab] = useState<'details' | 'comments'>('details')
   const assignableUsers = useAssignableUsers(true)
   const [filterUserIds, setFilterUserIds] = useState<string[]>([])
   const setTaskAssignees = useSetTaskAssignees()
@@ -68,6 +69,12 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
   const assigneeOptions = {
     users: assignableUsers.data ?? [], loading: assignableUsers.isLoading,
     error: Boolean(assignableUsers.error), onRetry: () => { void assignableUsers.refetch() },
+  }
+
+  function openTaskDetail(task: TaskWithAssignees, initialTab: 'details' | 'comments' = 'details') {
+    setSelectedTask(task)
+    setInitialDetailTab(initialTab)
+    setIsDetailOpen(true)
   }
 
   // A transfer/deletion by another session must not leave a stale detail open.
@@ -377,10 +384,8 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
                     label={col.label}
                     tasks={visibleTasksByColumn[col.id]}
                     taskImages={taskImages}
-                    onTaskClick={(task) => {
-                      setSelectedTask(task)
-                      setIsDetailOpen(true)
-                    }}
+                    onTaskClick={(task) => openTaskDetail(task)}
+                    onTaskCommentsClick={(task) => openTaskDetail(task, 'comments')}
                     onMoveTask={handleMoveTask}
                     onMoveTaskVertical={handleMoveTaskVertical}
                   />
@@ -415,6 +420,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
             setNotice('Tarea trasladada al tablero seleccionado.')
           } : undefined}
           task={selectedTaskId ? selectedTask : null}
+          initialTab={initialDetailTab}
           comments={comments}
           attachments={attachments}
           commentsLoading={commentsLoading}
