@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.9.0] - 2026-10-23
+
+### Funcionalidades
+
+- Abrir directamente «Comentarios» desde una tarjeta Kanban y mostrar el badge solo cuando hay comentarios.
+- Ampliar imágenes mostrando el título de la tarea, el nombre del archivo y la descripción, con navegación entre las imágenes de esa tarea.
+
+### Documentación y verificación
+
+- Actualizar el catálogo visual y la guía del proyecto; la ampliación detallada de la spec UX permanece pendiente por el límite efectivo de escritura del host.
+- Verificar 140 pruebas Vitest, TypeScript, lint y build correctos; el build conserva el aviso de chunk principal superior a 500 kB.
+
 ## [v0.8.1] - 2026-10-23
 
 ### Correcciones
