@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.8.1] - 2026-10-23
+
+### Correcciones
+
+- Evitar que el fallo de `tasks_with_stats` impida cargar el tablero: consultar por IDs de tareas y contar desde `comments` como fallback paginado.
+- No añadir ni solicitar `board_id` a la vista, que puede proceder de una instalación donde la columna se añadió después de crearla.
+
+### Verificación
+
+- Verificar 138 pruebas Vitest, `tsc -b`, `npm run lint` y build de Vite correctos.
+
 ## [v0.8.0] - 2026-10-23
 
 ### Funcionalidades
