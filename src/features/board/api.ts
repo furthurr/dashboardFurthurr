@@ -2,36 +2,72 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { type TaskWithAssignees, type TaskStatus, type TaskPriority, type AssigneeProfile, type Task } from '@/types'
 
+async function fetchCommentCountsFromComments(taskIds: string[]): Promise<Map<string, number> | undefined> {
+  const pageSize = 1000
+  const counts = new Map(taskIds.map((taskId) => [taskId, 0]))
+
+  for (let offset = 0; ; offset += pageSize) {
+    try {
+      const { data, error } = await supabase
+        .from('comments')
+        .select('task_id')
+        .in('task_id', taskIds)
+        .range(offset, offset + pageSize - 1)
+
+      if (error || !data) return undefined
+
+      for (const comment of data) {
+        counts.set(comment.task_id, (counts.get(comment.task_id) ?? 0) + 1)
+      }
+
+      if (data.length < pageSize) return counts
+    } catch {
+      return undefined
+    }
+  }
+}
+
 export async function fetchTasks(boardId: string): Promise<TaskWithAssignees[]> {
-  const [tasksResult, statsResult] = await Promise.all([
-    supabase
-      .from('tasks')
-      .select(`
-        *,
-        task_assignees(profile_id, profiles(id, full_name, email, avatar_url, role, is_active))
-      `)
-      .eq('board_id', boardId)
-      .order('position'),
-    supabase
-      .from('tasks_with_stats')
-      .select('id, comment_count')
-      .eq('board_id', boardId),
-  ])
+  const tasksResult = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      task_assignees(profile_id, profiles(id, full_name, email, avatar_url, role, is_active))
+    `)
+    .eq('board_id', boardId)
+    .order('position')
 
   if (tasksResult.error) throw tasksResult.error
-  if (statsResult.error) throw statsResult.error
 
-  const commentCounts = new Map<string, number>()
-  for (const stat of statsResult.data ?? []) {
-    commentCounts.set(stat.id, Number(stat.comment_count))
+  const taskRows = tasksResult.data ?? []
+  if (taskRows.length === 0) return []
+
+  const taskIds = taskRows.map((task) => task.id)
+  let commentCounts: Map<string, number> | undefined
+  try {
+    const { data, error } = await supabase
+      .from('tasks_with_stats')
+      .select('id, comment_count')
+      // Older deployed views were created before tasks.board_id existed, so they
+      // can expose id/counts without exposing board_id for PostgREST filtering.
+      .in('id', taskIds)
+
+    if (!error) {
+      commentCounts = new Map((data ?? []).map((stat) => [stat.id, Number(stat.comment_count)]))
+    }
+  } catch {
+    // A stats-view failure must not make the whole board unavailable.
   }
+  commentCounts ??= await fetchCommentCountsFromComments(taskIds)
 
-  return (tasksResult.data || []).map((task: Record<string, unknown>) => ({
+  return taskRows.map((task: Record<string, unknown>) => ({
     ...task,
     assignees: ((task.task_assignees as Array<{ profiles: unknown }>) || []).map(
       (ta) => ta.profiles
     ).filter(Boolean),
-    comment_count: commentCounts.get(task.id as string) ?? 0,
+    ...(commentCounts
+      ? { comment_count: commentCounts.get(task.id as string) ?? 0 }
+      : {}),
   })) as TaskWithAssignees[]
 }
 
