@@ -1,6 +1,14 @@
 # Deuda técnica de UI
 
-Hallazgos visuales/documentales detectados en los componentes y estilos revisados. No se modificó UI ni se ejecutó una auditoría automatizada de accesibilidad.
+Hallazgos visuales/documentales detectados en los componentes y estilos revisados. Esta revisión es documental: no se modificó UI ni se ejecutó una auditoría automatizada de accesibilidad.
+
+## Revisión focalizada — indicador de comentarios, 2026-10-23
+
+`TaskCard` reutiliza colores existentes y nombra accesiblemente el conteo; el SVG declara `aria-hidden` (`src/features/board/TaskCard.tsx:116-127`). No aparece un hallazgo nuevo verificable de accesibilidad y las pruebas DOM no se presentan como auditoría visual, de contraste ni lector de pantalla. El SVG y la geometría local añaden un ejemplo al hallazgo opcional R-02 (iconografía inline y tamaños locales); no se propone una abstracción nueva para un único indicador. Evidencia: 135 pruebas Vitest, build y lint correctos; no hubo comprobación en navegador para esta entrega.
+
+## Revisión focalizada — CTA de alta y pegado de imágenes, 2026-10-22
+
+El CTA `.board-create-fab` reutiliza el estilo primario, `--space-4`, `--shadow-panel` y los insets de área segura; su diámetro de `3.5rem` y el SVG de `1.5rem` son dimensiones locales (`src/index.css:93-98`). Es un único control específico, por lo que no se registra deuda por falta de token compartido; reconsiderar una abstracción solo si aparece otra acción flotante que reutilice esta geometría. El botón tiene nombre accesible y el SVG decorativo declara `aria-hidden` (`src/features/board/BoardPage.tsx:467-478`). No se encontró un hallazgo nuevo verificable de accesibilidad; las pruebas DOM no sustituyen una inspección visual ni una prueba con lector de pantalla.
 
 ## Revisión focalizada — 2026-10-22 (ciclo de vida de tableros)
 
@@ -31,7 +39,7 @@ Estado basado en lectura del código en esa fecha; ese código ya está versiona
 | ID | Prioridad | Hallazgo y evidencia | Seguimiento documental/técnico |
 | --- | --- | --- | --- |
 | R-01 (U-03) | Baja | Excepciones directas: hover danger `#492636`, halo auth y backdrop (`src/index.css:175`, `src/index.css:137`, `src/index.css:146`); radios locales en adjunto/avatar excedente (`src/features/board/AttachmentsList.tsx:35`, `src/features/board/TaskCard.tsx:83`). | Evaluar consolidación si se reutilizan; la centralización actual no es total. |
-| R-02 (U-04) | Baja | Paths/trazos/tamaños SVG locales; los decorativos de movimiento ya declaran `aria-hidden` (`src/features/board/TaskCard.tsx:110-165`). | Queda consolidación opcional de estilos de icono; no exige una abstracción compartida sin reutilización demostrada. |
+| R-02 (U-04) | Baja | Paths/trazos/tamaños SVG locales; el icono de comentarios también es inline y decorativo, mientras el indicador padre nombra el total (`src/features/board/TaskCard.tsx:116-127,136-138,159-203`). | Queda consolidación opcional de estilos de icono; no exige una abstracción compartida sin reutilización demostrada. |
 | R-03 | Corregida | En Chromium se reprodujo transición de tarjetas de 0s por duración inválida; `src/features/board/TaskCard.tsx:39` usa ahora `duration-150 ease-out`. | GREEN de estilo computado: 0,15s y 0,00001s con movimiento reducido. Evidencia en spec de entrega. |
 
 ### Evidencia de pruebas y límites

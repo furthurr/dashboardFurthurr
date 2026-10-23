@@ -7,6 +7,7 @@ import { BOARD_COLUMNS, PRIORITY_COLORS } from './constants'
 import { CommentsList } from './CommentsList'
 import { AttachmentsList } from './AttachmentsList'
 import { AssigneePicker, type AssigneeOptions } from './AssigneePicker'
+import { getClipboardImages } from './clipboardImages'
 
 type Operation = void | Promise<unknown>
 interface TaskDetailModalProps {
@@ -113,6 +114,32 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
     if (fileRef.current) fileRef.current.value = ''
   }
 
+  function handleAttachmentFile(nextFile: File | null) {
+    setError(null)
+    if (!nextFile) {
+      setFile(null)
+      return
+    }
+    if (nextFile.size > 5 * 1024 * 1024) {
+      setError('El archivo debe ser de 5 MB o menos.')
+      setFile(null)
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
+
+    setFile(nextFile)
+    void uploadAttachment(nextFile)
+  }
+
+  function handlePaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    if (activeTab !== 'attachments' || busy || !onUploadAttachment) return
+    const nextFile = getClipboardImages(event.clipboardData)[0]
+    if (!nextFile) return
+
+    event.preventDefault()
+    handleAttachmentFile(nextFile)
+  }
+
   async function removeConfirmed() {
     if (!confirmDelete) return
     const { kind, id: itemId } = confirmDelete
@@ -126,7 +153,7 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
   }
 
   return (
-    <Dialog title="Detalle de tarea" onClose={onClose} busy={busy}>
+    <Dialog title="Detalle de tarea" onClose={onClose} busy={busy} onPaste={handlePaste}>
       <Toast notice={notice} onClose={dismissNotice} />
       <div role="tablist" aria-label="Contenido de la tarea" className="task-tabs">
         {tabs.map((tab, index) => (
@@ -221,18 +248,12 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
         <section role="tabpanel" id={`${id}-attachments-panel`} aria-labelledby={`${id}-attachments-tab`} hidden={activeTab !== 'attachments'} className="space-y-5">
           {onUploadAttachment && <div className="space-y-3">
             <p id={`${id}-file-hint`} className="ui-label">Añadir archivo · máximo 5 MB</p>
+            <p className="text-sm text-[var(--color-text-muted)]">También puedes pegar una imagen con Ctrl+V / ⌘+V.</p>
             <input ref={fileRef} type="file" id={`${id}-file`} className="sr-only" tabIndex={-1} aria-hidden="true" disabled={busy}
               onChange={(event) => {
                 const next = event.target.files?.[0] ?? null
-                setError(null)
-                if (next && next.size > 5 * 1024 * 1024) {
-                  setError('El archivo debe ser de 5 MB o menos.')
-                  setFile(null)
-                  event.target.value = ''
-                } else if (next) {
-                  setFile(next)
-                  void uploadAttachment(next)
-                } else setFile(null)
+                handleAttachmentFile(next)
+                if (next && next.size > 5 * 1024 * 1024) event.target.value = ''
               }} />
             <div className="flex flex-wrap items-center gap-3">
               <button type="button" className="ui-button ui-button--secondary" aria-describedby={`${id}-file-hint`}

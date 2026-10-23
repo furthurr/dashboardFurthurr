@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { TaskDetailModal } from './TaskDetailModal'
@@ -45,6 +45,17 @@ describe('Traslado de tareas entre tableros', () => {
   })
 })
 const base = { task, comments: [], attachments: [], isOpen: true, onClose: vi.fn() }
+
+function createImagePasteEvent(file: File) {
+  const event = new Event('paste', { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      items: [{ kind: 'file', type: file.type, getAsFile: () => file }],
+      files: [],
+    },
+  })
+  return event
+}
 
 describe('Detalle de tarea', () => {
   it('precarga responsables, permite desasignarlos todos sin callback de guardado y mantiene el detalle abierto', async () => {
@@ -274,6 +285,40 @@ describe('Detalle de tarea', () => {
     expect(input.files).toHaveLength(0)
     expect(screen.getByText('Ningún archivo seleccionado')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('Archivo adjuntado.')
+  })
+
+  it('sube automáticamente la imagen pegada mientras está abierta la pestaña Adjuntos y valida los 5 MB', async () => {
+    const user = userEvent.setup()
+    let resolveUpload!: () => void
+    const onUploadAttachment = vi.fn(() => new Promise<void>((resolve) => { resolveUpload = resolve }))
+    render(<TaskDetailModal {...base} onUploadAttachment={onUploadAttachment} />)
+    const dialog = screen.getByRole('dialog')
+    const image = new File(['contenido'], 'captura.png', { type: 'image/png' })
+    const inactivePaste = createImagePasteEvent(image)
+
+    fireEvent(dialog, inactivePaste)
+    expect(inactivePaste.defaultPrevented).toBe(false)
+    expect(onUploadAttachment).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('tab', { name: /adjuntos/i }))
+    const oversized = new File(['contenido'], 'grande.png', { type: 'image/png' })
+    Object.defineProperty(oversized, 'size', { value: 5 * 1024 * 1024 + 1 })
+    const oversizedPaste = createImagePasteEvent(oversized)
+    fireEvent(dialog, oversizedPaste)
+    expect(oversizedPaste.defaultPrevented).toBe(true)
+    expect(screen.getByRole('alert')).toHaveTextContent('El archivo debe ser de 5 MB o menos.')
+    expect(onUploadAttachment).not.toHaveBeenCalled()
+
+    const paste = createImagePasteEvent(image)
+    fireEvent(dialog, paste)
+    expect(paste.defaultPrevented).toBe(true)
+    expect(onUploadAttachment).toHaveBeenCalledExactlyOnceWith(image)
+    expect(screen.getByText('Subiendo captura.png…')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Seleccionar archivo' })).toBeDisabled()
+
+    await act(async () => { resolveUpload() })
+    expect(screen.getByRole('status')).toHaveTextContent('Archivo adjuntado.')
+    expect(screen.getByText('Ningún archivo seleccionado')).toBeInTheDocument()
   })
 
   it('si la subida falla conserva el nombre y permite reintentar seleccionando de nuevo el archivo', async () => {

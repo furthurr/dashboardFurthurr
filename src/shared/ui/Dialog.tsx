@@ -6,6 +6,7 @@ interface DialogProps {
   children: ReactNode
   busy?: boolean
   className?: string
+  onPaste?: React.ClipboardEventHandler<HTMLDivElement>
 }
 
 const focusableSelector = 'a[href], button, input:not([type="hidden"]), textarea, select, [tabindex]'
@@ -19,7 +20,7 @@ function focusableElements(panel: HTMLElement) {
 }
 
 // Mount only while open; the consumer owns the dialog-body and dialog-footer children.
-export function Dialog({ title, onClose, children, busy = false, className = '' }: DialogProps) {
+export function Dialog({ title, onClose, children, busy = false, className = '', onPaste }: DialogProps) {
   const titleId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
   const closeFromKeyboard = useEffectEvent(() => {
@@ -82,7 +83,7 @@ export function Dialog({ title, onClose, children, busy = false, className = '' 
       if (event.target === event.currentTarget) requestClose()
     }}>
       <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        aria-busy={busy} tabIndex={-1} className={`dialog-panel ${className}`}>
+        aria-busy={busy} tabIndex={-1} className={`dialog-panel ${className}`} onPaste={onPaste}>
         <header className="dialog-header">
           <h2 id={titleId}>{title}</h2>
           <button type="button" aria-label="Cerrar diálogo" disabled={busy} onClick={requestClose}

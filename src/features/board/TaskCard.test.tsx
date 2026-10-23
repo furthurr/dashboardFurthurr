@@ -99,15 +99,27 @@ describe('TaskCard: apertura y movimiento independientes', () => {
     expect(screen.queryByRole('button', { name: 'Mover a la lista siguiente' })).toBeNull()
   })
 
-  it('muestra prioridad textual y contadores disponibles, incluido cero', () => {
+  it('muestra la prioridad y el contador de comentarios como globo, incluido cero', () => {
     const { rerender } = render(<SortableTaskCard task={{ ...task, comment_count: 0, attachment_count: 2 }} />)
     expect(screen.getByText('Prioridad alta')).toBeTruthy()
-    expect(screen.getByText('0 comentarios')).toBeTruthy()
+    expect(screen.getByRole('img', { name: '0 comentarios' })).toBeTruthy()
+    expect(screen.getByText('0', { selector: 'span[aria-hidden="true"]' })).toBeTruthy()
     expect(screen.getByText('2 adjuntos')).toBeTruthy()
 
     rerender(<SortableTaskCard task={task} />)
-    expect(screen.queryByText(/\d+ comentarios/)).toBeNull()
+    expect(screen.queryByRole('img', { name: /\d+ comentarios/ })).toBeNull()
     expect(screen.queryByText(/\d+ adjuntos/)).toBeNull()
+  })
+
+  it('coloca el globo a la derecha de los avatares y expone el conteo accesible', () => {
+    const assignee = { id: 'person-1', full_name: 'Ana López', email: 'ana@example.test', avatar_url: null, role: 'usuario' as const, is_active: true }
+    render(<SortableTaskCard task={{ ...task, assignees: [assignee], comment_count: 12 }} />)
+
+    const assigneeAvatar = screen.getByTitle('Ana López')
+    const commentIndicator = screen.getByRole('img', { name: '12 comentarios' })
+    expect(assigneeAvatar.parentElement?.parentElement).toBe(commentIndicator.parentElement)
+    expect(commentIndicator).toHaveAttribute('title', '12 comentarios')
+    expect(screen.getByText('12', { selector: 'span[aria-hidden="true"]' })).toBeTruthy()
   })
 
   it('muestra la descripción completa conservando saltos de línea', () => {

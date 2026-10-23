@@ -178,7 +178,7 @@ El cliente obtiene URLs firmadas de 60 segundos para detalle y miniaturas, refre
 
 - `tasks_with_assignees`: agrega datos de perfiles asignados (`supabase-schema.sql:408-424`).
 - `tasks_with_stats`: calcula conteos distintos de comentarios y adjuntos (`supabase-schema.sql:426-435`).
-- Las consultas de `src/features/board/api.ts` revisadas no usan estas vistas (`src/features/board/api.ts:5-21`).
+- `fetchTasks` usa `tasks_with_stats` solo para `id` y `comment_count`; los perfiles asignados se siguen leyendo mediante relación directa desde `tasks`. No solicita el `attachment_count` disponible en la vista (`src/features/board/api.ts:5-35`).
 - Ambas vistas se alteran con `security_invoker = true` para respetar los permisos/RLS del llamador (`supabase/migrations/202610190001_user_administration.sql:54-56`).
 
 ## Coherencia referencial pendiente

@@ -2,6 +2,36 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
+## Actualización focalizada — globo de comentarios en tarjetas, 2026-10-23
+
+Describe cambios locales de UI aún sin commit. `HEAD`, `main` y `origin/main` están en `01dc80c2180932c1e22d824638110f1b7df28e61`; la última publicación verificada sigue siendo `v0.6.0` (`21a44df`). Esta entrada describe el árbol de trabajo y no afirma que el indicador esté incluido en `HEAD` o publicado.
+
+No se añaden tokens, tema, paleta ni clases CSS propias. El icono es SVG inline; el globo usa tamaño y posición con utilities de Tailwind, borde del color de superficie y fondo/texto con las propiedades `--color-primary` y `--color-on-primary`. El icono y el número componen un indicador no interactivo con nombre accesible.
+
+| Componente/patrón | Propósito, estados y comportamiento | Fuente |
+| --- | --- | --- |
+| Indicador de comentarios de `TaskCard` | Alineado a la derecha de la fila de avatares, muestra icono de globo y el total de comentarios de la tarea, incluido `0`. `role="img"`, `aria-label` y `title` informan el conteo con singular/plural; el SVG decorativo y el número duplicado visualmente quedan ocultos a tecnologías de asistencia | `src/features/board/TaskCard.tsx:96-131`, `src/features/board/TaskCard.test.tsx:102-123` |
+
+### Verificación y límites
+
+135 pruebas Vitest en 16 archivos, `npm run build` y `npm run lint` correctos; persiste el aviso de chunk principal >500 kB. Las pruebas DOM comprueban el cero, un valor de dos cifras, la ubicación en la fila y el nombre accesible. No se hizo revisión visual en navegador, prueba con lector de pantalla ni auditoría de contraste para este indicador.
+
+## Actualización focalizada — alta rápida y pegado de imágenes, 2026-10-22
+
+Describe cambios locales de UI aún sin commit. El baseline Git consultado es `main` = `origin/main` = `83dacec5bf207ba9105742cd9ba28c5c4ae85a05` (2026-10-22); la release de producto sigue siendo `v0.6.0` (`21a44df`). El árbol de trabajo contiene los cambios descritos abajo, así que este registro no afirma que estén incluidos en `HEAD`.
+
+No se añaden tokens, paleta, tema ni tipografía. El CTA flotante reutiliza `ui-button--primary`, `--space-4` y `--shadow-panel`; su geometría particular es local en `.board-create-fab` (`src/index.css:93-98`). El texto de ayuda usa el color muted existente.
+
+| Componente/patrón | Propósito, estados y comportamiento | Fuente |
+| --- | --- | --- |
+| CTA flotante de creación | Añade «Crear tarea» fijo en la esquina inferior derecha, con offsets para el área segura, nombre accesible y SVG decorativo oculto; abre el mismo diálogo que «+ Nueva Tarea». Solo se muestra a cuentas distintas de invitado. | `src/features/board/BoardPage.tsx:337-345,467-479`, `src/index.css:97-98` |
+| `CreateTaskModal` — pegado | Ctrl+V / ⌘+V añade las imágenes del portapapeles a la selección existente. Reutiliza el límite de 5 MB y el aviso de archivos rechazados; el texto normal no se intercepta. La subida sigue ocurriendo después de crear la tarea. | `src/features/board/CreateTaskModal.tsx:45-75,114-127`, `src/features/board/clipboardImages.ts:1-24`, `src/shared/ui/Dialog.tsx:84-96` |
+| `TaskDetailModal` — pegado en Adjuntos | Solo cuando está activa esa pestaña, pegar una imagen inicia la subida automáticamente; se conserva el límite de 5 MB y el estado/feedback existentes. | `src/features/board/TaskDetailModal.tsx:109-141,248-263`, `src/features/board/clipboardImages.ts:1-24` |
+
+### Verificación y límites
+
+133 pruebas Vitest en 15 archivos, `npm run build` y `npm run lint` correctos. El build conserva el aviso de chunk principal >500 kB. Las nuevas pruebas simulan el evento de portapapeles en jsdom; no se hizo una prueba con portapapeles real en navegador, revisión visual responsive ni auditoría WCAG/lector de pantalla.
+
 ## Actualización — ciclo de vida de tableros, 2026-10-22
 
 Describe el release `v0.6.0` (commit `21a44df`), ya versionado: el baseline Git no queda pendiente. No añade tokens, paleta, tema ni tipografía: la única clase visual nueva es `.ui-badge`, que reutiliza `--color-border`, `--radius-sm`, `--color-surface-elevated`, `--color-text`, `--space-2` y `--text-xs` (`src/index.css:139`).

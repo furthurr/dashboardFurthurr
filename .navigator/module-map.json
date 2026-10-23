@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-10-22T22:54:41Z",
-  "source_commit": "daa40fdd6b1ff75dccf0d6ecd10b4d54c443d5b0",
+  "generated_at": "2026-10-23T01:22:33Z",
+  "source_commit": "83dacec5bf207ba9105742cd9ba28c5c4ae85a05",
   "root": ".",
   "modules": [
     {
@@ -28,7 +28,7 @@
       "id": "board",
       "name": "Tablero Kanban",
       "path": "src/features/board",
-      "responsibility": "Presenta tareas, comentarios, adjuntos y ordenamiento en el tablero activo, con creación/asignaciones RPC y edición compartida dentro del acceso por membresía.",
+      "responsibility": "Presenta tareas, comentarios, adjuntos y ordenamiento en el tablero activo, con acceso rápido al alta, pegado de imágenes, creación/asignaciones RPC y edición compartida dentro del acceso por membresía.",
       "kind": "feature",
       "tech": ["React", "TypeScript", "TanStack Query", "dnd-kit"],
       "entrypoints": ["src/features/board/BoardPage.tsx"],
@@ -92,7 +92,7 @@
       "id": "global-styles",
       "name": "Estilos globales",
       "path": "src/index.css",
-      "responsibility": "Define Tailwind, paleta oscura, custom properties, clases compartidas ui-* (incluido .ui-badge) y reglas globales de foco/movimiento.",
+      "responsibility": "Define Tailwind, paleta oscura, custom properties, clases compartidas ui-* (incluidos .ui-badge y .board-create-fab) y reglas globales de foco/movimiento.",
       "kind": "other",
       "tech": ["CSS", "Tailwind CSS v4"],
       "entrypoints": ["src/index.css"],

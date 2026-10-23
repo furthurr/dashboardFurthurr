@@ -4,6 +4,7 @@ import { type TaskStatus, type TaskPriority } from '@/types'
 import { BOARD_COLUMNS } from './constants'
 import { PRIORITY_COLORS } from './constants'
 import { AssigneePicker, type AssigneeOptions } from './AssigneePicker'
+import { getClipboardImages } from './clipboardImages'
 
 interface CreateTaskModalProps {
   isOpen: boolean
@@ -41,8 +42,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, isLoading, errorMes
     onSubmit({ title: title.trim(), description: description.trim() || undefined, status, priority, files, assigneeIds })
   }
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(event.currentTarget.files ?? [])
+  const addFiles = (selectedFiles: File[]) => {
     if (selectedFiles.length === 0) return
 
     const maxFileSize = 5 * 1024 * 1024
@@ -53,12 +53,25 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, isLoading, errorMes
     setFileError(oversizedFiles.length > 0
       ? `No se añadieron archivos superiores a 5 MB: ${oversizedFiles.map((file) => file.name).join(', ')}.`
       : null)
+  }
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    addFiles(Array.from(event.currentTarget.files ?? []))
     // Permite volver a elegir el mismo archivo si se quitó de la lista.
     event.currentTarget.value = ''
   }
 
+  const handlePaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    if (isLoading) return
+    const images = getClipboardImages(event.clipboardData)
+    if (images.length === 0) return
+
+    event.preventDefault()
+    addFiles(images)
+  }
+
   return (
-    <Dialog title="Nueva tarea" onClose={onClose} busy={isLoading} className="max-w-lg">
+    <Dialog title="Nueva tarea" onClose={onClose} busy={isLoading} className="max-w-lg" onPaste={handlePaste}>
       <form id={formId} onSubmit={handleSubmit} className="dialog-body space-y-4">
         {errorMessage && (
           <div role="alert" className="ui-feedback ui-feedback--error">
@@ -100,6 +113,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, isLoading, errorMes
 
         <div className="space-y-3">
           <p id={`${formId}-files-hint`} className="ui-label">Archivos adjuntos · máximo 5 MB por archivo</p>
+          <p className="text-sm text-[var(--color-text-muted)]">También puedes pegar imágenes con Ctrl+V / ⌘+V.</p>
           <input
             ref={fileInputRef}
             id={`${formId}-files`}

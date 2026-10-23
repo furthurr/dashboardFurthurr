@@ -93,23 +93,40 @@ export function TaskCard({
           </div>
         )}
 
-        {task.assignees.length > 0 && (
-          <div className="mt-3 flex -space-x-2">
-            {task.assignees.slice(0, 3).map((assignee, index) => (
-              <div
-                key={`${assignee.full_name}-${index}`}
-                className="ui-avatar border-2 border-[var(--color-surface)]"
-                title={assignee.full_name}
+        {(task.assignees.length > 0 || task.comment_count !== undefined) && (
+          <div className="mt-3 flex min-h-8 items-center justify-between gap-2">
+            <div className="flex -space-x-2">
+              {task.assignees.slice(0, 3).map((assignee, index) => (
+                <div
+                  key={`${assignee.full_name}-${index}`}
+                  className="ui-avatar border-2 border-[var(--color-surface)]"
+                  title={assignee.full_name}
+                >
+                  <span>
+                    {assignee.full_name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              ))}
+              {task.assignees.length > 3 && (
+                <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[var(--color-surface)] bg-[var(--color-surface-elevated)]">
+                  <span className="text-xs font-medium text-[var(--color-text-muted)]">+{task.assignees.length - 3}</span>
+                </div>
+              )}
+            </div>
+            {task.comment_count !== undefined && (
+              <span
+                role="img"
+                aria-label={`${task.comment_count} ${task.comment_count === 1 ? 'comentario' : 'comentarios'}`}
+                title={`${task.comment_count} ${task.comment_count === 1 ? 'comentario' : 'comentarios'}`}
+                className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center text-[var(--color-text-muted)]"
               >
-                <span>
-                  {assignee.full_name.charAt(0).toUpperCase()}
+                <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-9.5A7.5 7.5 0 0 1 10.5 4h2A7.5 7.5 0 0 1 20 11.5Z" />
+                </svg>
+                <span aria-hidden="true" className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-[var(--color-surface)] bg-[var(--color-primary)] px-1 text-[9px] font-semibold leading-none tabular-nums text-[var(--color-on-primary)]">
+                  {task.comment_count}
                 </span>
-              </div>
-            ))}
-            {task.assignees.length > 3 && (
-              <div className="w-7 h-7 rounded-full bg-[var(--color-surface-elevated)] border-2 border-[var(--color-surface)] flex items-center justify-center">
-                <span className="text-xs text-[var(--color-text-muted)] font-medium">+{task.assignees.length - 3}</span>
-              </div>
+              </span>
             )}
           </div>
         )}
@@ -123,14 +140,9 @@ export function TaskCard({
           </div>
         )}
 
-        {(task.comment_count !== undefined || task.attachment_count !== undefined) && (
+        {task.attachment_count !== undefined && (
           <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-text-muted)]">
-            {task.comment_count !== undefined && (
-              <span>{task.comment_count} {task.comment_count === 1 ? 'comentario' : 'comentarios'}</span>
-            )}
-            {task.attachment_count !== undefined && (
-              <span>{task.attachment_count} {task.attachment_count === 1 ? 'adjunto' : 'adjuntos'}</span>
-            )}
+            <span>{task.attachment_count} {task.attachment_count === 1 ? 'adjunto' : 'adjuntos'}</span>
           </div>
         )}
 

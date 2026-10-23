@@ -54,16 +54,17 @@ Correspondencia: `public.tasks`; `TaskWithAssignees` agrega `assignees` y contad
 | `position` | `number` | No | `numeric` en SQL, default `0` |
 | `created_at`, `updated_at` | `string` | TS requeridos; SQL permite null y asigna `now()` por defecto | Timestamps |
 | `assignees` | `AssigneeProfile[]` | No (en TS) | Proyección explícita con identidad/estado; relaciones nulas descartadas |
-| `comment_count`, `attachment_count` | `number?` | Opcional | Tipos definidos; no vienen en la query `useTasks` observada |
+| `comment_count` | `number?` | Opcional en la interfaz | `fetchTasks` lo obtiene por tarea desde `tasks_with_stats`, convierte el resultado a número y usa `0` si no hay coincidencia (`src/features/board/api.ts:15-35`) |
+| `attachment_count` | `number?` | Opcional | Tipo definido, pero no solicitado por `fetchTasks` |
 
-Fuente: `src/types/index.ts:19-47`, `src/features/board/api.ts:5-29`, `supabase/migrations/202610210001_boards.sql:19-22`.
+Fuente: `src/types/index.ts:19-47`, `src/features/board/api.ts:5-35`, `supabase/migrations/202610210001_boards.sql:19-22`, `supabase-schema.sql:425-433`.
 
 ### Proyecciones y solicitudes nuevas
 
 - `AssigneeProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url' | 'role' | 'is_active'>`. Las seis propiedades se proyectan explícitamente; no tiene `nickname` ni timestamps (`src/types/index.ts:41`).
 - `ManagedUser = Pick<Profile, 'id' | 'full_name' | 'email' | 'role' | 'is_active'>`, usado en la lista administrativa (`src/features/users/api.ts:4`).
 - `UserAction`/`AdminAction`: uniones discriminadas por `action`: `create`, `rename`, `password`, `set-active` y `promote-admin`; el contrato servidor añade `list`. `promote-admin` solo recibe `userId`; el servidor fija el rol `admin` y no admite un valor de rol del cliente. Validación runtime **de solicitudes administrativas**, no de todas las respuestas ni modelos (`src/features/users/api.ts:5-10`, `supabase/functions/admin-users/validation.ts:1-34`).
-- Solicitud de creación de tarea: título, descripción opcional, enum de estado/prioridad y `assigneeIds: string[]`; SQL recibe UUIDs, valida destinos y obtiene propietario de la sesión (`src/features/board/api.ts:76-92`).
+- Solicitud de creación de tarea: título, descripción opcional, enum de estado/prioridad y `assigneeIds: string[]`; SQL recibe UUIDs, valida destinos y obtiene propietario de la sesión (`src/features/board/api.ts:65-104`).
 - `TaskImagePreview`: `{ id: string, fileName: string, signedUrl: string }`, proyección transitoria sin persistir la URL firmada (`src/features/board/attachmentsApi.ts:5-9`).
 
 ## Relaciones auxiliares
@@ -110,4 +111,4 @@ Fuente: `src/types/index.ts:68-78`, `supabase-schema.sql:89-99`.
 
 - No se encontró JSON Schema o validación runtime de estos tipos en las rutas de datos consultadas.
 - No hay tipos generados desde el schema Supabase en el repositorio; los tipos locales son mantenidos manualmente.
-- `tasks_with_assignees` y `tasks_with_stats` existen como vistas SQL, pero la query de tareas leída consulta `tasks` con relación y no usa esas vistas (`supabase-schema.sql:408-435`, `src/features/board/api.ts:5-21`).
+- `tasks_with_assignees` existe, pero `fetchTasks` no la usa: obtiene responsables mediante la relación de `tasks`. `tasks_with_stats` sí se consulta, limitada a `id` y `comment_count`; `attachment_count` no se solicita en la query actual (`supabase-schema.sql:408-435`, `src/features/board/api.ts:5-35`).

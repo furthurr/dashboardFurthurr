@@ -87,11 +87,11 @@ No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge
 
 ### Leer tareas — `tasks.select` con relación de asignados
 
-- Propósito: traer las tareas del tablero seleccionado, ordenadas por `position`, y perfiles asignados.
-- Request observado: `.from('tasks').select(...)`, `eq('board_id', boardId)` y relación `task_assignees(...)`; relaciones nulas descartadas.
-- Response: filas transformadas a `TaskWithAssignees`; consultar [mapeo](03-mapping.md#tareas-y-asignados).
-- Errores: el error Supabase se lanza; TanStack Query lo expone a la pantalla.
-- Fuente: `src/features/board/api.ts:5-29`.
+- Propósito: traer las tareas del tablero seleccionado, ordenadas por `position`, sus perfiles asignados y el total de comentarios por tarea.
+- Request observado: en paralelo, `.from('tasks').select(...)` filtra por `board_id`, ordena por `position` y expande `task_assignees(...)`; `.from('tasks_with_stats').select('id, comment_count')` filtra el mismo tablero. Las relaciones de asignados nulas se descartan.
+- Response: filas transformadas a `TaskWithAssignees`; el cliente asocia `comment_count` por ID y lo convierte a `number` (`0` si no encuentra una fila de estadística). La vista también calcula `attachment_count`, pero esta lectura no lo solicita. Consultar [mapeo](03-mapping.md#tareas-y-asignados).
+- Errores: el error de cualquiera de las dos consultas Supabase se lanza; TanStack Query lo expone a la pantalla.
+- Fuente: `src/features/board/api.ts:5-35`, definición de la vista `supabase-schema.sql:425-433`.
 
 ### Crear tarea — RPC `create_task_with_assignees`
 
@@ -99,7 +99,7 @@ No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge
 - Request: `{ p_board_id, p_title, p_description, p_status, p_priority, p_assignee_ids }`; descripción ausente → `null`; IDs deduplicados. SQL permite lista omitida por defecto `[]`.
 - Response: objeto JSON de la tarea (`Task`), no incluye los perfiles de responsables; la query de tareas se invalida.
 - Transacción: valida título/rol/estado, calcula posición con bloqueo por estado, inserta tarea y ejecuta `set_task_assignees`. Un error revierte ambas escrituras. Los adjuntos se suben **después**, fuera de esta transacción.
-- Fuente: `src/features/board/api.ts:49-85`, `supabase/migrations/202610200001_task_assignments.sql:47-76`.
+- Fuente: `src/features/board/api.ts:65-104`, `supabase/migrations/202610200001_task_assignments.sql:47-76`.
 
 La firma incremental actual incluye `p_board_id` y exige acceso al tablero además del rol activo `admin`/`usuario`; posición se calcula dentro del tablero y estado (`supabase/migrations/202610210001_boards.sql:94-112`).
 
@@ -118,7 +118,7 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 - Validación: destinos existentes y activos; permite conservar un destino inactivo si ya estaba asignado. Bloquea tarea y perfiles objetivo durante la transacción. Prevalece el último conjunto guardado, sin detección de conflicto de borradores.
 - Permisos: no modifica título, descripción, propietario, estado ni prioridad. Escritura directa cliente en `task_assignees` revocada. La edición de esos campos de la tarea se rige por su propia policy y sus permisos por columna, no por esta RPC.
 - Errores SQL: `42501` cuenta no autorizada; `22023` lista/destino inválido; `P0002` tarea inexistente. El SDK los propaga; la UI conserva el borrador y presenta un mensaje seguro.
-- Fuente: `src/features/board/api.ts:87-104`, `supabase/migrations/202610200001_task_assignments.sql:5-45`.
+- Fuente: `src/features/board/api.ts:106-123`, `supabase/migrations/202610200001_task_assignments.sql:5-45`.
 
 ### Usuarios asignables — `profiles.select`
 
@@ -135,7 +135,7 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 - Columnas escribibles: solo `title`, `description`, `status`, `priority` y `position`. `created_by` no es escribible desde el cliente.
 - Response: no se consume fila; la query `tasks` se invalida al completar.
 - Errores: si la migración `202610200002_shared_task_editing.sql` no está aplicada en el proyecto, la base de datos rechaza la escritura con un error de RLS; la UI conserva el borrador y muestra un mensaje seguro.
-- Fuente: `src/features/board/api.ts:106-134`, `supabase/migrations/202610200002_shared_task_editing.sql:1-19`.
+- Fuente: `src/features/board/api.ts:125-153`, `supabase/migrations/202610200002_shared_task_editing.sql:1-19`.
 
 ### Cambiar estado/posición — `tasks.update`
 
@@ -143,7 +143,7 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 - Auth: cualquier cuenta autenticada activa, sobre cualquier tarea de un tablero accesible.
 - Request observado: `taskId`, `status`, `position`; filtro por `id`.
 - Response: sin fila de respuesta consumida; invalidación de `tasks`.
-- Fuente: `src/features/board/api.ts:31-47`.
+- Fuente: `src/features/board/api.ts:47-63`.
 
 ### Reordenar posiciones — varias operaciones `tasks.update`
 
@@ -151,20 +151,21 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 - Auth: cualquier cuenta autenticada activa.
 - Request observado: arreglo `{ taskId, position }`; ejecuta una actualización por elemento usando `Promise.all`.
 - Response: no hay transacción explícita; se invalidan las tareas al completar.
-- Fuente: `src/features/board/api.ts:154-174`.
+- Fuente: `src/features/board/api.ts:173-193`.
 
 ### Eliminar tarea — `tasks.delete`
 
 - Propósito: borrar una tarea por `id`.
 - Auth: el creador de la tarea o un `admin`. La edición compartida no amplía este permiso.
 - Response: no se consume fila; error se lanza.
-- Fuente: `src/features/board/api.ts:136-152`, `supabase/migrations/202610200002_shared_task_editing.sql:16-18`.
+- Fuente: `src/features/board/api.ts:155-170`, `supabase/migrations/202610200002_shared_task_editing.sql:16-18`.
 
 ### Leer / crear / eliminar comentarios — `comments`
 
 - Lectura: filtra por `task_id`, ordena por `created_at` ascendente y proyecta `author` desde `profiles` (`src/features/board/commentsApi.ts:5-24`).
 - Creación: inserta `task_id`, `author_id` y `body`, devuelve la fila insertada (`src/features/board/commentsApi.ts:27-57`).
 - Eliminación: borra por `id` (`src/features/board/commentsApi.ts:59-74`).
+- Caché: tras crear se invalidan `['comments', taskId]` y `['tasks']`; tras eliminar, `['comments']` y `['tasks']`, para actualizar el detalle y los conteos de las tarjetas (`src/features/board/commentsApi.ts:53-75`).
 - Errores: errores de consulta/mutación se lanzan; no existe DTO común de error.
 
 ### Leer adjuntos — `task_attachments.select`

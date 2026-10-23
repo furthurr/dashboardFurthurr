@@ -2,7 +2,7 @@
 
 ## Tareas y asignados
 
-La query lee tareas filtradas por `board_id` y expande `task_assignees(profile_id, profiles(id, full_name, email, avatar_url, role, is_active))`. Añade `assignees` con cada perfil relacionado, descarta relaciones nulas y castea como `TaskWithAssignees`. `board_id` viaja en el objeto de tarea (`src/features/board/api.ts:5-29`).
+`fetchTasks` lee tareas filtradas por `board_id`, ordenadas por `position`, y expande `task_assignees(profile_id, profiles(id, full_name, email, avatar_url, role, is_active))`. En paralelo consulta `tasks_with_stats` para el mismo tablero, solo por `id` y `comment_count`; asocia los conteos por id, convierte el valor a `number` y usa `0` si falta. Añade `assignees` con cada perfil relacionado, descarta relaciones nulas y castea como `TaskWithAssignees`. `board_id` viaja en el objeto de tarea (`src/features/board/api.ts:5-35`, `supabase-schema.sql:425-433`).
 
 ```text
 tasks row
@@ -11,11 +11,14 @@ tasks row
         └── profiles { id, full_name, email, avatar_url, role, is_active }
               ↓ map
         assignees[]
+tasks_with_stats { id, comment_count }
+              ↓ Number + merge by id
+        comment_count
 ```
 
-La proyección coincide ahora con `AssigneeProfile`, no promete un `Profile` completo. Esta parte de D-03 está resuelta; el cast sigue sin validar respuestas en runtime (`src/types/index.ts:41-47`). `set_task_assignees` devuelve las mismas seis propiedades y sustituye el arreglo cacheado; no mezcla otros campos de la tarea (`src/features/board/api.ts:87-102`).
+La proyección coincide ahora con `AssigneeProfile`, no promete un `Profile` completo. Esta parte de D-03 está resuelta; el cast sigue sin validar respuestas en runtime (`src/types/index.ts:41-47`). `set_task_assignees` devuelve las mismas seis propiedades y sustituye el arreglo cacheado; no mezcla otros campos de la tarea (`src/features/board/api.ts:106-123`).
 
-El formulario envía IDs, no perfiles completos. El cliente y SQL deduplican; SQL acepta conservar responsables inactivos ya presentes, pero rechaza añadir nuevos inactivos. El hook aún acepta `createdBy` por compatibilidad local, pero no lo envía al RPC: `auth.uid()` define el creador (`src/features/board/api.ts:49-84`, `supabase/migrations/202610200001_task_assignments.sql:13-68`).
+El formulario envía IDs, no perfiles completos. El cliente y SQL deduplican; SQL acepta conservar responsables inactivos ya presentes, pero rechaza añadir nuevos inactivos. El hook aún acepta `createdBy` por compatibilidad local, pero no lo envía al RPC: `auth.uid()` define el creador (`src/features/board/api.ts:65-104`, `supabase/migrations/202610200001_task_assignments.sql:13-68`).
 
 ## Administración y perfil
 
@@ -42,5 +45,5 @@ Fuente: `src/features/boards/api.ts`, `src/features/board/BoardPage.tsx:411`, `s
 ## Tipos y validación
 
 - Las interfaces/uniones de `src/types/index.ts:1-78` describen tipos estáticos; `parseAction` sí valida los payloads administrativos de entrada, no las respuestas del SDK.
-- Las respuestas se convierten a esos tipos mediante casts en algunas consultas (`src/features/board/api.ts:16-21`, `src/features/board/commentsApi.ts:15-17`); no se observa una validación runtime del payload.
+- Las respuestas se convierten a esos tipos mediante casts en algunas consultas (`src/features/board/api.ts:29-35`, `src/features/board/commentsApi.ts:15-17`); no se observa una validación runtime del payload. `comment_count` se convierte explícitamente a `number` antes del merge.
 - No hay una capa de mapeo DTO-dominio general: las queries de cada feature adaptan directamente el resultado donde hace falta.

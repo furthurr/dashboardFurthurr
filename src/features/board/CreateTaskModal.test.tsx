@@ -174,6 +174,48 @@ describe('Crear tarea: diálogo', () => {
     })
   })
 
+  it('adjunta imágenes pegadas desde el portapapeles y conserva el límite de 5 MB', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    render(<CreateTaskModal {...base} onSubmit={onSubmit} />)
+    const image = new File(['contenido'], 'captura.png', { type: 'image/png' })
+    const oversized = new File(['contenido'], 'grande.png', { type: 'image/png' })
+    Object.defineProperty(oversized, 'size', { value: 5 * 1024 * 1024 + 1 })
+    const paste = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(paste, 'clipboardData', {
+      value: {
+        items: [image, oversized].map((file) => ({ kind: 'file', type: file.type, getAsFile: () => file })),
+        files: [],
+      },
+    })
+
+    fireEvent(screen.getByRole('dialog'), paste)
+    expect(paste.defaultPrevented).toBe(true)
+    expect(screen.getByRole('list', { name: 'Archivos seleccionados para adjuntar' })).toHaveTextContent('captura.png')
+    expect(screen.getByRole('list', { name: 'Archivos seleccionados para adjuntar' })).not.toHaveTextContent('grande.png')
+    expect(screen.getByRole('alert')).toHaveTextContent('grande.png')
+
+    await user.type(screen.getByLabelText(/título/i), 'Con imagen pegada')
+    await user.click(screen.getByRole('button', { name: 'Crear Tarea' }))
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ files: [image] }))
+  })
+
+  it('no intercepta el pegado de texto ni de contenido que no sea imagen', () => {
+    render(<CreateTaskModal {...base} />)
+    const paste = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(paste, 'clipboardData', {
+      value: {
+        items: [{ kind: 'string', type: 'text/plain', getAsFile: () => null }],
+        files: [],
+      },
+    })
+
+    fireEvent(screen.getByLabelText(/título/i), paste)
+
+    expect(paste.defaultPrevented).toBe(false)
+    expect(screen.getByText('Ningún archivo seleccionado')).toBeInTheDocument()
+  })
+
   it('tolera desmontar el origen del foco antes de cerrar', () => {
     const origin = document.createElement('button')
     document.body.append(origin)

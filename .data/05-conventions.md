@@ -14,10 +14,11 @@
 ## Caché y consistencia
 
 - `QueryClient` usa `staleTime = 5 minutos` y `retry = 1` por defecto (`src/App.tsx:10-17`).
-- Claves: `['boards']`, `['board-members', boardId]`, `['tasks', boardId]`, `['comments', taskId]`, `['attachments', taskId]`, `['task-image-previews', idsNormalizados]`, `['assignable-users']` y `['admin-users', page]` (`src/features/boards/api.ts`, `src/features/board/api.ts:24-29`).
-- Las mutaciones invalidan las consultas relacionadas tras éxito. La actualización de posiciones emite múltiples updates en paralelo; no se observa transacción (`src/features/board/api.ts:145-164`).
+- Claves: `['boards']`, `['board-members', boardId]`, `['tasks', boardId]`, `['comments', taskId]`, `['attachments', taskId]`, `['task-image-previews', idsNormalizados]`, `['assignable-users']` y `['admin-users', page]` (`src/features/boards/api.ts`, `src/features/board/api.ts:38-45`).
+- Las mutaciones invalidan las consultas relacionadas tras éxito. La actualización de posiciones emite múltiples updates en paralelo; no se observa transacción (`src/features/board/api.ts:173-193`).
 - El tablero aplica estado optimista al mover tareas y limpia la proyección tras éxito o error (`src/features/board/BoardPage.tsx:128-147`).
-- Guardar responsables sustituye `assignees` en la caché y luego invalida tareas. Crear tarea y responsables es una transacción SQL; los adjuntos siguen siendo operaciones posteriores con recuperación de fallo parcial. Cambiar de identidad/perder acceso limpia la caché (`src/features/board/api.ts:76-102`, `src/features/auth/AuthContext.tsx:35-65`).
+- Guardar responsables sustituye `assignees` en la caché y luego invalida tareas. Crear tarea y responsables es una transacción SQL; los adjuntos siguen siendo operaciones posteriores con recuperación de fallo parcial. Cambiar de identidad/perder acceso limpia la caché (`src/features/board/api.ts:76-123`, `src/features/auth/AuthContext.tsx:35-65`).
+- Crear un comentario invalida `['comments', taskId]` y `['tasks']`; eliminarlo invalida `['comments']` y `['tasks']`, de modo que el detalle y `comment_count` de las tarjetas se refrescan desde Supabase (`src/features/board/commentsApi.ts:53-75`).
 - El catálogo de tableros se consulta por RPC (`list_boards_with_pending_counts`), no con un `select` directo: la RPC replica la visibilidad de RLS y añade el conteo de pendientes. La query usa `staleTime: 0` y refresca cada 30 segundos (`src/features/boards/api.ts:20-22`).
 - Crear, renombrar y activar/desactivar un tablero invalidan la clave `['boards']` tras el éxito, de modo que el listado se recalcula con los valores nuevos del servidor (`src/features/boards/api.ts:24-60`).
 - La sección «Tableros desactivados» se deriva en cliente de `is_active` sobre el mismo resultado de la query; no hay una segunda consulta para los tableros inactivos (`src/features/boards/BoardsPage.tsx:19-20,32-35`).
@@ -27,7 +28,7 @@
 
 ## Errores, reintentos y límites
 
-- Las funciones de datos lanzan directamente el error de Supabase (`src/features/board/api.ts:14`, `src/features/board/commentsApi.ts:15`, `src/features/board/attachmentsApi.ts:12`). No hay un formato de error API compartido.
+- Las funciones de datos lanzan directamente el error de Supabase (`src/features/board/api.ts:21-22`, `src/features/board/commentsApi.ts:15`, `src/features/board/attachmentsApi.ts:12`). No hay un formato de error API compartido.
 - El selector de tableros es la excepción: `describeBoardError` traduce el código de Postgres a un mensaje en lenguaje claro y comparte esa traducción entre alta y actualización (`src/features/boards/BoardsPage.tsx:72-91`):
 
 | Código/estado SQL | Significado en la interfaz |
@@ -50,4 +51,4 @@
 - Estados, prioridades y roles se representan como uniones TypeScript y enums Postgres; deben mantenerse alineados (`src/types/index.ts:1-5`, `supabase-schema.sql:10-14`).
 - No se documenta una estrategia de versionado de API ni un mapeo/validación runtime general.
 - Los adjuntos nuevos generan path `<taskId>/<UUID>.<extensión segura>` y almacenan metadata; el trigger verifica que el objeto pertenezca a la tarea y el borrado comprueba error. La lectura resuelve también referencias flat-path preexistentes. D-02 conserva una discrepancia entre URL almacenada y bucket privado (`src/features/board/attachmentsApi.ts`, `supabase/migrations/202610210001_boards.sql:133-172`).
-- Nombre administrativo 1–120 caracteres tras `trim`; contraseña 8–128 más política de Auth; email normalizado a minúsculas en alta. `rename` no modifica metadata de Auth. Los responsables se envían como UUIDs deduplicados; conjunto vacío significa retirar todos y no un error (`supabase/functions/admin-users/validation.ts:16-31`, `src/features/board/api.ts:76-92`).
+- Nombre administrativo 1–120 caracteres tras `trim`; contraseña 8–128 más política de Auth; email normalizado a minúsculas en alta. `rename` no modifica metadata de Auth. Los responsables se envían como UUIDs deduplicados; conjunto vacío significa retirar todos y no un error (`supabase/functions/admin-users/validation.ts:16-31`, `src/features/board/api.ts:94-112`).

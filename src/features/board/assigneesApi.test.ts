@@ -2,12 +2,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchAssignableUsers } from './assigneesApi'
 import { createTaskWithAssignees, fetchTasks, setTaskAssignees } from './api'
 
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), range: vi.fn(), order: vi.fn(), select: vi.fn(), eq: vi.fn() }))
-vi.mock('@/lib/supabase', () => ({ supabase: { rpc: mocks.rpc, from: () => ({ select: mocks.select }) } }))
+const mocks = vi.hoisted(() => ({
+  rpc: vi.fn(), range: vi.fn(), order: vi.fn(),
+  profileSelect: vi.fn(), profileEq: vi.fn(),
+  taskSelect: vi.fn(), taskEq: vi.fn(), statsSelect: vi.fn(), statsEq: vi.fn(),
+}))
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    rpc: mocks.rpc,
+    from: (table: string) => ({
+      select: table === 'tasks' ? mocks.taskSelect : table === 'tasks_with_stats' ? mocks.statsSelect : mocks.profileSelect,
+    }),
+  },
+}))
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.select.mockReturnValue({ eq: mocks.eq, order: mocks.order })
-  mocks.eq.mockReturnValue({ order: mocks.order })
+  mocks.profileSelect.mockReturnValue({ eq: mocks.profileEq })
+  mocks.profileEq.mockReturnValue({ order: mocks.order })
+  mocks.taskSelect.mockReturnValue({ eq: mocks.taskEq })
+  mocks.taskEq.mockReturnValue({ order: mocks.order })
+  mocks.statsSelect.mockReturnValue({ eq: mocks.statsEq })
   mocks.order.mockReturnValue({ order: mocks.order, range: mocks.range })
 })
 
@@ -16,7 +30,7 @@ describe('API de asignaciones', () => {
     const users = Array.from({ length: 500 }, (_, index) => ({ id: `person-${index}` }))
     mocks.range.mockResolvedValueOnce({ data: users, error: null }).mockResolvedValueOnce({ data: [{ id: 'last' }], error: null })
     expect(await fetchAssignableUsers()).toHaveLength(501)
-    expect(mocks.eq).toHaveBeenCalledWith('is_active', true)
+    expect(mocks.profileEq).toHaveBeenCalledWith('is_active', true)
     expect(mocks.range).toHaveBeenNthCalledWith(1, 0, 499)
     expect(mocks.range).toHaveBeenNthCalledWith(2, 500, 999)
   })
@@ -37,11 +51,15 @@ describe('API de asignaciones', () => {
     expect(mocks.rpc).toHaveBeenCalledWith('set_task_assignees', { p_task_id: 'task', p_assignee_ids: [] })
     await expect(setTaskAssignees('task', ['a'])).rejects.toThrow('Transacción rechazada')
   })
-  it('recupera el id y estado de los responsables y descarta relaciones nulas', async () => {
+  it('recupera responsables, descarta relaciones nulas y asocia el conteo de comentarios', async () => {
     mocks.order.mockResolvedValueOnce({ data: [{ id: 'task', task_assignees: [{ profiles: { id: 'person', is_active: false } }, { profiles: null }] }], error: null })
+    mocks.statsEq.mockResolvedValueOnce({ data: [{ id: 'task', comment_count: '3' }], error: null })
     const tasks = await fetchTasks('offline')
-    expect(mocks.eq).toHaveBeenCalledWith('board_id', 'offline')
-    expect(mocks.select).toHaveBeenCalledWith(expect.stringContaining('profiles(id, full_name, email, avatar_url, role, is_active)'))
+    expect(mocks.taskEq).toHaveBeenCalledWith('board_id', 'offline')
+    expect(mocks.taskSelect).toHaveBeenCalledWith(expect.stringContaining('profiles(id, full_name, email, avatar_url, role, is_active)'))
+    expect(mocks.statsSelect).toHaveBeenCalledWith('id, comment_count')
+    expect(mocks.statsEq).toHaveBeenCalledWith('board_id', 'offline')
     expect(tasks[0].assignees).toEqual([{ id: 'person', is_active: false }])
+    expect(tasks[0].comment_count).toBe(3)
   })
 })

@@ -3,22 +3,35 @@ import { supabase } from '@/lib/supabase'
 import { type TaskWithAssignees, type TaskStatus, type TaskPriority, type AssigneeProfile, type Task } from '@/types'
 
 export async function fetchTasks(boardId: string): Promise<TaskWithAssignees[]> {
-  const { data, error } = await supabase
-    .from('tasks')
-    .select(`
-      *,
-      task_assignees(profile_id, profiles(id, full_name, email, avatar_url, role, is_active))
-    `)
-    .eq('board_id', boardId)
-    .order('position')
+  const [tasksResult, statsResult] = await Promise.all([
+    supabase
+      .from('tasks')
+      .select(`
+        *,
+        task_assignees(profile_id, profiles(id, full_name, email, avatar_url, role, is_active))
+      `)
+      .eq('board_id', boardId)
+      .order('position'),
+    supabase
+      .from('tasks_with_stats')
+      .select('id, comment_count')
+      .eq('board_id', boardId),
+  ])
 
-  if (error) throw error
+  if (tasksResult.error) throw tasksResult.error
+  if (statsResult.error) throw statsResult.error
 
-  return (data || []).map((task: Record<string, unknown>) => ({
+  const commentCounts = new Map<string, number>()
+  for (const stat of statsResult.data ?? []) {
+    commentCounts.set(stat.id, Number(stat.comment_count))
+  }
+
+  return (tasksResult.data || []).map((task: Record<string, unknown>) => ({
     ...task,
     assignees: ((task.task_assignees as Array<{ profiles: unknown }>) || []).map(
       (ta) => ta.profiles
     ).filter(Boolean),
+    comment_count: commentCounts.get(task.id as string) ?? 0,
   })) as TaskWithAssignees[]
 }
 

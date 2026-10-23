@@ -52,6 +52,7 @@ export function useCreateComment() {
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['comments', variables.taskId] })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
 }
@@ -70,6 +71,7 @@ export function useDeleteComment() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['comments'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
 }
