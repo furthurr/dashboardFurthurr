@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.8.0] - 2026-10-23
+
+### Funcionalidades
+
+- Mostrar el total de comentarios de cada tarea mediante un indicador accesible en su tarjeta.
+- Permitir pegar imágenes del portapapeles al crear una tarea y en la pestaña «Adjuntos» del detalle.
+
+### Documentación y verificación
+
+- Alinear la documentación de datos, diseño, arquitectura, navegación y guía del proyecto con los cambios incluidos.
+- Verificar 135 pruebas Vitest, TypeScript, lint y build.
+
 ## [v0.7.0] - 2026-10-22
 
 ### Funcionalidades
