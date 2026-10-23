@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.7.0] - 2026-10-22
+
+### Funcionalidades
+
+- Mantener accesible «Nueva tarea» con un botón flotante fijo al desplazarse por el tablero.
+
 ## [v0.6.0] - 2026-10-22
 
 ### Funcionalidades
