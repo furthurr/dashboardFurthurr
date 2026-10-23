@@ -57,6 +57,25 @@ beforeEach(() => {
 })
 
 describe('Integración del tablero', () => {
+  it('muestra un botón flotante fijo que abre el formulario de nueva tarea', async () => {
+    const user = userEvent.setup()
+    renderBoard()
+
+    const createTaskButton = screen.getByRole('button', { name: 'Crear tarea' })
+    expect(createTaskButton).toHaveClass('board-create-fab')
+
+    await user.click(createTaskButton)
+    expect(screen.getByRole('dialog', { name: 'Nueva tarea' })).toBeVisible()
+  })
+
+  it('oculta la acción de crear tarea a las cuentas invitadas', () => {
+    mocks.role = 'invitado'
+    renderBoard()
+
+    expect(screen.queryByRole('button', { name: 'Crear tarea' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /nueva tarea/i })).not.toBeInTheDocument()
+  })
+
   it('consulta solo el tablero seleccionado y cierra el detalle si la tarea deja de pertenecerle', async () => {
     const user = userEvent.setup()
     const view = renderBoard()

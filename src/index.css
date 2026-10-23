@@ -94,6 +94,8 @@
   .ui-button--secondary { background: var(--color-surface-elevated); }
   .ui-button--danger { background: var(--color-danger-surface); border-color: var(--color-danger-border); color: var(--color-danger); }
   .ui-button--sm { min-height: 2.25rem; padding: var(--space-2) var(--space-3); font-size: var(--text-xs); }
+  .board-create-fab { position: fixed; right: max(var(--space-4), env(safe-area-inset-right)); bottom: max(var(--space-4), env(safe-area-inset-bottom)); z-index: 40; width: 3.5rem; height: 3.5rem; padding: 0; border-radius: 50%; box-shadow: var(--shadow-panel); }
+  .board-create-fab svg { width: 1.5rem; height: 1.5rem; }
   .ui-button:not(:disabled):not([aria-disabled='true']):active { box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.25); }
   .ui-button:disabled, .ui-button[aria-disabled='true'] { opacity: 0.55; }
   .ui-field {

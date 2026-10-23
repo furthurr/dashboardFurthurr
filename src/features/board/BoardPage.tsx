@@ -464,6 +464,19 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
           canDeleteAttachments={user?.id === selectedTask?.created_by || false}
         />
       </main>
+      {profile?.role !== 'invitado' && (
+        <button
+          type="button"
+          className="ui-button ui-button--primary board-create-fab"
+          aria-label="Crear tarea"
+          title="Nueva tarea"
+          onClick={() => setIsModalOpen(true)}
+        >
+          <svg aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" d="M12 5v14m-7-7h14" />
+          </svg>
+        </button>
+      )}
     </DndContext>
   )
 }
