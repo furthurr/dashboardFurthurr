@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { getStorageObjectPath } from '@/lib/storage'
 import { type TaskAttachment } from '@/types'
 
 export interface TaskImagePreview {
@@ -36,16 +37,37 @@ export function useAttachments(taskId: string | null) {
   })
 }
 
-function getStorageObjectPath(fileUrl: string): string | null {
-  try {
-    const pathname = new URL(fileUrl).pathname
-    const bucketMarker = '/task-attachments/'
-    const bucketIndex = pathname.indexOf(bucketMarker)
-    if (bucketIndex < 0) return null
-    return decodeURIComponent(pathname.slice(bucketIndex + bucketMarker.length)) || null
-  } catch {
-    return null
+export async function renameAttachment(attachmentId: string, fileName: string): Promise<void> {
+  const normalizedName = fileName.trim()
+  if (!normalizedName) throw new Error('El nombre del adjunto no puede estar vacío')
+
+  const { data, error } = await supabase
+    .from('task_attachments')
+    .update({ file_name: normalizedName })
+    .eq('id', attachmentId)
+    .select('id')
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) throw new Error('Adjunto no disponible o sin permisos')
+}
+
+export async function deleteAttachment(attachmentId: string, fileUrl: string): Promise<void> {
+  const fileName = getStorageObjectPath(fileUrl)
+  if (fileName) {
+    const { error } = await supabase.storage.from('task-attachments').remove([fileName])
+    if (error) throw error
   }
+
+  const { data, error } = await supabase
+    .from('task_attachments')
+    .delete()
+    .eq('id', attachmentId)
+    .select('id')
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) throw new Error('Adjunto no disponible o sin permisos')
 }
 
 export async function fetchTaskImagePreviews(taskIds: string[]): Promise<Record<string, TaskImagePreview[]>> {
@@ -156,24 +178,25 @@ export function useUploadAttachment() {
   })
 }
 
+export function useRenameAttachment() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ attachmentId, fileName }: { attachmentId: string; fileName: string }) =>
+      renameAttachment(attachmentId, fileName),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attachments'] })
+      queryClient.invalidateQueries({ queryKey: ['task-image-previews'] })
+    },
+  })
+}
+
 export function useDeleteAttachment() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ attachmentId, fileUrl }: { attachmentId: string; fileUrl: string }) => {
-      const fileName = getStorageObjectPath(fileUrl)
-      if (fileName) {
-        const { error } = await supabase.storage.from('task-attachments').remove([fileName])
-        if (error) throw error
-      }
-
-      const { error } = await supabase
-        .from('task_attachments')
-        .delete()
-        .eq('id', attachmentId)
-
-      if (error) throw error
-    },
+    mutationFn: ({ attachmentId, fileUrl }: { attachmentId: string; fileUrl: string }) =>
+      deleteAttachment(attachmentId, fileUrl),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attachments'] })
       queryClient.invalidateQueries({ queryKey: ['task-image-previews'] })

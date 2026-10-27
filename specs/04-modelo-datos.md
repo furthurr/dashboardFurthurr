@@ -2,7 +2,7 @@
 
 Estado: `aprobada`
 
-Última actualización: 2026-10-21
+Última actualización: 2026-10-27
 
 ## Archivo De Referencia
 
@@ -19,7 +19,8 @@ Campos propuestos:
 - `id`: uuid, primary key, referencia a `auth.users.id`.
 - `full_name`: text, requerido.
 - `email`: text, requerido.
-- `avatar_url`: text, opcional.
+- `avatar_url`: text, opcional. Apunta al objeto del bucket público `avatars`; la aplicación usa el path `<profile-id>/avatar`. Lectura pública y escrituras solo por propietario o administrador activo.
+- El bucket limita avatares a JPEG, PNG o WebP con tamaño máximo de 2 MiB; no guardar contenido sensible en esas imágenes.
 - `nickname`: text, opcional.
 - `role`: enum `admin`, `usuario`, `invitado`.
 - `is_active`: boolean obligatorio, `true` por defecto; permite desactivar el acceso sin borrar cuenta ni contenido. Solo la función administrativa puede cambiarlo desde la aplicación.
@@ -66,6 +67,7 @@ Operaciones sobre tableros (reservadas a administradores activos):
 - `rename_board(p_board_id, p_name)`: renombra el tablero; conserva las reglas de longitud (1–120 tras recortar) y unicidad sin distinguir mayúsculas.
 - `set_board_active(p_board_id, p_active)`: desactiva o reactiva el tablero sin eliminar su contenido.
 - `list_boards_with_pending_counts()`: devuelve `id`, `name`, `is_active`, `created_at` y `pending_count` (tareas en `backlog`, `por_hacer` y `haciendo`). El administrador activo recibe todos los tableros; el resto, solo los tableros activos de los que es miembro.
+- `delete_inactive_board(p_board_id)`: operación exclusiva de administrador activo que elimina un tablero solo si está desactivado. Elimina primero las tareas y después el tablero; las relaciones de tarea se eliminan por cascada.
 
 ### `board_members`
 
@@ -98,6 +100,8 @@ Campos propuestos:
 - `file_size`: integer.
 - `mime_type`: text.
 - `created_at`: timestamp.
+
+`file_name` puede actualizarse por el uploader, el creador de la tarea o un administrador activo con acceso al tablero. El permiso de cliente se limita a esa columna; el objeto y path de Storage no cambian al renombrarlo. El borrado elimina el objeto de Storage y luego la fila de metadata; estas operaciones no comparten una transacción distribuida.
 
 ## Enums Propuestos
 
@@ -133,4 +137,6 @@ El archivo SQL incluye también:
   - `tasks_with_assignees`: tasks con array JSON de asignados.
   - `tasks_with_stats`: tasks con conteo de comentarios y adjuntos.
 - **Storage buckets**: `avatars` (público) y `task-attachments` (privado).
+- **Avatar**: `avatars` admite imágenes JPEG, PNG y WebP de hasta 2 MiB; `profiles.avatar_url` guarda la URL pública.
+- **Gestión de adjuntos y tableros**: el bootstrap contiene el permiso de actualizar únicamente `task_attachments.file_name`, el borrado de tableros inactivos y las policies de avatar. Para bases existentes corresponden las migraciones `202610260001_task_attachment_management.sql`, `202610260002_delete_inactive_boards.sql` y `202610260003_profile_avatars.sql`, en ese orden. Están en el árbol local; su aplicación remota no se verificó en esta actualización.
 - **RLS policies**: detalladas por tabla según roles documentados en `05-auth-roles-permisos.md`.

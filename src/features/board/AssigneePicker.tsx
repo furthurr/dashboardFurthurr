@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import type { AssigneeProfile } from '@/types'
+import { ProfileAvatar } from '@/shared/ui/ProfileAvatar'
 
 export interface AssigneePickerProps {
   users?: AssigneeProfile[]
@@ -28,6 +29,7 @@ export function AssigneePicker({ users = [], initialAssignees = [], value, onCha
           const person = people.get(personId)
           const name = person?.full_name || person?.email || 'Usuario no disponible'
           return <li key={personId} className="ui-list-card flex max-w-full items-center gap-2 px-3 py-2">
+            <ProfileAvatar src={person?.avatar_url} name={name} size="sm" fallback="initials" />
             <span className="min-w-0 break-words text-sm">{name}{person?.is_active === false ? ' (inactivo)' : ''}</span>
             <button type="button" className="ui-button ui-button--sm shrink-0" aria-label={`Desasignar a ${name}`} onClick={() => onChange(value.filter((item) => item !== personId))}>Quitar</button>
           </li>

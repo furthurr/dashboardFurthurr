@@ -9,6 +9,8 @@
 - RLS/grants protegen operaciones directas; Edge/RPC verifican además permisos antes de usar privilegios servidor. Ocultar controles no sustituye esas reglas. Un invitado activo puede gestionar asignaciones, editar y mover cualquier tarea dentro de un tablero accesible, pero no crear tareas. La edición compartida se aplica por permisos de columna, mientras `created_by` permanece fuera del alcance de escritura del cliente (`supabase/migrations/202610200001_task_assignments.sql:7-76`, `supabase/migrations/202610200002_shared_task_editing.sql:1-19`, `supabase/migrations/202610210001_boards.sql:51-59`).
 - El catálogo de tableros lo filtra RLS: admin activo ve todos (activos y desactivados); usuario/invitado solo los tableros **activos** de los que es miembro. Las asignaciones a tareas no conceden pertenencia al tablero. Crear tableros, renombrarlos, activarlos/desactivarlos y sustituir miembros se reserva a admin; las mutaciones de tarea validan membresía en el servidor (`supabase/migrations/202610210001_boards.sql:24-80`, `supabase/migrations/202610220002_board_lifecycle.sql:40-66`).
 - El apagado de un tablero no es una revocación de identidad: solo retira el acceso de sus miembros. El admin activo conserva el acceso, las membresías no se borran y los JWT no se invalidan (`supabase/migrations/202610220002_board_lifecycle.sql:5,27-36`).
+- El borrado permanente es otra operación: solo acepta tableros ya desactivados y elimina primero los objetos de Storage desde cliente; la RPC repite la comprobación de admin/estado y borra las filas relacionales en PostgreSQL. Las dos fases no son atómicas (`src/features/boards/api.ts:101-131`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-21`).
+- Avatares: una cuenta puede cambiar el propio y la UI admin permite cambiar otros; el servidor Storage permite escribir solo al propietario o admin activo. La lectura es pública; el bucket local limita MIME a JPEG/PNG/WebP y tamaño a 2 MiB (`src/features/users/avatarApi.ts:3-35`, `supabase/migrations/202610260003_profile_avatars.sql:5-50`).
 - Las cuentas activas ya existentes se asignan inicialmente a `Offline`; `General` queda vacío. Cuentas nuevas no reciben membresías automáticamente. Un traslado requiere acceso a origen y destino, y el acceso a comments/attachments sigue al tablero actual de la tarea.
 
 ## Caché y consistencia
@@ -21,10 +23,12 @@
 - Crear un comentario invalida `['comments', taskId]` y `['tasks']`; eliminarlo invalida `['comments']` y `['tasks']`, de modo que el detalle y `comment_count` de las tarjetas se refrescan desde Supabase (`src/features/board/commentsApi.ts:53-75`).
 - El catálogo de tableros se consulta por RPC (`list_boards_with_pending_counts`), no con un `select` directo: la RPC replica la visibilidad de RLS y añade el conteo de pendientes. La query usa `staleTime: 0` y refresca cada 30 segundos (`src/features/boards/api.ts:20-22`).
 - Crear, renombrar y activar/desactivar un tablero invalidan la clave `['boards']` tras el éxito, de modo que el listado se recalcula con los valores nuevos del servidor (`src/features/boards/api.ts:24-60`).
+- Eliminar un tablero elimina las cachés de sus tareas, comentarios, adjuntos y miniaturas, e invalida `['boards']` tras completarse Storage y la RPC (`src/features/boards/api.ts:135-145`).
 - La sección «Tableros desactivados» se deriva en cliente de `is_active` sobre el mismo resultado de la query; no hay una segunda consulta para los tableros inactivos (`src/features/boards/BoardsPage.tsx:19-20,32-35`).
 - Los destinos de traslado se filtran por `board.is_active` antes de ofrecerse, además de la comprobación del servidor en `move_task_to_board` (`src/features/board/BoardPage.tsx:411`).
 - Tras un traslado se eliminan cachés de comentarios/adjuntos/miniaturas y se invalidan tareas; se valida el nuevo tablero en el servidor (`src/features/boards/api.ts:102-108`).
 - Usuarios asignables y administración usan `staleTime: 0`; adjuntos y miniaturas emiten URLs firmadas de 60 segundos y refrescan cada 45 segundos. No se observó sincronización Realtime.
+- Al cargar el avatar propio, `AccountMenu` actualiza el perfil de Auth; al cambiar el de otra cuenta, `UsersPage` invalida las queries `admin-users`, `tasks`, `comments` y `assignable-users` para refrescar las proyecciones (`src/shared/ui/AccountMenu.tsx:29-39`, `src/features/users/UsersPage.tsx:65-74`).
 
 ## Errores, reintentos y límites
 
@@ -38,17 +42,22 @@
 | HTTP 401 | Sesión caducada |
 | `22023` / `23514` | El nombre no cumple la regla de 1–120 caracteres sin espacios exteriores |
 | `P0002` | El tablero ya no existe |
+| `55000` | Solo se pueden eliminar tableros desactivados |
+| `BOARD_ATTACHMENT_PATH_INVALID` | No se pudo identificar el path de un adjunto; no se inicia el borrado de Storage |
+| `BOARD_ATTACHMENTS_DELETE_FAILED` | Falló la eliminación de objetos de Storage; la RPC no se invoca |
+| `BOARD_DELETE_FAILED_AFTER_STORAGE` | La limpieza de Storage terminó, pero falló el borrado SQL del tablero |
 | Cualquier otro | Mensaje genérico que añade el código del error |
 
 - `retry: 1` aplica al comportamiento de queries de TanStack Query; no se encontró timeout explícito ni retry propio del cliente Supabase (`src/App.tsx:10-17`, `src/lib/supabase.ts:1-10`).
 - No se encontró paginación en las lecturas de tareas, comentarios o adjuntos revisadas.
 - Administración pagina de 50 en 50; usuarios asignables se recuperan en lotes de 500 y se filtran por nombre/correo en cliente (`supabase/functions/admin-users/index.ts:34-41`, `src/features/board/assigneesApi.ts:5-15`).
 - Las respuestas de Edge usan `{ error: string }`; el cliente extrae JSON del error HTTP o muestra fallback de conexión. No devuelve contraseñas ni errores internos en crudo. Las RPC propagan el error del SDK y la UI conserva borrador con mensaje seguro (`src/features/users/api.ts:11-24`, `supabase/functions/admin-users/index.ts:73-75`).
-- El upload en UI rechaza archivos mayores a 5 MiB; el bootstrap crea el bucket sin configurar `file_size_limit`. No asumir enforcement servidor del límite de cliente (`src/features/board/CreateTaskModal.tsx`, `src/features/board/TaskDetailModal.tsx`, `supabase-schema.sql:345-357`).
+- El upload de adjuntos en UI rechaza archivos mayores a 5 MiB; el bucket `task-attachments` no declara `file_size_limit` en el bootstrap, así que no asumir enforcement servidor de ese máximo (`src/features/board/CreateTaskModal.tsx`, `src/features/board/TaskDetailModal.tsx`, `supabase-schema.sql:354-357`). Los avatares son distintos: el bucket `avatars` declara máximo 2 MiB y MIME permitidos en el bootstrap/migración (`supabase-schema.sql:348-352`, `supabase/migrations/202610260003_profile_avatars.sql:5-10`).
 
 ## Nombres, versiones y serialización
 
 - Estados, prioridades y roles se representan como uniones TypeScript y enums Postgres; deben mantenerse alineados (`src/types/index.ts:1-5`, `supabase-schema.sql:10-14`).
 - No se documenta una estrategia de versionado de API ni un mapeo/validación runtime general.
 - Los adjuntos nuevos generan path `<taskId>/<UUID>.<extensión segura>` y almacenan metadata; el trigger verifica que el objeto pertenezca a la tarea y el borrado comprueba error. La lectura resuelve también referencias flat-path preexistentes. D-02 conserva una discrepancia entre URL almacenada y bucket privado (`src/features/board/attachmentsApi.ts`, `supabase/migrations/202610210001_boards.sql:133-172`).
+- Avatares usan el path fijo `<profile-id>/avatar` con reemplazo (`upsert`) y la URL pública queda en `profiles.avatar_url`; el archivo se limita a JPEG/PNG/WebP de hasta 2 MiB (`src/features/users/avatarApi.ts:3-35`).
 - Nombre administrativo 1–120 caracteres tras `trim`; contraseña 8–128 más política de Auth; email normalizado a minúsculas en alta. `rename` no modifica metadata de Auth. Los responsables se envían como UUIDs deduplicados; conjunto vacío significa retirar todos y no un error (`supabase/functions/admin-users/validation.ts:16-31`, `src/features/board/api.ts:94-112`).

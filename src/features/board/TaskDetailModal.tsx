@@ -22,9 +22,10 @@ interface TaskDetailModalProps {
   onAddComment?: (body: string) => Operation
   onDeleteComment?: (commentId: string) => Operation
   onUploadAttachment?: (file: File) => Operation
+  onRenameAttachment?: (attachmentId: string, fileName: string) => Operation
   onDeleteAttachment?: (attachmentId: string) => Operation
   canDeleteComments?: boolean
-  canDeleteAttachments?: boolean
+  canManageAttachment?: (attachment: TaskAttachment) => boolean
   commentsLoading?: boolean
   attachmentsLoading?: boolean
   commentsError?: boolean
@@ -45,8 +46,8 @@ const tabs = ['details', 'comments', 'attachments'] as const
 type Tab = typeof tabs[number]
 
 function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDelete,
-  onAddComment, onDeleteComment, onUploadAttachment, onDeleteAttachment,
-  canDeleteComments, canDeleteAttachments, commentsLoading, attachmentsLoading,
+  onAddComment, onDeleteComment, onUploadAttachment, onRenameAttachment, onDeleteAttachment,
+  canDeleteComments, canManageAttachment, commentsLoading, attachmentsLoading,
   commentsError, attachmentsError, onSaveAssignees, assigneeOptions, boards = [], onMoveToBoard, initialTab = 'details',
 }: TaskDetailModalProps & { task: TaskWithAssignees }) {
   const id = useId()
@@ -67,7 +68,7 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
   const pendingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const { notice, setNotice, dismissNotice } = useToast()
-  const [confirmDelete, setConfirmDelete] = useState<{ kind: 'task' | 'comment' | 'attachment'; id?: string } | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: 'task' | 'comment' | 'attachment'; id?: string; name?: string } | null>(null)
   const busy = pending !== null
 
   async function perform(name: string, action: () => Operation, failure: string, success = '') {
@@ -105,6 +106,11 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
   async function sendComment() {
     if (!comment.trim() || !onAddComment) return
     if (await perform('comment', () => onAddComment(comment.trim()), 'No se pudo enviar el comentario.', 'Comentario enviado.')) setComment('')
+  }
+
+  async function renameAttachment(attachmentId: string, fileName: string) {
+    if (!onRenameAttachment) return false
+    return perform('rename-attachment', () => onRenameAttachment(attachmentId, fileName), 'No se pudo cambiar el nombre del adjunto.', 'Nombre del adjunto actualizado.')
   }
 
   async function uploadAttachment(nextFile: File) {
@@ -147,7 +153,9 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
     const action = kind === 'task' ? onDelete : kind === 'comment'
       ? () => onDeleteComment?.(itemId!) : () => onDeleteAttachment?.(itemId!)
     if (!action) return
-    if (await perform('delete', action, 'No se pudo eliminar.', 'Elemento eliminado.')) {
+    const failure = kind === 'attachment' ? 'No se pudo eliminar el adjunto.' : 'No se pudo eliminar.'
+    const success = kind === 'attachment' ? 'Adjunto eliminado.' : 'Elemento eliminado.'
+    if (await perform('delete', action, failure, success)) {
       setConfirmDelete(null)
       if (kind === 'task') onClose()
     }
@@ -265,10 +273,15 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
             </div>
           </div>}
           {attachmentsLoading ? <p role="status">Cargando adjuntos…</p> : attachmentsError ? <p role="alert" className="ui-feedback ui-feedback--error">No se pudieron cargar los adjuntos. Vuelve a abrir la tarea para reintentar.</p>
-            : <AttachmentsList attachments={attachments} canDelete={canDeleteAttachments && !busy} onDeleteAttachment={onDeleteAttachment ? (itemId) => setConfirmDelete({ kind: 'attachment', id: itemId }) : undefined} />}
+            : <AttachmentsList attachments={attachments} disabled={busy} canManageAttachment={canManageAttachment}
+              onRenameAttachment={onRenameAttachment ? renameAttachment : undefined}
+              onDeleteAttachment={onDeleteAttachment ? (itemId) => {
+                const attachment = attachments.find((item) => item.id === itemId)
+                setConfirmDelete({ kind: 'attachment', id: itemId, name: attachment?.file_name })
+              } : undefined} />}
         </section>
         {confirmDelete && <div className="ui-feedback ui-feedback--error space-y-3" role="group" aria-label="Confirmar eliminación">
-          <p>¿Eliminar {confirmDelete.kind === 'task' ? 'esta tarea' : confirmDelete.kind === 'comment' ? 'este comentario' : 'este adjunto'}? Esta acción no se puede deshacer.</p>
+          <p>¿Eliminar {confirmDelete.kind === 'task' ? 'esta tarea' : confirmDelete.kind === 'comment' ? 'este comentario' : confirmDelete.name ? `el adjunto «${confirmDelete.name}»` : 'este adjunto'}? Esta acción no se puede deshacer.</p>
           <div className="flex flex-wrap gap-2">
             <button className="ui-button ui-button--danger" disabled={busy} onClick={() => { void removeConfirmed() }}>{pending === 'delete' ? 'Eliminando…' : 'Sí, eliminar'}</button>
             <button className="ui-button" disabled={busy} onClick={() => setConfirmDelete(null)}>Cancelar eliminación</button>

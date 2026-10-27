@@ -2,9 +2,29 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
+## Actualización focalizada — adjuntos, eliminación de tableros y avatares, 2026-10-26
+
+Describe el árbol local aún sin commit sobre adjuntos, tableros y avatares. `HEAD` es `bbacf5c62a8ab0bf144e602ae3666c4026882f0e` (`v0.9.0` en preparación); esta entrada no afirma que esos cambios estén incluidos en `HEAD` ni publicados.
+
+No se añaden tokens, tema ni clases CSS; se reutilizan `ui-list-card`, `ui-field`, `Dialog`, botones existentes y variables visuales. El renombrado de adjuntos solo cambia metadata, no el archivo de Storage.
+
+| Componente/patrón | Propósito, estados y comportamiento | Fuente |
+| --- | --- | --- |
+| `AttachmentsList` — renombrar | Cada archivo autorizado muestra «Cambiar nombre». La acción sustituye el nombre por un campo precargado y con etiqueta accesible; «Guardar nombre» se deshabilita si está vacío o no cambió, y «Cancelar» abandona la edición. Durante una mutación se bloquean los controles; un fallo conserva el borrador y el detalle anuncia el error | `src/features/board/AttachmentsList.tsx:37-67,85-91`, `src/features/board/TaskDetailModal.tsx:111-114` |
+| `AttachmentsList` — eliminar | El botón contextual «Eliminar» abre la confirmación inline del detalle con el nombre del archivo y aviso de irreversibilidad. La acción espera resultado, comunica éxito/error y mantiene la confirmación ante un fallo | `src/features/board/AttachmentsList.tsx:92-96`, `src/features/board/TaskDetailModal.tsx:150-160,278-287` |
+| Disponibilidad por adjunto | La interfaz muestra ambas acciones al uploader, creador de la tarea o administrador activo; Postgres/Storage y el acceso activo al tablero siguen siendo la autoridad del permiso | `src/features/board/BoardPage.tsx:465-476`, `supabase/migrations/202610260001_task_attachment_management.sql:10-22` |
+| `BoardsPage` — eliminar tablero inactivo | Solo el admin ve «Eliminar tablero» en cards desactivadas. El `Dialog` identifica el tablero y advierte que tareas, comentarios, asignaciones y adjuntos se eliminan sin recuperación; la acción usa `ui-button--danger`, muestra espera y conserva el diálogo ante errores específicos de Storage/RPC | `src/features/boards/BoardsPage.tsx:33-43,64-71,98-110,187-207` |
+| `ProfileAvatar` | Círculo con imagen lazy/async y recorte `object-cover`; si no hay URL o falla la carga muestra icono o inicial. Tamaños `sm`, `md`, `lg`; la variante de administración conserva iniciales como fallback. Reutilizado en cuenta, lista de usuarios, autores de comentarios, tarjetas Kanban y responsables seleccionados. Usa superficie/color existentes y utilities, sin token ni clase propia | `src/shared/ui/ProfileAvatar.tsx:3-45`, `src/features/users/UsersPage.tsx:37-40,148-154`, `src/shared/ui/AccountMenu.tsx:61`, `src/features/board/CommentsList.tsx:28-30`, `src/features/board/TaskCard.tsx:101-112`, `src/features/board/AssigneePicker.tsx:27-34` |
+| `AccountMenu` — avatar propio | El panel de cuenta permite seleccionar una imagen; muestra espera, mensaje `role=status` o error `role=alert`. El selector acepta JPG/PNG/WebP y la ayuda visual declara máximo 2 MB | `src/shared/ui/AccountMenu.tsx:17-41,58-75` |
+| `UsersPage` — avatar administrativo | La fila de cuenta muestra el avatar/las iniciales y expone «Cambiar foto». El diálogo previsualiza archivo/foto existente, informa formatos/tamaño y bloquea el envío mientras guarda | `src/features/users/UsersPage.tsx:37-54,80-99,138-173` |
+
+### Verificación y límites
+
+La evidencia previa al cambio de tableros/avatares para la gestión de adjuntos registró 157 pruebas Vitest en 16 archivos, build y lint correctos; no valida por sí sola las ampliaciones añadidas después. En esta sincronización documental no se ejecutaron pruebas, build, lint ni suite SQL, no se aplicaron migraciones remotas y no se hizo revisión visual en navegador, prueba con lector de pantalla o auditoría de contraste. La UI actual no se presenta como publicada.
+
 ## Actualización focalizada — visor de imágenes y descripción de tarea, 2026-10-23
 
-Describe cambios de UI locales aún sin commit. `HEAD`, `main` y `origin/main` están en `9444ced119b66271530b5e8f0c0ba4260a6c0ced`; la SPA publicada verificada sigue en `v0.8.1` (workflow «Deploy to GitHub Pages», run `40004615822`). Esta entrada describe el árbol de trabajo, no afirma que el visor esté incluido en `HEAD` o publicado.
+Registro histórico de la revisión del 2026-10-23: en esa fecha se anotó `HEAD=9444ced119b66271530b5e8f0c0ba4260a6c0ced` y `v0.8.1` (run `40004615822`) como publicación. No es el baseline Git actual ni se consultaron referencias remotas en la revisión de 2026-10-26; el visor descrito no debe inferirse como publicado por esta entrada.
 
 No se añaden tokens ni clases CSS propias. El visor reutiliza `Dialog` y controles `ui-button`; sus flechas son SVG inline. El `Dialog` acepta un subtítulo opcional y lo asocia como descripción accesible, manteniendo el título de tarea como nombre del diálogo.
 
@@ -19,7 +39,7 @@ No se añaden tokens ni clases CSS propias. El visor reutiliza `Dialog` y contro
 
 ## Actualización focalizada — acción y badge de comentarios en tarjetas, 2026-10-23
 
-Describe cambios locales de UI aún sin commit. `HEAD`, `main` y `origin/main` están en `9444ced119b66271530b5e8f0c0ba4260a6c0ced`; la última publicación verificada es `v0.8.1` (workflow de Pages, run `40004615822`). Esta entrada describe el árbol de trabajo y no afirma que la nueva interacción esté incluida en `HEAD` o publicada.
+Registro histórico de la revisión del 2026-10-23: se anotó `HEAD=9444ced119b66271530b5e8f0c0ba4260a6c0ced` y `v0.8.1` (run `40004615822`) como publicación. No representa el baseline Git actual ni una consulta remota realizada durante esta actualización.
 
 No se añaden tokens, tema, paleta ni clases CSS propias. El icono es SVG inline; el botón usa colores y foco existentes. El botón permanece disponible con cero o con conteo desconocido, y su nombre accesible incluye el total cuando está disponible. El badge visual se omite con cero y solo se superpone cuando hay comentarios.
 
@@ -33,7 +53,7 @@ No se añaden tokens, tema, paleta ni clases CSS propias. El icono es SVG inline
 
 ## Actualización focalizada — alta rápida y pegado de imágenes, 2026-10-22
 
-Describe cambios locales de UI aún sin commit. El baseline Git consultado es `main` = `origin/main` = `83dacec5bf207ba9105742cd9ba28c5c4ae85a05` (2026-10-22); la release de producto sigue siendo `v0.6.0` (`21a44df`). El árbol de trabajo contiene los cambios descritos abajo, así que este registro no afirma que estén incluidos en `HEAD`.
+Registro histórico de la revisión del 2026-10-22: entonces se consultaron `main` y `origin/main` en `83dacec5bf207ba9105742cd9ba28c5c4ae85a05` y se anotó la release `v0.6.0` (`21a44df`). No se verificaron ramas remotas en esta actualización.
 
 No se añaden tokens, paleta, tema ni tipografía. El CTA flotante reutiliza `ui-button--primary`, `--space-4` y `--shadow-panel`; su geometría particular es local en `.board-create-fab` (`src/index.css:93-98`). El texto de ayuda usa el color muted existente.
 
@@ -255,9 +275,10 @@ Se conserva el catálogo previo. Sus estilos (por ejemplo gradientes), rangos de
 
 ## Lista de adjuntos
 
-- **Propósito:** mostrar icono, nombre, tamaño, enlace «Ver» y borrado condicional.
-- **Variantes/estados:** vacía y con adjuntos; borrar depende de `canDelete`.
-- **Fuente:** `src/features/board/AttachmentsList.tsx:15-61`.
+- **Propósito:** mostrar icono, nombre, tamaño y enlace «Ver»; ofrece cambio de nombre inline y borrado con confirmación a los adjuntos administrables por la cuenta.
+- **Variantes/estados:** vacía y con adjuntos; editor de nombre precargado, botones guardar/cancelar, bloqueo durante mutación y acciones condicionales por uploader/creador de tarea/admin activo.
+- **Estilo:** reutiliza `ui-list-card`, `ui-field` y botones `ui-*`; no añade tokens ni clases CSS propias.
+- **Fuente:** `src/features/board/AttachmentsList.tsx:18-99`, `src/features/board/TaskDetailModal.tsx:275-287`, `src/features/board/BoardPage.tsx:465-476`.
 
 ## Controles de formulario
 

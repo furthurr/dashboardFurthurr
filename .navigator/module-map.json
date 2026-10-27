@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-10-23T01:22:33Z",
-  "source_commit": "83dacec5bf207ba9105742cd9ba28c5c4ae85a05",
+  "generated_at": "2026-10-27T08:44:53Z",
+  "source_commit": "bbacf5c62a8ab0bf144e602ae3666c4026882f0e",
   "root": ".",
   "modules": [
     {
@@ -39,34 +39,34 @@
       "id": "boards",
       "name": "Selección, acceso y ciclo de vida de tableros",
       "path": "src/features/boards",
-      "responsibility": "Presenta los tableros permitidos en secciones activa/desactivada con conteo de pendientes, administra creación/membresías/renombrado/activación para admin y valida el tablero antes de montar el Kanban.",
+      "responsibility": "Presenta tableros permitidos con conteo de pendientes; administra creación, membresías, renombrado, activación y borrado permanente de inactivos; valida acceso antes del Kanban.",
       "kind": "feature",
       "tech": ["React", "TypeScript", "TanStack Query", "Supabase PostgREST/RPC"],
       "entrypoints": ["src/features/boards/BoardsPage.tsx", "src/features/boards/BoardRoute.tsx", "src/features/boards/api.ts"],
       "depends_on": ["auth", "board", "supabase-client", "shared-types", "shared-ui", "database-schema"],
-      "notes": "Comparte AssigneePicker/consulta de usuarios con board; el catálogo se obtiene por RPC list_boards_with_pending_counts y la autorización definitiva vive en RLS/RPC, no en las cards."
+      "notes": "Comparte AssigneePicker/consulta de usuarios con board; el catálogo usa list_boards_with_pending_counts. El borrado limpia objetos Storage antes de delete_inactive_board; las fases no son atómicas. Los cambios locales de borrado no están incluidos en source_commit ni verificados en remoto."
     },
     {
       "id": "users",
       "name": "Administración de usuarios",
       "path": "src/features/users",
-      "responsibility": "Presenta listado administrativo, alta, nombre, contraseña, activación y promoción unidireccional de cuentas no admin a admin.",
+      "responsibility": "Presenta listado administrativo, alta, nombre, contraseña, activación, promoción a admin y cambio de avatares.",
       "kind": "feature",
       "tech": ["React", "TypeScript", "TanStack Query"],
-      "entrypoints": ["src/features/users/UsersPage.tsx", "src/features/users/api.ts"],
+      "entrypoints": ["src/features/users/UsersPage.tsx", "src/features/users/api.ts", "src/features/users/avatarApi.ts"],
       "depends_on": ["auth", "supabase-client", "shared-types", "shared-ui", "admin-users"],
-      "notes": "admin-users es dependencia de uso vía functions.invoke, no un import del servidor."
+      "notes": "admin-users es dependencia de uso vía functions.invoke, no un import del servidor. avatarApi carga en Storage y actualiza profiles.avatar_url; los cambios locales de avatar no están incluidos en source_commit ni verificados en remoto."
     },
     {
       "id": "shared-ui",
       "name": "UI compartida",
       "path": "src/shared/ui",
-      "responsibility": "Aporta diálogos, notificaciones y controles de cuenta reutilizados por las features.",
+      "responsibility": "Aporta diálogos, notificaciones, menú de cuenta y ProfileAvatar reutilizados por las features.",
       "kind": "lib",
       "tech": ["React", "TypeScript"],
-      "entrypoints": ["src/shared/ui/Dialog.tsx", "src/shared/ui/Toast.tsx"],
+      "entrypoints": ["src/shared/ui/Dialog.tsx", "src/shared/ui/Toast.tsx", "src/shared/ui/AccountMenu.tsx", "src/shared/ui/ProfileAvatar.tsx"],
       "depends_on": ["auth"],
-      "notes": "AccountMenu apareció durante la sincronización y usa Auth; su flujo de perfil queda pendiente de revisión específica."
+      "notes": "AccountMenu usa Auth y permite cambiar avatar propio; ProfileAvatar reutiliza fallback de icono/iniciales. Estos cambios locales no están incluidos en source_commit."
     },
     {
       "id": "supabase-client",
@@ -75,7 +75,7 @@
       "responsibility": "Inicializa el cliente gestionado con variables de entorno requeridas.",
       "kind": "lib",
       "tech": ["TypeScript", "@supabase/supabase-js"],
-      "entrypoints": ["src/lib/supabase.ts"],
+      "entrypoints": ["src/lib/supabase.ts", "src/lib/storage.ts"],
       "depends_on": []
     },
     {
@@ -102,22 +102,23 @@
       "id": "database-schema",
       "name": "Schema Supabase",
       "path": "supabase-schema.sql",
-      "responsibility": "Mantiene el bootstrap Postgres, RLS, Storage, vistas, grants y funciones transaccionales de referencia, incluido el ciclo de vida de tableros.",
+      "responsibility": "Mantiene el bootstrap Postgres, RLS, Storage, vistas, grants y RPCs, incluido ciclo de vida/borrado de tableros y gestión de avatar/adjuntos.",
       "kind": "other",
       "tech": ["PostgreSQL", "SQL"],
       "entrypoints": ["supabase-schema.sql"],
-      "depends_on": []
+      "depends_on": [],
+      "notes": "El schema local contiene los objetos recientes de avatar, nombre de adjunto y borrado de tableros; no se verificó su aplicación remota. Los cambios del árbol de trabajo no están incluidos en source_commit."
     },
     {
       "id": "database-migrations",
       "name": "Migraciones Supabase",
       "path": "supabase/migrations",
-      "responsibility": "Evoluciona instalaciones existentes con estado de cuenta, RPCs, políticas de autorización/membresía por tablero y el ciclo de vida de tableros (is_active, renombrado, activación y listado con pendientes).",
+      "responsibility": "Evoluciona instalaciones existentes con estado de cuenta, RPCs, políticas de membresía, ciclo de vida/borrado de tableros y permisos de adjuntos/avatares.",
       "kind": "other",
       "tech": ["PostgreSQL", "SQL"],
-      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql", "supabase/migrations/202610200002_shared_task_editing.sql", "supabase/migrations/202610210001_boards.sql", "supabase/migrations/202610220001_board_access_returning.sql", "supabase/migrations/202610220002_board_lifecycle.sql"],
+      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql", "supabase/migrations/202610200002_shared_task_editing.sql", "supabase/migrations/202610210001_boards.sql", "supabase/migrations/202610220001_board_access_returning.sql", "supabase/migrations/202610220002_board_lifecycle.sql", "supabase/migrations/202610260001_task_attachment_management.sql", "supabase/migrations/202610260002_delete_inactive_boards.sql", "supabase/migrations/202610260003_profile_avatars.sql"],
       "depends_on": ["database-schema"],
-      "notes": "Las dos migraciones de 202610220002 se aplicaron el 2026-10-22 en el proyecto Supabase remoto, en ese orden; las tres suites SQL remotas pasan y revierten sus fixtures con ROLLBACK. La SPA compatible ya está publicada en GitHub Pages con v0.6.0 el 2026-10-22 (run 39860177282)."
+      "notes": "202610220001/202610220002 y las suites SQL se verificaron en remoto el 2026-10-22 (registro histórico). Las migraciones 202610260001–202610260003 son locales; no se verificó su aplicación remota ni se ejecutaron suites SQL en esta sincronización. Los cambios de este mapa posteriores a source_commit representan el árbol de trabajo sin commit."
     },
     {
       "id": "admin-users",
@@ -128,7 +129,7 @@
       "tech": ["Deno", "TypeScript", "Supabase Edge Functions", "Supabase Auth"],
       "entrypoints": ["supabase/functions/admin-users/index.ts"],
       "depends_on": ["database-schema"],
-      "notes": "Despliegue separado de GitHub Pages; instrucciones en supabase/README.md. Verificado el 2026-10-22 en el proyecto Supabase remoto: función en versión 4, ACTIVE, con el código descargado idéntico byte a byte al del repo; el código anterior (versión 3) no contenía la acción promote-admin. La verificación funcional en producción se completó ese mismo 2026-10-22 con una sesión real de administrador: la persona responsable del proyecto confirmó que el botón «Hacer administrador» de «Usuarios» promueve correctamente la cuenta (comprobación manual, no automatizada)."
+      "notes": "Despliegue separado de GitHub Pages; instrucciones en supabase/README.md. El listado local ahora incluye avatar_url; la última evidencia de remoto de admin-users es del 2026-10-22 (versión 4 ACTIVE e identidad de código), sin verificación remota durante esta sincronización. La comprobación funcional de promote-admin fue manual en 2026-10-22. Los cambios locales no están incluidos en source_commit."
     },
     {
       "id": "product-specs",
@@ -149,7 +150,7 @@
       "tech": ["GitHub Actions", "Node.js", "Vite"],
       "entrypoints": [".github/workflows/deploy.yml"],
       "depends_on": ["web-app"],
-      "notes": "Publicación verificada: run 39860177282, conclusión success, headSha 21a44df (release v0.6.0, 2026-10-22); la SPA se sirve en https://furthurr.github.io/dashboardFurthurr/. El workflow no despliega SQL ni Edge Functions."
+      "notes": "El workflow publica la SPA, no SQL ni Edge Functions. La documentación del proyecto registra v0.8.1 (run 40004615822) como última publicación conocida; no se consultó el remoto en esta sincronización y no se afirma que incluya los cambios locales actuales."
     }
   ]
 }

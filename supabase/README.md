@@ -5,7 +5,18 @@ La SPA sigue alojada en GitHub Pages. Las operaciones privilegiadas se ejecutan 
 ## Instalación existente
 
 1. Realiza una copia de seguridad y prueba primero en un proyecto de pruebas.
-2. Ejecuta las migraciones pendientes en orden: `migrations/202610190001_user_administration.sql`, `migrations/202610200001_task_assignments.sql`, `migrations/202610200002_shared_task_editing.sql`, `migrations/202610210001_boards.sql`, `migrations/202610220001_board_access_returning.sql` y `migrations/202610220002_board_lifecycle.sql`. No vuelvas a ejecutar el schema bootstrap en una instalación existente. Las tareas existentes se asignan al tablero `Offline`; las cuentas activas existentes se convierten en miembros de `Offline`; `General` inicia sin miembros. Revisa la política de asignación antes de aplicar en producción.
+2. Ejecuta **solo las migraciones pendientes**, en este orden:
+   1. `migrations/202610190001_user_administration.sql`
+   2. `migrations/202610200001_task_assignments.sql`
+   3. `migrations/202610200002_shared_task_editing.sql`
+   4. `migrations/202610210001_boards.sql`
+   5. `migrations/202610220001_board_access_returning.sql`
+   6. `migrations/202610220002_board_lifecycle.sql`
+   7. `migrations/202610260001_task_attachment_management.sql`
+   8. `migrations/202610260002_delete_inactive_boards.sql`
+   9. `migrations/202610260003_profile_avatars.sql`
+
+   No vuelvas a ejecutar el schema bootstrap en una instalación existente. Las tareas y cuentas activas existentes se asignan a `Offline`; `General` inicia vacío. Revisa la política de asignación antes de aplicar en producción. Las migraciones `202610260001`–`202610260003` están presentes en el árbol local; su aplicación remota no se verificó durante la última sincronización documental.
 3. En Supabase Auth, deshabilita **Allow new users to sign up** (registro público). La API administrativa `createUser` continúa disponible. No es necesario desactivar globalmente la confirmación por correo: esta función usa `email_confirm: true` al crear cada cuenta.
 
    Alternativamente, con CLI **2.121.0** se puede revisar y aplicar el único ajuste declarado de Auth en `config.toml`, conservando las propiedades no declaradas:
@@ -22,10 +33,10 @@ La SPA sigue alojada en GitHub Pages. Las operaciones privilegiadas se ejecutan 
 
    `config.toml` desactiva únicamente la validación JWT del gateway de esta función: la función valida el bearer token con `auth.getUser` y exige un perfil `admin` activo antes de cualquier operación. `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` son variables del entorno de funciones de Supabase. **Nunca** las copies a variables `VITE_*` ni a la SPA.
 
-   Estado del proyecto de producción (2026-10-22): `admin-users` está desplegada en la **versión 4, ACTIVE**, y el código descargado del remoto es **idéntico byte a byte** a `functions/admin-users/` del repositorio. La versión anterior (3) no contenía la acción `promote-admin`, por lo que «Hacer administrador» habría fallado; tras el redespliegue la función responde sin sesión con `401 {"error":"Inicia sesión para continuar."}`, es decir, valida el bearer en su propio código y no en el gateway. `supabase config diff` informa **0 cambios aplicables**: `auth.enable_signup` ya está deshabilitado en remoto y `functions list` confirma `verify_jwt: false`. Las diferencias que reporta el diff son propiedades solo remotas (site_url, correo, MFA, pooler, storage vector) que `config push` conservaría y que no requieren acción.
+    Estado remoto histórico verificado el 2026-10-22: `admin-users` estaba desplegada en la **versión 4, ACTIVE**, y el código descargado coincidía byte a byte con el repo. La versión anterior (3) no incluía `promote-admin`; después del redespliegue la función respondía sin sesión con 401 y validaba el bearer en su código. `supabase config diff` no informaba cambios aplicables, `auth.enable_signup` estaba deshabilitado y `verify_jwt: false`. No se repitieron esas consultas en la sincronización documental actual; este registro no verifica el estado remoto presente ni los cambios locales posteriores.
 5. Publica la web con `npm run build` y el flujo habitual de GitHub Pages.
 
-Para una instalación nueva, `../supabase-schema.sql` incluye el modelo de tableros y sus políticas; no apliques además las migraciones ya incluidas en el bootstrap.
+Para una instalación nueva, `../supabase-schema.sql` incluye el modelo de tableros, RPC de borrado, permisos del nombre de adjunto y bucket/policies de avatares. No apliques además las migraciones ya incluidas en el bootstrap.
 
 ### Tableros y acceso por membresía
 
@@ -41,25 +52,49 @@ Para una instalación nueva, `../supabase-schema.sql` incluye el modelo de table
 
 Al desactivar un tablero, sus miembros dejan de verlo en el selector y de acceder a sus tareas (RLS), incluida la URL directa; el administrador activo conserva el acceso y puede reactivarlo. La policy de lectura de `boards` ya no llama a ninguna función que lea `boards`, para no reintroducir la recursión que corrigió `202610220001_board_access_returning.sql`; los miembros leen su propia fila de `board_members` mediante la policy «Members read own memberships».
 
-RLS limita tareas, asignaciones, comentarios, metadata de adjuntos y Storage por tablero. Crear tarea exige rol admin/usuario activo y acceso al tablero; cambiar tablero usa `move_task_to_board`, exige acceso a origen y destino y actualiza la misma tarea conservando sus relaciones. La secuencia se aplicó en el proyecto Supabase seleccionado y los probes SQL remotos pasaron el 2026-10-21. El push y publicación de la SPA siguen pendientes.
+RLS limita tareas, asignaciones, comentarios, metadata de adjuntos y Storage por tablero. Crear tarea exige rol admin/usuario activo y acceso al tablero; cambiar tablero usa `move_task_to_board`, exige acceso a origen y destino y actualiza la misma tarea conservando sus relaciones. El probe SQL remoto de la secuencia base se registró el 2026-10-21; las verificaciones posteriores de `202610220001`/`202610220002` se registran a continuación. Los registros son históricos y no verifican migraciones posteriores.
 
-`202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql` se aplicaron en ese mismo proyecto el 2026-10-22, en ese orden. Después de aplicarlas se verificaron de nuevo las tres suites (`boards.sql`, `task_assignments.sql` y `user_access.sql`): las tres pasan y sus fixtures se revierten con `ROLLBACK`. El proyecto conserva sus 4 tableros y sus 32 tareas; la columna `is_active` se creó con `true` en todos ellos.
+Registro remoto histórico: `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql` se aplicaron en el proyecto elegido el 2026-10-22, en ese orden. Después se ejecutaron las tres suites (`boards.sql`, `task_assignments.sql`, `user_access.sql`) con `PASS` y fixtures revertidos con `ROLLBACK`. El proyecto conservaba sus 4 tableros y 32 tareas; `is_active` quedó `true`. Esta evidencia no verifica las migraciones `202610260001`–`202610260003` ni el estado remoto actual.
 
 Las cargas nuevas usan path `<task-id>/<UUID>.<ext>`; las antiguas con path plano se resuelven desde metadata. El bucket de adjuntos permanece privado. La UI genera URLs firmadas de corta duración; accesos firmados ya emitidos o archivos descargados no se revocan retroactivamente.
 
-Prueba transaccional con fixtures revertidos:
+## Gestión de adjuntos (migración local `202610260001`)
+
+`202610260001_task_attachment_management.sql` permite actualizar en cliente únicamente `task_attachments.file_name`. RLS autoriza al uploader, creador de la tarea o administrador activo, siempre con acceso activo al tablero; los otros campos y el path de Storage no se modifican.
+
+La eliminación quita primero el objeto del bucket privado y después su metadata. Son peticiones separadas a Storage y PostgreSQL, no una transacción conjunta. Si falla la segunda etapa, la fila puede permanecer aunque el objeto ya se haya eliminado. La migración no requiere otra Edge Function.
+
+## Borrado permanente de tableros inactivos (migración local `202610260002`)
+
+`202610260002_delete_inactive_boards.sql` crea la RPC `delete_inactive_board(p_board_id)`. Requiere administrador activo, tablero existente y `is_active = false`; la función bloquea la fila, elimina sus tareas y luego el tablero. Las relaciones de tarea se eliminan por cascada. El cliente elimina previamente, por lotes, los objetos del bucket `task-attachments`.
+
+Storage y PostgreSQL no comparten transacción. Un fallo de Storage detiene la llamada a la RPC; si la RPC falla después de limpiar Storage, las filas pueden quedar y faltar algunos objetos. La operación es permanente y no hay restauración desde la aplicación.
+
+La suite `tests/boards.sql` cubre permisos de renombrado de adjuntos y borrado de tableros inactivos. Ejecutarla después de `202610260002` en una base de pruebas; usa fixtures transaccionales con `ROLLBACK`:
 
 ```bash
 npx supabase@2.121.0 db query --linked --project-ref <project-ref> --file supabase/tests/boards.sql
 ```
 
-Verificación local: `boards.sql`, `task_assignments.sql` y `user_access.sql` pasan contra PostgreSQL embebido con Auth/Storage simulados, bootstrap y secuencia incremental. Verificación remota: las mismas suites pasaron contra el proyecto Supabase seleccionado; cada fixture se revierte con `ROLLBACK`. Ninguna prueba es auditoría de seguridad completa ni valida otros entornos.
+## Avatares de perfil (migración local `202610260003`)
+
+`202610260003_profile_avatars.sql` declara público el bucket `avatars`, limita archivos a 2 MiB y a `image/jpeg`, `image/png` o `image/webp`, y autoriza al propietario o a un administrador activo a insertar/reemplazar objetos. La aplicación usa `<profile-id>/avatar` y persiste la URL pública en `profiles.avatar_url`. Los objetos son legibles públicamente: no cargues imágenes sensibles.
+
+La suite `tests/profile_avatars.sql` comprueba límites, carga/reemplazo propio, escritura administrativa y denegaciones cruzadas; termina con `ROLLBACK`:
+
+```bash
+npx supabase@2.121.0 db query --linked --project-ref <project-ref> --file supabase/tests/profile_avatars.sql
+```
+
+La migración y esta suite están en el árbol local; no se confirmó su aplicación ni ejecución remota durante la última sincronización.
+
+Las pruebas SQL transaccionales crean fixtures que terminan con `ROLLBACK`. Verificación local histórica: `boards.sql`, `task_assignments.sql` y `user_access.sql` pasaron contra PostgreSQL embebido con Auth/Storage simulados, bootstrap y secuencia incremental. Verificación remota histórica: las mismas suites pasaron contra el proyecto Supabase seleccionado. Ninguna prueba es auditoría de seguridad completa ni valida otros entornos. Las suites no se ejecutaron en la sincronización documental actual; los probes nuevos en `boards.sql` requieren aplicar hasta `202610260002`, y `profile_avatars.sql` requiere `202610260003`.
 
 ## Contrato y comprobación manual
 
 POST autenticado a `admin-users`, vía `supabase.functions.invoke`:
 
-- `{ action: 'list', page: 1 }`: devuelve `users`, `total`, `pageSize` (50).
+- `{ action: 'list', page: 1 }`: devuelve `users`, `total`, `pageSize` (50); el código local proyecta `avatar_url`.
 - `{ action: 'create', fullName, email, password }`: alta como `usuario`, activa y confirmada.
 - `{ action: 'password', userId, password }`: establece contraseña (8–128 caracteres, además de la política de Supabase).
 - `{ action: 'rename', userId, fullName }`: administrador activo actualiza solo el nombre en `profiles` (1–120 caracteres tras recortar espacios exteriores); no cambia metadata de Auth ni otros campos de la cuenta.
@@ -69,9 +104,15 @@ POST autenticado a `admin-users`, vía `supabase.functions.invoke`:
 
 Comprueba con cuentas separadas:
 
-Antes de publicar la nueva SPA, verifica además: admin ve Offline y General, usuario/invitado ve solo tableros asignados, asignar una tarea no añade membresía, miembro de ambos tableros traslada una sola tarea conservando sus relaciones, y la cuenta que no pertenece al destino recibe denegación. Al retirar una membresía, nuevas peticiones de tablas/Storage deben quedar denegadas.
+En un entorno de pruebas antes de desplegar, verifica: admin ve Offline y General, usuario/invitado ve solo tableros asignados, asignar una tarea no añade membresía, miembro de ambos tableros traslada una sola tarea conservando sus relaciones, y la cuenta que no pertenece al destino recibe denegación. Al retirar una membresía, nuevas peticiones de tablas/Storage deben quedar denegadas.
 
 Para el ciclo de vida de los tableros: en «Tableros», el administrador ve «Cambiar nombre», «Desactivar» y «Activar»; el tablero desactivado pasa a su propia sección, visible solo para administradores. Comprueba que un miembro deja de ver el tablero desactivado y que su URL directa responde «no tienes acceso»; que «Tareas pendientes» suma `backlog`, `por_hacer` y `haciendo`; y que una cuenta no administradora recibe denegación al invocar `rename_board` o `set_board_active` directamente.
+
+Para gestión de adjuntos: uploader/creador/admin con acceso al tablero puede cambiar `file_name` sin alterar path/contenido; confirma el borrado con el nombre y verifica el objeto y metadata. Prueba fallos de Storage y de Postgres por separado: no son una transacción común.
+
+Para el borrado de tableros: solo un administrador activo debe poder eliminar un tablero desactivado. Verifica que un tablero activo es rechazado, que el tablero inactivo y sus tareas/relaciones desaparecen, y que Storage se limpia. Ejecuta en un entorno de prueba porque el borrado no tiene recuperación; recuerda que los objetos de Storage se eliminan antes de la RPC SQL.
+
+Para avatares: comprueba carga/reemplazo propio y por admin, rechazo de otros usuarios, límite de 2 MiB y tipos JPG/PNG/WebP. Confirma que la imagen es públicamente legible y que `profiles.avatar_url` queda actualizado. No cargues datos sensibles.
 
 1. Un admin ve «Usuarios»; usuario e invitado no pueden abrir la ruta ni invocar la función (403).
 2. Alta: la sesión del admin no cambia; la cuenta nueva entra inmediatamente sin correo.
@@ -80,6 +121,7 @@ Para el ciclo de vida de los tableros: en «Tableros», el administrador ve «Ca
 5. Intenta cambiar `role` o `is_active` directamente con el cliente autenticado: debe ser rechazado por permisos de columnas.
 6. Verifica que las tareas, comentarios y adjuntos del usuario desactivado se conservan.
 7. Desde «Usuarios», confirma la promoción de una cuenta `usuario` o `invitado`; verifica que el rol cambia a `admin`, que `is_active` no cambia y que una cuenta no administradora recibe 403 si intenta invocar directamente la operación. Re-despliega `admin-users` para que la acción nueva esté disponible en Supabase.
+8. En «Usuarios» y el menú de cuenta, cambia un avatar autorizado; verifica fallback si la imagen no carga y permisos por propietario/admin.
 
 `is_active` es el estado de acceso a **esta plataforma**: no elimina el usuario de Auth ni invalida criptográficamente sus JWT. La protección inmediata es RLS, que consulta el estado en cada petición. El cliente autenticado puede leer su propio perfil inactivo para mostrar el bloqueo, pero no modificarlo. Los avatares del bucket público siguen siendo públicos; archivos ya descargados o URLs firmadas emitidas previamente no pueden retirarse retroactivamente mediante RLS.
 

@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { TaskDetailModal } from './TaskDetailModal'
-import type { TaskWithAssignees } from '@/types'
+import type { TaskAttachment, TaskWithAssignees } from '@/types'
 
 const task: TaskWithAssignees = {
   board_id: 'offline',
@@ -45,6 +45,68 @@ describe('Traslado de tareas entre tableros', () => {
   })
 })
 const base = { task, comments: [], attachments: [], isOpen: true, onClose: vi.fn() }
+const attachment: TaskAttachment = {
+  id: 'attachment-1', task_id: task.id, uploaded_by: 'uploader-1', file_name: 'contrato.pdf',
+  file_url: 'https://project.example/task-attachments/task-1/uuid.pdf', signed_url: 'https://signed.example/contrato',
+  file_size: 1024, mime_type: 'application/pdf', created_at: '2026-10-26',
+}
+
+describe('Gestión de adjuntos', () => {
+  it('permite editar el nombre mostrado y confirma el guardado', async () => {
+    const user = userEvent.setup()
+    const onRenameAttachment = vi.fn().mockResolvedValue(undefined)
+    render(<TaskDetailModal {...base} initialTab="attachments" attachments={[attachment]} onRenameAttachment={onRenameAttachment}
+      canManageAttachment={() => true} />)
+
+    await user.click(screen.getByRole('button', { name: 'Cambiar nombre de contrato.pdf' }))
+    const input = screen.getByRole('textbox', { name: 'Nuevo nombre de contrato.pdf' })
+    expect(input).toHaveValue('contrato.pdf')
+    await user.clear(input)
+    expect(screen.getByRole('button', { name: 'Guardar nombre' })).toBeDisabled()
+    await user.type(input, 'contrato-firmado.pdf')
+    await user.click(screen.getByRole('button', { name: 'Guardar nombre' }))
+
+    expect(onRenameAttachment).toHaveBeenCalledExactlyOnceWith(attachment.id, 'contrato-firmado.pdf')
+    expect(await screen.findByRole('status')).toHaveTextContent('Nombre del adjunto actualizado.')
+    expect(screen.queryByRole('textbox', { name: 'Nuevo nombre de contrato.pdf' })).not.toBeInTheDocument()
+  })
+
+  it('conserva el nombre en edición y muestra error si el renombrado falla', async () => {
+    const user = userEvent.setup()
+    const onRenameAttachment = vi.fn().mockRejectedValue(new Error('Sin conexión'))
+    render(<TaskDetailModal {...base} initialTab="attachments" attachments={[attachment]} onRenameAttachment={onRenameAttachment}
+      canManageAttachment={() => true} />)
+
+    await user.click(screen.getByRole('button', { name: 'Cambiar nombre de contrato.pdf' }))
+    const input = screen.getByRole('textbox', { name: 'Nuevo nombre de contrato.pdf' })
+    await user.clear(input)
+    await user.type(input, 'borrador.pdf')
+    await user.click(screen.getByRole('button', { name: 'Guardar nombre' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cambiar el nombre del adjunto')
+    expect(input).toHaveValue('borrador.pdf')
+    expect(onRenameAttachment).toHaveBeenCalledExactlyOnceWith(attachment.id, 'borrador.pdf')
+  })
+
+  it('confirma la eliminación del documento y no ofrece acciones a quien no tiene permiso', async () => {
+    const user = userEvent.setup()
+    const onDeleteAttachment = vi.fn().mockResolvedValue(undefined)
+    const { rerender } = render(<TaskDetailModal {...base} initialTab="attachments" attachments={[attachment]}
+      onRenameAttachment={vi.fn()} onDeleteAttachment={onDeleteAttachment} canManageAttachment={() => true} />)
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar contrato.pdf' }))
+    const confirmation = screen.getByRole('group', { name: 'Confirmar eliminación' })
+    expect(confirmation).toHaveTextContent('contrato.pdf')
+    await user.click(within(confirmation).getByRole('button', { name: 'Sí, eliminar' }))
+    expect(onDeleteAttachment).toHaveBeenCalledExactlyOnceWith(attachment.id)
+    expect(await screen.findByRole('status')).toHaveTextContent('Adjunto eliminado.')
+
+    rerender(<TaskDetailModal {...base} initialTab="attachments" attachments={[attachment]}
+      onRenameAttachment={vi.fn()} onDeleteAttachment={onDeleteAttachment} canManageAttachment={() => false} />)
+    expect(screen.queryByRole('button', { name: 'Cambiar nombre de contrato.pdf' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Eliminar contrato.pdf' })).not.toBeInTheDocument()
+  })
+})
 
 function createImagePasteEvent(file: File) {
   const event = new Event('paste', { bubbles: true, cancelable: true })

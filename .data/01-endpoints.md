@@ -71,6 +71,17 @@ No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge
 - Efecto colateral autorizado en RLS: mientras el tablero está desactivado, sus miembros pierden la lectura del tablero y el acceso a sus tareas (también por URL directa); el admin activo conserva el acceso.
 - Fuente: `src/features/boards/api.ts:49-60`, `supabase/migrations/202610220002_board_lifecycle.sql:56-66`.
 
+### Eliminar tablero desactivado — Storage + RPC `delete_inactive_board`
+
+- Propósito: borrar permanentemente un tablero previamente desactivado y sus tareas, comentarios, responsables y metadata de adjuntos.
+- Request del cliente: `{ p_board_id: uuid }` a `supabase.rpc('delete_inactive_board', ...)`. Antes de llamar a la RPC, `deleteInactiveBoard` confirma que el tablero existe y está desactivado; pagina las tareas/adjuntos, deriva y deduplica paths y elimina objetos de `task-attachments` por lotes de hasta 100 (`src/features/boards/api.ts:69-123`).
+- Response SQL: `void`. La RPC vuelve a comprobar admin activo, ID y estado bajo bloqueo de fila; elimina tareas y después el tablero. Los datos relacionales se eliminan por cascadas (`supabase/migrations/202610260002_delete_inactive_boards.sql:5-25`).
+- Auth/validación: solo admin activo (`42501`); ID nulo (`22023`); tablero inexistente (`P0002`); tablero activo (`55000`). La comprobación del cliente no sustituye el control de la RPC.
+- Fallos parciales: Storage y PostgreSQL no son una transacción única. `BOARD_ATTACHMENTS_DELETE_FAILED` detiene el borrado SQL; `BOARD_DELETE_FAILED_AFTER_STORAGE` indica que los objetos ya se quitaron pero la RPC falló. Paths irreconocibles producen `BOARD_ATTACHMENT_PATH_INVALID` antes de limpiar (`src/features/boards/api.ts:88-131`).
+- Caché: tras éxito se quitan consultas de tareas, comentarios, adjuntos y miniaturas, e invalida `['boards']` (`src/features/boards/api.ts:135-145`).
+- Estado remoto: la migración existe localmente; no se verificó su aplicación en Supabase.
+- Fuente: `src/features/boards/api.ts:69-145`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-25`.
+
 ### Leer/administrar membresías — `board_members` y RPC `set_board_members`
 
 - Las lecturas de miembros se paginan en rangos de 500. El admin puede leer la tabla completa de membresías y sustituirlas mediante `{ p_board_id, p_profile_ids }`.
@@ -172,9 +183,27 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 
 - Propósito: consultar metadatos por `task_id`, ordenados por fecha ascendente.
 - Response: metadata como `TaskAttachment`; por archivo se deriva el path de `file_url` y se emite URL firmada de 60 segundos. La lectura queda limitada por acceso al tablero de la tarea.
-- Fuente: `src/features/board/attachmentsApi.ts:11-27`.
+- Fuente: `src/features/board/attachmentsApi.ts:12-27`, `src/lib/storage.ts:1-10`.
+
+### Renombrar adjunto — `task_attachments.update(file_name)`
+
+- Propósito: cambiar el nombre visible del archivo en los metadatos. No cambia el objeto, su contenido ni su path en Storage.
+- Request: `{ file_name }`, recortado; el cliente actualiza la fila filtrando por `id` y solicita el `id` resultante.
+- Response: un `id`; si RLS no devuelve una fila, el cliente falla en vez de anunciar un cambio inexistente. El nombre vacío se rechaza antes de enviar la mutación.
+- Auth: cuenta activa con acceso al tablero y que sea quien subió el adjunto, creadora de la tarea o admin activo. La policy se aplica en Postgres; el grant cliente solo permite `UPDATE(file_name)`.
+- Caché: invalida `['attachments']` y `['task-image-previews']`, de modo que la lista y las miniaturas reciban el nombre nuevo.
+- Fuente: `src/features/board/attachmentsApi.ts:40-53,181-190`, `supabase/migrations/202610260001_task_attachment_management.sql:4-22`, `supabase-schema.sql:461,617-628`.
 
 ## Storage vía Supabase
+
+### Subir avatar — bucket `avatars` + `profiles.update`
+
+- Propósito: cargar o reemplazar la foto de perfil propia; la UI administrativa también permite a un admin cambiar la foto de otra cuenta.
+- Validación cliente: MIME `image/jpeg`, `image/png` o `image/webp`, máximo 2 MiB (`src/features/users/avatarApi.ts:3-16`).
+- Request: path `<profile-id>/avatar`, `upsert: true`, `cacheControl: '0'`, content type del archivo; luego actualiza solo `profiles.avatar_url` con la URL pública del objeto (`src/features/users/avatarApi.ts:14-35`).
+- Autorización: Storage y RLS permiten escritura al propietario o a un admin activo; el campo `avatar_url` es la columna de perfil actualizable. La lectura del bucket es pública. La migración configura tamaño máximo 2 MiB y MIME permitidos, además de policies de inserción/reemplazo (`supabase-schema.sql:363-404`, `supabase/migrations/202610260003_profile_avatars.sql:5-50`).
+- Errores: propaga errores de Storage/Postgres; si el `UPDATE` no devuelve una fila, el cliente informa que no se guardó el perfil. El objeto puede haberse cargado antes del error de metadata; no hay transacción entre ambos servicios.
+- Fuente: `src/features/users/avatarApi.ts:3-35`, `supabase/migrations/202610260003_profile_avatars.sql:5-50`.
 
 ### Subir adjunto — bucket `task-attachments`
 
@@ -186,13 +215,15 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 
 ### Eliminar adjunto — Storage y `task_attachments.delete`
 
-- Secuencia observada: extrae el último segmento de `fileUrl`, intenta quitar ese objeto del bucket y después borra metadata por `id`.
-- Response: se consulta el error al borrar metadata; el resultado de borrar el objeto no se valida explícitamente.
-- Fuente: `src/features/board/attachmentsApi.ts:150-172`.
+- Secuencia observada: deriva el path de `file_url`, comprueba el resultado de `Storage.remove` y después elimina la fila por `id`, solicitando el `id` borrado.
+- Auth: quien subió el adjunto, quien creó su tarea o un admin activo, siempre con cuenta activa y acceso al tablero; RLS/Storage vuelven a aplicar la autorización en servidor.
+- Errores: propaga fallos de Storage/Postgres y considera fallido el borrado si no se devuelve una fila. Storage y Postgres son llamadas separadas, no una única transacción.
+- Caché: invalida `['attachments']` y `['task-image-previews']` al completar.
+- Fuente: `src/features/board/attachmentsApi.ts:55-71,194-204`, `src/lib/storage.ts:1-10`, `supabase-schema.sql:327-340`, `supabase/migrations/202610210001_boards.sql:152-159`.
 
 ### Miniaturas — URLs firmadas de `task-attachments`
 
-Consulta metadata por IDs de tareas, filtra MIME `image/`, firma rutas por 60 segundos y agrupa `{ id, fileName, signedUrl }` por tarea. La query se refresca cada 45 segundos; los enlaces de detalle también usan firmas breves. La referencia persistida sigue construida con `getPublicUrl` aunque el bucket sea privado; ver D-02. Fuente: `src/features/board/attachmentsApi.ts:30-103`.
+Consulta metadata por IDs de tareas, filtra MIME `image/`, firma rutas por 60 segundos y agrupa `{ id, fileName, signedUrl }` por tarea. La query se refresca cada 45 segundos; los enlaces de detalle también usan firmas breves. La referencia persistida sigue construida con `getPublicUrl` aunque el bucket sea privado; ver D-02. Fuente: `src/features/board/attachmentsApi.ts:73-127`, `src/lib/storage.ts:1-10`.
 
 ## Edge Function — `admin-users`
 
@@ -207,10 +238,13 @@ Cliente: `supabase.functions.invoke('admin-users', { body })`, POST con bearer d
 | `set-active` | `userId`, `active: boolean` | `{ success: true }` | Solo `profiles.is_active`; prohíbe desactivación propia y conserva datos |
 | `promote-admin` | `userId` UUID | `{ success: true }` | Asigna `profiles.role = 'admin'`; no modifica `is_active` ni ofrece degradar roles |
 
+`list` proyecta `avatar_url` junto con el resto de `ManagedUser`. El cliente hace una consulta adicional a `profiles(id, avatar_url)` si una versión anterior de la Edge Function omite esa propiedad (`supabase/functions/admin-users/index.ts:34-41`, `src/features/users/api.ts:28-48`). La carga de avatares no es una acción Edge: usa Storage y `profiles.update` (ver arriba).
+
 Validación servidor: nombre recortado 1–120 caracteres; email validado, recortado y en minúsculas para alta; contraseña 8–128 caracteres más política de Auth; `userId` UUID. Solo un administrador activo puede ejecutar acciones; `promote-admin` acepta cualquier cuenta no administradora, activa o inactiva, y fija el rol en servidor, sin aceptar `role` ni `is_active` como valores del cliente. Propiedades extra se ignoran. Respuesta de error `{ error: string }`: 400 payload/operación o cuenta objetivo no actualizable, 401 sesión, 403 rol/estado, 405 método, 500 fallo interno/compensación/listado. `Cache-Control: no-store`; OPTIONS soportado. El cliente intenta leer el error JSON de `FunctionsHttpError.context` y usa fallback seguro en fallos de red/gateway (`supabase/functions/admin-users/validation.ts:8-34`, `supabase/functions/admin-users/index.ts:24-32,68-80`, `src/features/users/api.ts:11-24`).
 
 ## Límites del catálogo
 
 - Las rutas HTTP internas de Supabase, límites de tamaño configurados en el servicio, respuestas exactas de Auth y estado de despliegue del proyecto Supabase no son verificables desde este repositorio.
 - Administración usa páginas de 50 y usuarios asignables lotes de 500. Tareas/comentarios/adjuntos continúan sin paginación explícita. El catálogo no certifica rate limits ni configuración remota actual; conserva la evidencia previa de despliegue descrita en el README de este dominio.
-- Las tres RPCs de ciclo de vida (`list_boards_with_pending_counts`, `rename_board`, `set_board_active`) y la columna `boards.is_active` **están aplicadas en el proyecto Supabase remoto** desde el 2026-10-22 (`202610220001` y `202610220002`, en ese orden), y las tres suites SQL remotas pasan con fixtures revertidos con `ROLLBACK`. En una instalación donde falte la migración, el listado por RPC falla y el selector queda en error con reintento. La SPA compatible **ya está publicada en GitHub Pages** con `v0.6.0` el 2026-10-22 (workflow «Deploy to GitHub Pages», run `39860177282`, `headSha=21a44df`).
+- Historial remoto verificado hasta 2026-10-22: `202610220001`/`202610220002` y las tres suites SQL se aplicaron/pasaron en ese entorno; la SPA de ciclo de vida se publicó como `v0.6.0` (run `39860177282`). Esta evidencia no cubre el estado remoto actual ni las migraciones `202610260001`–`202610260003`, cuya aplicación no se verificó en esta sincronización.
+- Estado local 2026-10-26: el código y las tres migraciones están presentes en el árbol de trabajo; no se ejecutaron suites SQL local/remota ni se consultó el proyecto Supabase remoto. La documentación del proyecto señala `v0.8.1` (run `40004615822`) como última publicación registrada, sin consulta remota durante esta operación.

@@ -9,6 +9,7 @@ Estado: `borrador`
 - El usuario puede cerrar sesión.
 - El sistema mantiene sesión persistente.
 - Cada usuario tiene perfil con nombre completo, correo, foto, nick o alias y tipo.
+- Una cuenta activa puede cargar o reemplazar su propio avatar; un administrador activo puede hacerlo para cualquier cuenta. Se aceptan JPG, PNG y WebP de hasta 2 MiB.
 
 ## Roles
 
@@ -18,6 +19,13 @@ Estado: `borrador`
 - Invitado puede visualizar, pero no crear ni editar comentarios.
 - Cualquier cuenta activa puede editar los campos de cualquier tarea, propia o ajena; el borrado sigue reservado a su creador o a un administrador.
 - Administración de usuarios: listado, alta como `usuario`, edición del nombre completo, cambio de contraseña, activación/desactivación y promoción a `admin`. Solo un administrador activo puede promover cualquier cuenta no administradora (`usuario` o `invitado`, activa o inactiva); la acción requiere confirmación, solo cambia el rol y no ofrece degradar administradores.
+- La lista administrativa muestra los avatares y permite cambiar la foto de cualquier cuenta mediante un diálogo con vista previa.
+
+## Tableros
+
+- Un administrador activo puede crear tableros, gestionar miembros, cambiar nombre y activar/desactivar.
+- Los tableros desactivados se muestran solo a administradores activos. Sus miembros pierden acceso hasta que el tablero se reactive.
+- Un administrador activo puede eliminar permanentemente un tablero solo después de desactivarlo. La operación elimina el tablero, sus tareas, comentarios, responsables, metadata y objetos adjuntos; no hay recuperación.
 
 ## Tareas
 
@@ -29,6 +37,8 @@ Estado: `borrador`
 - Al crearla se pueden elegir cero, uno o varios usuarios activos mediante un desplegable por nombre/correo, con opción «Todos» y sin mostrar los ya asignados. Al abrir el detalle se precargan los responsables y se pueden añadir o desasignar con un guardado independiente, disponible para cualquier cuenta activa, incluidos invitados.
 - Cada tarea puede tener anotaciones especiales.
 - Cada tarea puede tener adjuntos de máximo 5 MB.
+- En «Adjuntos», el uploader, el creador de la tarea o un administrador activo con acceso al tablero puede renombrar o eliminar un adjunto. Renombrar cambia solo el nombre de metadata, no el objeto ni su path.
+- Antes de eliminar un adjunto se confirma la acción con el nombre del archivo.
 - Cualquier cuenta activa puede editar título, descripción, estado y prioridad de cualquier tarea, y moverla entre columnas o reordenarla dentro de su columna.
 
 ## Estados

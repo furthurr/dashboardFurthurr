@@ -2,7 +2,7 @@
 
 Estado: `aprobada`
 
-Última actualización: 2026-10-21
+Última actualización: 2026-10-27
 
 ## Archivo De Referencia
 
@@ -22,9 +22,10 @@ Campos requeridos por producto:
 
 - Nombre completo.
 - Correo.
-- Foto.
+- Foto (`avatar_url`), guardada como objeto del bucket público `avatars`.
 - Nick o alias.
 - Tipo de usuario.
+- La persona activa puede cargar/reemplazar su propio avatar; el administrador activo puede cambiar el de cualquier perfil. Solo JPG/PNG/WebP, máximo 2 MiB.
 
 ## Roles
 
@@ -81,8 +82,11 @@ El alcance de las acciones sobre tareas y sus recursos asociados (asignaciones, 
 | Eliminar comentarios ajenos | Sí | No | No |
 | Subir adjuntos | Sí | Sí | No |
 | Ver adjuntos | En cualquier tablero | Solo miembros | Solo miembros |
-| Eliminar adjuntos propios | Sí | Sí | No |
-| Eliminar adjuntos ajenos | Sí (de sus tareas) | No | No |
+| Renombrar adjunto | Si es uploader/creador de tarea/admin | Si es uploader o creador de tarea | No |
+| Eliminar adjunto | Si es uploader/creador de tarea/admin | Si es uploader o creador de tarea | No |
+| Ver avatares | Lectura pública del bucket | Lectura pública del bucket | Lectura pública del bucket |
+| Cambiar avatar propio (cuenta activa) | Sí | Sí | Sí |
+| Cambiar avatar de otra cuenta | Sí, admin activo | No | No |
 | Editar perfil propio | Sí | Sí | Sí |
 | Promover cuentas no administradoras a `admin` | Sí | No | No |
 | Asignar/desasignar responsables de tareas en tableros accesibles | Sí | Sí | Sí |
@@ -95,13 +99,15 @@ El alcance de las acciones sobre tareas y sus recursos asociados (asignaciones, 
 - Un administrador activo puede **cambiar el nombre** de cualquier tablero y **desactivarlo o reactivarlo**. El nombre conserva las reglas de 1–120 caracteres y la unicidad sin distinguir mayúsculas, también en tableros desactivados.
 - Los tableros desactivados se muestran en una **sección propia, visible solo para administradores activos**. Sus miembros dejan de verlos y de acceder a sus tareas, incluida la URL directa; el administrador activo conserva el acceso y puede reactivarlos.
 - Desactivar un tablero **no borra** tareas, comentarios, adjuntos ni membresías; al reactivarlo, sus miembros recuperan el acceso.
+- Un administrador activo puede eliminar permanentemente un tablero solo cuando está desactivado. La operación elimina sus tareas y relaciones Postgres; el cliente elimina antes los objetos adjuntos de Storage. Storage y Postgres no comparten transacción, así que un fallo puede dejar objetos parcialmente eliminados aunque las filas se conserven.
 - Un tablero desactivado no se ofrece como destino de traslado de tareas.
 - El selector de tableros muestra el número de **tareas pendientes** de cada tablero visible: la suma de las tareas en `backlog`, `por_hacer` y `haciendo`.
 - Las cuentas activas existentes se añaden inicialmente a `Offline`; `General` queda vacío. Todas las tareas preexistentes se asignan a `Offline` durante la migración.
 - Crear tareas conserva la regla admin/usuario y exige membresía en ese tablero. Cualquier cuenta activa con acceso al tablero puede editar tareas según las reglas existentes.
 - Trasladar una tarea permite a cualquier cuenta activa con acceso tanto al tablero de origen como al destino; conserva la identidad y relaciones de la tarea. No crea una copia. La tarea deja de ser visible en origen.
 - RLS limita tareas, asignaciones, comentarios, metadatos de adjuntos y objetos de Storage al acceso del tablero. Los enlaces firmados ya emitidos permanecen utilizables hasta expirar; RLS no revoca descargas ya realizadas.
-- Implementación: `supabase/migrations/202610210001_boards.sql`, `migrations/202610220001_board_access_returning.sql` y `migrations/202610220002_board_lifecycle.sql`. Los cambios de estado y nombre se aplican mediante RPC (`rename_board`, `set_board_active`) que exigen administrador activo; el cliente no escribe `boards` directamente. El selector usa `list_boards_with_pending_counts()`, que replica la visibilidad de RLS. Verificado con probes SQL contra PostgreSQL local y en el proyecto Supabase remoto el 2026-10-22, donde las tres suites remotas pasan y revierten sus fixtures. La SPA con este comportamiento se publicó en GitHub Pages con la versión `v0.6.0` el 2026-10-22.
+- Implementación de ciclo de vida: `supabase/migrations/202610210001_boards.sql`, `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql`. `rename_board` y `set_board_active` requieren administrador activo; el selector usa `list_boards_with_pending_counts()`. La aplicación remota y sus suites se verificaron el 2026-10-22 y la SPA de ciclo de vida se publicó con `v0.6.0` ese día (registro histórico).
+- La migración local `202610260002_delete_inactive_boards.sql` añade `delete_inactive_board`; su aplicación remota no se verificó durante la actualización documental del 2026-10-27.
 
 ## Asignaciones de tareas
 
@@ -135,3 +141,17 @@ El alcance de las acciones sobre tareas y sus recursos asociados (asignaciones, 
 - Un administrador no puede desactivarse a sí mismo.
 - El cliente no actualiza `profiles.role` ni `profiles.is_active` directamente mediante PostgREST. La promoción usa una acción específica de `admin-users`, que verifica en servidor el rol activo del actor; no hay selección arbitraria de rol ni degradación desde esta sección.
 - El registro público de Supabase debe deshabilitarse en el despliegue; las cuentas se crean con la API administrativa.
+
+## Gestión de adjuntos
+
+- Renombrar solo modifica `task_attachments.file_name`; el grant del cliente no permite cambiar path, uploader, tarea, tamaño ni MIME.
+- Puede renombrar o eliminar el uploader, el creador de la tarea o un administrador activo, siempre que la cuenta tenga acceso activo al tablero. La RLS de `task_attachments` y Storage vuelve a comprobar permisos en servidor.
+- El borrado primero elimina el objeto del bucket privado y después la metadata. No es una transacción común: si falla la segunda fase, el registro puede persistir con el objeto ya eliminado.
+- La migración local `202610260001_task_attachment_management.sql` requiere el schema previo de tableros. No se confirmó su aplicación remota ni se ejecutaron sus probes SQL en la actualización documental del 2026-10-27.
+
+## Avatares
+
+- El bucket `avatars` es público para lectura y acepta JPEG, PNG y WebP con máximo de 2 MiB.
+- Las escrituras a Storage se permiten al propietario del primer segmento del path o al administrador activo. La aplicación carga/reemplaza `<profile-id>/avatar` y guarda la URL pública en `profiles.avatar_url`.
+- Todas las cuentas activas pueden modificar su propio avatar; el administrador activo puede cambiar el de cualquier perfil. No almacenar contenido sensible en un avatar porque su objeto es públicamente legible.
+- La migración local `202610260003_profile_avatars.sql` configura límites y policies. No se verificó su aplicación en Supabase remoto durante la actualización documental del 2026-10-27.

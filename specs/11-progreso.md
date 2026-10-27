@@ -84,3 +84,10 @@
 
 - Configurar secrets en GitHub: `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`
 - Hacer primer deploy a GitHub Pages
+
+## 2026-10-27 — sincronización documental del árbol local
+
+- Se actualizaron los requisitos funcionales, el modelo de datos, la matriz de permisos y la spec de UI/UX para reflejar avatares, gestión de adjuntos y borrado permanente de tableros desactivados.
+- El código y las migraciones `202610260001_task_attachment_management.sql`, `202610260002_delete_inactive_boards.sql` y `202610260003_profile_avatars.sql` están presentes en el árbol local; esta anotación no afirma que sus migraciones estén aplicadas en Supabase ni que la SPA esté publicada con esos cambios.
+- La secuencia y los probes de `202610220001`/`202610220002` conservan su verificación remota histórica del 2026-10-22. Las migraciones nuevas y sus suites SQL no se ejecutaron ni verificaron remotamente durante esta actualización documental.
+- Se actualizaron además los READMEs operativos y los índices de arquitectura/datos/diseño/navegación. Las pruebas de producto no se ejecutaron como parte de este cambio documental.

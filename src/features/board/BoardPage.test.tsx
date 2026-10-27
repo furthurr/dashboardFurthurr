@@ -3,14 +3,15 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BoardPage } from './BoardPage'
-import type { TaskWithAssignees } from '@/types'
+import type { TaskAttachment, TaskWithAssignees } from '@/types'
 
 const mocks = vi.hoisted(() => {
   const mutation = () => ({ mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false })
   return {
     tasks: vi.fn(), refetch: vi.fn(), update: mutation(), status: mutation(), positions: mutation(),
     create: mutation(), remove: mutation(), comment: mutation(), deleteComment: mutation(),
-    upload: mutation(), deleteAttachment: mutation(), taskImages: vi.fn(), assign: mutation(), users: vi.fn(), role: 'admin',
+    upload: mutation(), renameAttachment: mutation(), deleteAttachment: mutation(), taskImages: vi.fn(), assign: mutation(), users: vi.fn(), role: 'admin',
+    attachments: [] as TaskAttachment[],
   }
 })
 
@@ -27,9 +28,10 @@ vi.mock('./commentsApi', () => ({
   useCreateComment: () => mocks.comment, useDeleteComment: () => mocks.deleteComment,
 }))
 vi.mock('./attachmentsApi', () => ({
-  useAttachments: () => ({ data: [], isLoading: false, error: null }),
+  useAttachments: () => ({ data: mocks.attachments, isLoading: false, error: null }),
   useTaskImagePreviews: mocks.taskImages,
-  useUploadAttachment: () => mocks.upload, useDeleteAttachment: () => mocks.deleteAttachment,
+  useUploadAttachment: () => mocks.upload, useRenameAttachment: () => mocks.renameAttachment,
+  useDeleteAttachment: () => mocks.deleteAttachment,
 }))
 vi.mock('@/features/auth/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1', email: 'equipo@example.test' }, profile: { role: mocks.role }, signOut: vi.fn() }),
@@ -41,6 +43,11 @@ const task: TaskWithAssignees = {
   priority: 'normal', special_notes: null, created_by: 'user-1', position: 0,
   created_at: '2026-10-16', updated_at: '2026-10-16', assignees: [],
 }
+const attachment: TaskAttachment = {
+  id: 'attachment-1', task_id: task.id, uploaded_by: 'uploader-1', file_name: 'reporte.pdf',
+  file_url: 'https://project.example/task-attachments/task-1/reporte.pdf', signed_url: 'https://signed.example/reporte',
+  file_size: 1024, mime_type: 'application/pdf', created_at: '2026-10-26',
+}
 const renderBoard = () => render(<MemoryRouter><BoardPage boardId="offline" boardName="Offline" boards={[]} /></MemoryRouter>)
 const ana = { id: 'ana', full_name: 'Ana', email: 'ana@example.test', avatar_url: null, role: 'usuario' as const, is_active: true }
 const bruno = { ...ana, id: 'bruno', full_name: 'Bruno', email: 'bruno@example.test' }
@@ -51,6 +58,7 @@ beforeEach(() => {
   mocks.assign.mutateAsync.mockResolvedValue([])
   mocks.users.mockReturnValue({ data: [], isLoading: false, error: null, refetch: vi.fn() })
   mocks.role = 'admin'
+  mocks.attachments = []
   mocks.status.mutateAsync.mockResolvedValue(undefined)
   mocks.tasks.mockReturnValue({ data: [task], isLoading: false, error: null, refetch: mocks.refetch })
   mocks.taskImages.mockReturnValue({ data: {} })
@@ -85,6 +93,49 @@ describe('Integración del tablero', () => {
     mocks.tasks.mockReturnValue({ data: [], isLoading: false, error: null, refetch: mocks.refetch })
     view.rerender(<MemoryRouter><BoardPage boardId="offline" boardName="Offline" boards={[]} /></MemoryRouter>)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('permite al uploader renombrar y eliminar su adjunto desde el detalle', async () => {
+    const user = userEvent.setup()
+    mocks.role = 'usuario'
+    mocks.tasks.mockReturnValue({ data: [{ ...task, created_by: 'task-owner' }], isLoading: false, error: null, refetch: mocks.refetch })
+    mocks.attachments = [{ ...attachment, uploaded_by: 'user-1' }]
+    renderBoard()
+
+    await user.click(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }))
+    await user.click(screen.getByRole('tab', { name: 'Adjuntos (1)' }))
+    await user.click(screen.getByRole('button', { name: 'Cambiar nombre de reporte.pdf' }))
+    const nameInput = screen.getByRole('textbox', { name: 'Nuevo nombre de reporte.pdf' })
+    await user.clear(nameInput)
+    await user.type(nameInput, 'reporte-final.pdf')
+    await user.click(screen.getByRole('button', { name: 'Guardar nombre' }))
+    expect(mocks.renameAttachment.mutateAsync).toHaveBeenCalledExactlyOnceWith({
+      attachmentId: attachment.id, fileName: 'reporte-final.pdf',
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar reporte.pdf' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, eliminar' }))
+    expect(mocks.deleteAttachment.mutateAsync).toHaveBeenCalledExactlyOnceWith({
+      attachmentId: attachment.id, fileUrl: attachment.file_url,
+    })
+  })
+
+  it('no muestra gestión de adjuntos a un miembro que no los subió ni creó la tarea', async () => {
+    const user = userEvent.setup()
+    mocks.role = 'usuario'
+    mocks.tasks.mockReturnValue({ data: [{ ...task, created_by: 'task-owner' }], isLoading: false, error: null, refetch: mocks.refetch })
+    mocks.attachments = [attachment]
+    const view = renderBoard()
+
+    await user.click(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }))
+    await user.click(screen.getByRole('tab', { name: 'Adjuntos (1)' }))
+    expect(screen.queryByRole('button', { name: 'Cambiar nombre de reporte.pdf' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Eliminar reporte.pdf' })).not.toBeInTheDocument()
+
+    mocks.role = 'admin'
+    view.rerender(<MemoryRouter><BoardPage boardId="offline" boardName="Offline" boards={[]} /></MemoryRouter>)
+    expect(screen.getByRole('button', { name: 'Cambiar nombre de reporte.pdf' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Eliminar reporte.pdf' })).toBeInTheDocument()
   })
 
   it('abre directamente la pestaña Comentarios desde el icono de la tarjeta', async () => {

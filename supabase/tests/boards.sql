@@ -1,4 +1,4 @@
--- Privileged connection after 202610220001_board_access_returning.sql. No fixtures persist.
+-- Privileged connection after 202610260002_delete_inactive_boards.sql. No fixtures persist.
 begin;
 select set_config('app.board_admin', gen_random_uuid()::text, true);
 select set_config('app.board_user', gen_random_uuid()::text, true);
@@ -8,6 +8,8 @@ select set_config('app.board_source', gen_random_uuid()::text, true);
 select set_config('app.board_target', gen_random_uuid()::text, true);
 select set_config('app.board_private', gen_random_uuid()::text, true);
 select set_config('app.board_archived', gen_random_uuid()::text, true);
+select set_config('app.board_attachment', gen_random_uuid()::text, true);
+select set_config('app.member_attachment', gen_random_uuid()::text, true);
 insert into auth.users(id, email, raw_user_meta_data)
 select id, id::text || '@example.test', '{"full_name":"Board probe"}'::jsonb from unnest(array[
   current_setting('app.board_admin')::uuid, current_setting('app.board_user')::uuid,
@@ -30,10 +32,23 @@ select set_config('app.board_task', public.create_task_with_assignees(current_se
 select set_config('app.private_task', public.create_task_with_assignees(current_setting('app.board_private')::uuid,
   'Hidden task', null, 'backlog', 'normal', '{}')->>'id', true);
 insert into public.comments(task_id, author_id, body) values(current_setting('app.board_task')::uuid, auth.uid(), 'Preserved comment');
-insert into public.task_attachments(task_id, uploaded_by, file_name, file_url, file_size, mime_type)
-values(current_setting('app.board_task')::uuid, auth.uid(), 'probe.txt',
+insert into public.task_attachments(id, task_id, uploaded_by, file_name, file_url, file_size, mime_type)
+values(current_setting('app.board_attachment')::uuid, current_setting('app.board_task')::uuid, auth.uid(), 'probe.txt',
   'https://example.test/storage/v1/object/public/task-attachments/' || current_setting('app.board_task') || '/probe.txt', 1, 'text/plain');
+insert into public.task_attachments(id, task_id, uploaded_by, file_name, file_url, file_size, mime_type)
+values(current_setting('app.member_attachment')::uuid, current_setting('app.board_task')::uuid,
+  current_setting('app.board_user')::uuid, 'member.txt',
+  'https://example.test/storage/v1/object/public/task-attachments/' || current_setting('app.board_task') || '/member.txt', 1, 'text/plain');
 insert into storage.objects(bucket_id, name) values('task-attachments', current_setting('app.board_task') || '/probe.txt');
+insert into storage.objects(bucket_id, name) values('task-attachments', current_setting('app.board_task') || '/member.txt');
+update public.task_attachments set file_name = 'admin-renamed-member.txt'
+  where id = current_setting('app.member_attachment')::uuid;
+do $$ begin
+  if not exists(select 1 from public.task_attachments where id = current_setting('app.member_attachment')::uuid
+    and file_name = 'admin-renamed-member.txt') then
+    raise exception 'Admin cannot rename another uploader''s attachment';
+  end if;
+end $$;
 do $$
 declare created_board_id uuid;
 begin
@@ -57,7 +72,14 @@ end $$;
 -- Board lifecycle: the admin sees deactivated boards, renames them and counts
 -- their pending tasks; members lose access while the board stays deactivated.
 select set_config('app.archived_task', public.create_task_with_assignees(current_setting('app.board_archived')::uuid,
-  'Archived task', null, 'backlog', 'normal', '{}')->>'id', true);
+  'Archived task', null, 'backlog', 'normal', array[current_setting('app.board_outsider')::uuid])->>'id', true);
+insert into public.comments(task_id, author_id, body)
+values(current_setting('app.archived_task')::uuid, current_setting('app.board_admin')::uuid, 'Delete with board');
+insert into public.task_attachments(task_id, uploaded_by, file_name, file_url, file_size, mime_type)
+values(current_setting('app.archived_task')::uuid, current_setting('app.board_admin')::uuid, 'board-delete.txt',
+  'https://example.test/storage/v1/object/public/task-attachments/' || current_setting('app.archived_task') || '/board-delete.txt', 1, 'text/plain');
+insert into storage.objects(bucket_id, name)
+values('task-attachments', current_setting('app.archived_task') || '/board-delete.txt');
 do $$
 begin
   if (select count(*) from public.list_boards_with_pending_counts() where id = current_setting('app.board_archived')::uuid) <> 1 then
@@ -90,6 +112,10 @@ begin
   if (select is_active from public.boards where id = current_setting('app.board_archived')::uuid) then
     raise exception 'Admin could not deactivate the board';
   end if;
+  begin
+    perform public.delete_inactive_board(current_setting('app.board_source')::uuid);
+    raise exception 'Active board deletion was accepted';
+  exception when object_not_in_prerequisite_state then null; end;
 end $$;
 
 -- Simulate a flat-path attachment predating the migration; do not rewrite it.
@@ -111,7 +137,8 @@ do $$ begin
     or exists(select 1 from public.task_assignees where task_id = current_setting('app.board_task')::uuid)
     or exists(select 1 from public.tasks_with_stats where id = current_setting('app.board_task')::uuid)
     or exists(select 1 from public.tasks_with_assignees where id = current_setting('app.board_task')::uuid)
-    or exists(select 1 from storage.objects where name in (current_setting('app.board_task') || '/probe.txt', current_setting('app.board_task') || '-legacy.txt')) then
+    or exists(select 1 from storage.objects where name in (current_setting('app.board_task') || '/probe.txt',
+      current_setting('app.board_task') || '/member.txt', current_setting('app.board_task') || '-legacy.txt')) then
     raise exception 'Nonmember can read board resources';
   end if;
   begin
@@ -164,6 +191,20 @@ do $$ begin
   end if;
   update public.tasks set title = 'Member edit' where id = current_setting('app.board_task')::uuid;
   if not found then raise exception 'Member cannot edit'; end if;
+  update public.task_attachments set file_name = 'member-renamed.txt'
+    where id = current_setting('app.member_attachment')::uuid;
+  if not found or not exists(select 1 from public.task_attachments where id = current_setting('app.member_attachment')::uuid
+    and file_name = 'member-renamed.txt') then
+    raise exception 'Uploader cannot rename own attachment';
+  end if;
+  update public.task_attachments set file_name = 'unauthorized.txt'
+    where id = current_setting('app.board_attachment')::uuid;
+  if found then raise exception 'Non-uploader and non-creator renamed an attachment'; end if;
+  begin
+    update public.task_attachments set file_url = 'https://example.test/changed'
+      where id = current_setting('app.member_attachment')::uuid;
+    raise exception 'Attachment storage path is client-writable';
+  exception when insufficient_privilege then null; end;
 end $$;
 
 -- A deactivated board disappears for its members and only admins can change it.
@@ -186,6 +227,10 @@ do $$ begin
     perform public.set_board_active(current_setting('app.board_archived')::uuid, true);
     raise exception 'Member activated a board';
   exception when insufficient_privilege then null; end;
+  begin
+    perform public.delete_inactive_board(current_setting('app.board_archived')::uuid);
+    raise exception 'Nonadmin deleted a board';
+  exception when insufficient_privilege then null; end;
 end $$;
 
 -- A guest can transfer accessible tasks, retaining all related resources.
@@ -197,7 +242,7 @@ do $$ begin
     or exists(select 1 from public.tasks where id = current_setting('app.board_task')::uuid and board_id = current_setting('app.board_source')::uuid)
     or (select count(*) from public.comments where task_id = current_setting('app.board_task')::uuid) <> 1
     or (select count(*) from public.task_assignees where task_id = current_setting('app.board_task')::uuid) <> 1
-    or (select count(*) from public.task_attachments where task_id = current_setting('app.board_task')::uuid) <> 2
+    or (select count(*) from public.task_attachments where task_id = current_setting('app.board_task')::uuid) <> 3
     or not public.can_access_task_object(current_setting('app.board_task') || '/probe.txt') then
     raise exception 'Transfer lost data or duplicated task';
   end if;
@@ -209,9 +254,25 @@ select set_config('request.jwt.claims', json_build_object('sub', current_setting
 do $$ begin
   if public.can_access_task(current_setting('app.board_task')::uuid)
     or public.can_access_task_object(current_setting('app.board_task') || '/probe.txt')
-    or public.can_access_task_object(current_setting('app.board_task') || '-legacy.txt')
+     or public.can_access_task_object(current_setting('app.board_task') || '-legacy.txt')
+     or public.can_access_task_object(current_setting('app.board_task') || '/member.txt')
     or exists(select 1 from public.tasks where id = current_setting('app.board_task')::uuid) then
     raise exception 'Membership removal did not revoke access';
+  end if;
+end $$;
+reset role;
+
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('app.board_admin'), 'role', 'authenticated')::text, true);
+set local role authenticated;
+do $$ begin
+  perform public.delete_inactive_board(current_setting('app.board_archived')::uuid);
+  if exists(select 1 from public.boards where id = current_setting('app.board_archived')::uuid)
+    or exists(select 1 from public.board_members where board_id = current_setting('app.board_archived')::uuid)
+    or exists(select 1 from public.tasks where id = current_setting('app.archived_task')::uuid)
+    or exists(select 1 from public.comments where task_id = current_setting('app.archived_task')::uuid)
+    or exists(select 1 from public.task_assignees where task_id = current_setting('app.archived_task')::uuid)
+    or exists(select 1 from public.task_attachments where task_id = current_setting('app.archived_task')::uuid) then
+    raise exception 'Deleting an inactive board did not remove its relational data';
   end if;
 end $$;
 reset role;

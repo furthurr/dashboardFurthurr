@@ -14,7 +14,7 @@ Los tipos de aplicación viven en `src/types/index.ts`; el esquema SQL es `supab
 
 - `Board`: `{ id: string, name: string, is_active: boolean, pending_count: number, created_at: string }`, corresponde a `public.boards` más el conteo derivado que añade la RPC de listado (`src/types/index.ts:33-39`).
 - `public.boards.name` es único sin distinguir mayúsculas (`boards_unique_name` sobre `lower(name)`), y valida nombre recortado de 1–120 caracteres (`supabase-schema.sql:576,580`).
-- `public.boards.is_active` es `boolean not null default true`; modela el ciclo de vida del tablero (activo/desactivado) sin borrado físico (`supabase-schema.sql:577`, `supabase/migrations/202610220002_board_lifecycle.sql:5`).
+- `public.boards.is_active` es `boolean not null default true`; modela el ciclo de vida activo/desactivado sin borrar contenido al desactivar. Un admin puede borrar permanentemente un tablero solo después de desactivarlo, mediante `delete_inactive_board`; esta operación elimina sus tareas y datos relacionales (`supabase-schema.sql:577,727-739`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-21`).
 - `pending_count` **no es una columna**: es un valor calculado por la RPC `list_boards_with_pending_counts` y devuelto como `bigint`; el cliente lo normaliza a `number` (`src/features/boards/api.ts:5,15`).
 - `board_members` es la relación many-to-many entre `boards.id` y `profiles.id`, con PK compuesta `(board_id, profile_id)`; se representa como perfiles `AssigneeProfile[]` en el cliente, no como entidad TS independiente.
 - Solo admins activos pueden crear tableros, renombrarlos, activarlos/desactivarlos y gestionar membresías. `Offline` y `General` se crean por migración; los miembros activos existentes se asignan a Offline y General empieza vacío.
@@ -62,8 +62,9 @@ Fuente: `src/types/index.ts:19-47`, `src/features/board/api.ts:5-35`, `supabase/
 ### Proyecciones y solicitudes nuevas
 
 - `AssigneeProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url' | 'role' | 'is_active'>`. Las seis propiedades se proyectan explícitamente; no tiene `nickname` ni timestamps (`src/types/index.ts:41`).
-- `ManagedUser = Pick<Profile, 'id' | 'full_name' | 'email' | 'role' | 'is_active'>`, usado en la lista administrativa (`src/features/users/api.ts:4`).
+- `ManagedUser = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url' | 'role' | 'is_active'>`, usado en la lista administrativa. El cliente lee `avatar_url` desde `profiles` si una Edge Function antigua lo omite (`src/features/users/api.ts:4,28-48`).
 - `UserAction`/`AdminAction`: uniones discriminadas por `action`: `create`, `rename`, `password`, `set-active` y `promote-admin`; el contrato servidor añade `list`. `promote-admin` solo recibe `userId`; el servidor fija el rol `admin` y no admite un valor de rol del cliente. Validación runtime **de solicitudes administrativas**, no de todas las respuestas ni modelos (`src/features/users/api.ts:5-10`, `supabase/functions/admin-users/validation.ts:1-34`).
+- La carga de avatar no forma parte de `UserAction`: `uploadProfileAvatar(profileId, file)` acepta `File` de tipo JPG/PNG/WebP hasta 2 MiB y devuelve la URL pública (`src/features/users/avatarApi.ts:3-35`).
 - Solicitud de creación de tarea: título, descripción opcional, enum de estado/prioridad y `assigneeIds: string[]`; SQL recibe UUIDs, valida destinos y obtiene propietario de la sesión (`src/features/board/api.ts:65-104`).
 - `TaskImagePreview`: `{ id: string, fileName: string, signedUrl: string }`, proyección transitoria sin persistir la URL firmada (`src/features/board/attachmentsApi.ts:5-9`).
 

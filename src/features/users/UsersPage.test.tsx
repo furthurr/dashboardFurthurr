@@ -7,12 +7,13 @@ import { UsersPage } from './UsersPage'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 
 const mocks = vi.hoisted(() => ({
-  list: vi.fn(), request: vi.fn(),
-  auth: { session: {}, user: { id: 'admin' }, profile: { role: 'admin', is_active: true }, isLoading: false, signOut: vi.fn() },
+  list: vi.fn(), request: vi.fn(), uploadAvatar: vi.fn(), getAvatarFileError: vi.fn(),
+  auth: { session: {}, user: { id: 'admin' }, profile: { role: 'admin', is_active: true }, isLoading: false, signOut: vi.fn(), refreshProfile: vi.fn() },
 }))
 vi.mock('./api', () => ({ listUsers: (...args: unknown[]) => mocks.list(...args), adminRequest: (...args: unknown[]) => mocks.request(...args) }))
+vi.mock('./avatarApi', () => ({ uploadProfileAvatar: (...args: unknown[]) => mocks.uploadAvatar(...args), getAvatarFileError: (...args: unknown[]) => mocks.getAvatarFileError(...args) }))
 vi.mock('@/features/auth/AuthContext', () => ({ useAuth: () => mocks.auth }))
-const account = { id: 'person', full_name: 'Persona', email: 'person@example.test', role: 'usuario', is_active: true }
+const account = { id: 'person', full_name: 'Persona', email: 'person@example.test', avatar_url: null, role: 'usuario', is_active: true }
 
 function setup(protectedRoute = false) {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -28,6 +29,8 @@ beforeEach(() => {
   mocks.auth.profile = { role: 'admin', is_active: true }
   mocks.list.mockResolvedValue({ users: [account, { ...account, id: 'admin', email: 'admin@example.test', role: 'admin' }], total: 2, pageSize: 50 })
   mocks.request.mockResolvedValue({ success: true })
+  mocks.uploadAvatar.mockResolvedValue('https://example.test/avatar.png')
+  mocks.getAvatarFileError.mockReturnValue(null)
 })
 
 describe('Administración de usuarios', () => {
@@ -61,6 +64,26 @@ describe('Administración de usuarios', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('entre 1 y 120 caracteres')
     expect(mocks.request).not.toHaveBeenCalled()
   })
+  it('permite al administrador cambiar la foto de una cuenta y refresca los datos asociados', async () => {
+    const user = userEvent.setup()
+    setup()
+    await user.click(await screen.findByRole('button', { name: 'Cambiar foto de person@example.test' }))
+    const file = new File(['image'], 'perfil.png', { type: 'image/png' })
+    await user.upload(screen.getByLabelText('Foto de perfil'), file)
+    await user.click(screen.getByRole('button', { name: 'Guardar foto' }))
+
+    expect(mocks.uploadAvatar).toHaveBeenCalledWith('person', file)
+    expect(await screen.findByText('Foto de perfil actualizada.')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+  it('requiere seleccionar una imagen antes de guardar la foto', async () => {
+    const user = userEvent.setup()
+    setup()
+    await user.click(await screen.findByRole('button', { name: 'Cambiar foto de person@example.test' }))
+    await user.click(screen.getByRole('button', { name: 'Guardar foto' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Selecciona una foto')
+    expect(mocks.uploadAvatar).not.toHaveBeenCalled()
+  })
   it('conserva el borrador ante un error al guardar el nombre y permite cancelar', async () => {
     const user = userEvent.setup()
     mocks.request.mockRejectedValueOnce(new Error('No se pudo actualizar el nombre'))
@@ -78,9 +101,18 @@ describe('Administración de usuarios', () => {
   it('muestra usuarios y bloquea la desactivación propia', async () => {
     setup()
     expect(await screen.findByText('person@example.test')).toBeInTheDocument()
+    const avatars = await screen.findAllByRole('img', { name: 'Foto de Persona' })
+    expect(within(avatars[0]!).getByText('P')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Desactivar a admin@example.test' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Promover a administrador a person@example.test' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Promover a administrador a admin@example.test' })).not.toBeInTheDocument()
+  })
+  it('muestra la foto de perfil en el círculo cuando la cuenta tiene avatar', async () => {
+    mocks.list.mockResolvedValue({ users: [{ ...account, avatar_url: 'https://example.test/person.png' }], total: 1, pageSize: 50 })
+    setup()
+
+    const avatar = await screen.findByRole('img', { name: 'Foto de Persona' })
+    expect(avatar.querySelector('img')).toHaveAttribute('src', 'https://example.test/person.png')
   })
   it('confirma la promoción de una cuenta no administradora y actualiza el listado', async () => {
     const user = userEvent.setup()

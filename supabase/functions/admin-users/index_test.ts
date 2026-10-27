@@ -9,6 +9,7 @@ const actorId = '00000000-0000-0000-0000-000000000001'
 const otherId = '00000000-0000-0000-0000-000000000002'
 function fixture(role = 'admin', active = true, valid = true, failures: { create?: boolean; profile?: boolean; cleanup?: boolean; list?: boolean } = {}) {
   const calls: Record<string, unknown>[] = []
+  const projections: string[] = []
   let reads = 0
   const client = {
     auth: {
@@ -20,10 +21,11 @@ function fixture(role = 'admin', active = true, valid = true, failures: { create
       },
     },
     from: () => ({
-      select: () => {
+      select: (projection: string) => {
+        projections.push(projection)
         const order = () => ({ order, range: (start: number, end: number) => {
           calls.push({ start, end })
-          return Promise.resolve({ data: [{ id: otherId }], count: 51, error: failures.list ? {} : null })
+          return Promise.resolve({ data: [{ id: otherId, avatar_url: 'https://example.test/avatar' }], count: 51, error: failures.list ? {} : null })
         } })
         return { eq: () => ({ single: () => Promise.resolve({ data: { role, is_active: active }, error: null }) }), order }
       },
@@ -38,7 +40,7 @@ function fixture(role = 'admin', active = true, valid = true, failures: { create
   const send = (body: unknown, token = true) => handle(new Request('https://example.test/admin-users', {
     method: 'POST', headers: token ? { Authorization: 'Bearer test' } : {}, body: JSON.stringify(body),
   }))
-  return { send, calls, reads: () => reads, handle }
+  return { send, calls, projections, reads: () => reads, handle }
 }
 
 Deno.test('rejects missing/invalid tokens, non-admin and inactive admin', async () => {
@@ -89,6 +91,8 @@ Deno.test('paginates profile projection and reports listing errors', async () =>
   assert(response.status === 200)
   const body = await response.json()
   assert(body.total === 51 && body.pageSize === 50)
+  assert(body.users[0].avatar_url === 'https://example.test/avatar')
+  assert(f.projections.includes('id, full_name, email, avatar_url, role, is_active'))
   assert(f.calls[0].start === 50 && f.calls[0].end === 99)
   assert((await fixture('admin', true, true, { list: true }).send({ action: 'list' })).status === 500)
 })

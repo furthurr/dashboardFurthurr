@@ -2,12 +2,12 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BoardsPage, getBoardUpdateErrorMessage, getCreateBoardErrorMessage } from './BoardsPage'
+import { BoardsPage, getBoardDeleteErrorMessage, getBoardUpdateErrorMessage, getCreateBoardErrorMessage } from './BoardsPage'
 import { BoardRoute } from './BoardRoute'
 
 const mocks = vi.hoisted(() => ({
   role: 'admin', boards: vi.fn(), members: vi.fn(), users: vi.fn(), create: vi.fn(), save: vi.fn(),
-  rename: vi.fn(), setActive: vi.fn(),
+  rename: vi.fn(), setActive: vi.fn(), deleteBoard: vi.fn(),
   createError: null as unknown, saveError: null as unknown, boardId: 'offline',
 }))
 vi.mock('@/features/auth/AuthContext', () => ({ useAuth: () => ({ profile: { role: mocks.role }, signOut: vi.fn() }) }))
@@ -17,6 +17,7 @@ vi.mock('./api', () => ({
   useSetBoardMembers: () => ({ mutateAsync: mocks.save, isPending: false, error: mocks.saveError }),
   useRenameBoard: () => ({ mutateAsync: mocks.rename, isPending: false, error: null }),
   useSetBoardActive: () => ({ mutateAsync: mocks.setActive, isPending: false, error: null }),
+  useDeleteBoard: () => ({ mutateAsync: mocks.deleteBoard, isPending: false, error: null }),
 }))
 vi.mock('@/features/board/assigneesApi', () => ({ useAssignableUsers: mocks.users }))
 vi.mock('@/features/board/BoardPage', () => ({ BoardPage: ({ boardId, boardName }: { boardId: string; boardName: string }) => <h1>{boardName} · {boardId}</h1> }))
@@ -37,6 +38,7 @@ beforeEach(() => {
   mocks.save.mockResolvedValue(undefined)
   mocks.rename.mockResolvedValue(undefined)
   mocks.setActive.mockResolvedValue(undefined)
+  mocks.deleteBoard.mockResolvedValue(undefined)
   mocks.saveError = null
 })
 
@@ -48,6 +50,9 @@ describe('Selección y gestión de tableros', () => {
     expect(getCreateBoardErrorMessage({ code: '23514' })).toMatch(/1 y 120 caracteres/i)
     expect(getBoardUpdateErrorMessage({ code: '23505' })).toMatch(/Ya existe un tablero/i)
     expect(getBoardUpdateErrorMessage({ code: 'P0002' })).toMatch(/ya no existe/i)
+    expect(getBoardDeleteErrorMessage({ code: '55000' })).toMatch(/desactivados/i)
+    expect(getBoardDeleteErrorMessage({ code: 'BOARD_ATTACHMENTS_DELETE_FAILED' })).toMatch(/archivos podrían haberse eliminado/i)
+    expect(getBoardDeleteErrorMessage({ code: 'BOARD_DELETE_FAILED_AFTER_STORAGE' })).toMatch(/archivos adjuntos ya se eliminaron/i)
   })
   it('muestra cards con enlace al tablero y gestión solo para administradores', () => {
     renderPage()
@@ -62,6 +67,7 @@ describe('Selección y gestión de tableros', () => {
     expect(screen.queryByRole('button', { name: /Gestionar miembros/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Cambiar nombre/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Desactivar/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Eliminar tablero/ })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Offline' })).toBeVisible()
   })
   it('explica el estado sin membresías sin mostrar tableros ajenos', () => {
@@ -132,6 +138,8 @@ describe('Ciclo de vida de los tableros', () => {
     expect(screen.getByRole('link', { name: 'Archivo 2025' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Desactivar Offline' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Activar Archivo 2025' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Eliminar tablero Offline' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Eliminar tablero Archivo 2025' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Desactivar Archivo 2025' })).not.toBeInTheDocument()
   })
   it.each(['usuario', 'invitado'])('no muestra la sección de desactivados a %s', (role) => {
@@ -196,6 +204,43 @@ describe('Ciclo de vida de los tableros', () => {
     await user.click(screen.getByRole('button', { name: 'Desactivar Offline' }))
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Desactivar tablero' }))
     expect(screen.getByRole('alert')).toHaveTextContent('permisos')
+  })
+  it('advierte del borrado irreversible y cancelar no elimina el tablero', async () => {
+    mocks.boards.mockReturnValue({ data: [board, archivedBoard], isLoading: false, error: null })
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar tablero Archivo 2025' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('se eliminarán todas sus tareas, comentarios, asignaciones y archivos adjuntos')
+    expect(dialog).toHaveTextContent('No será posible recuperar ni el tablero ni las tareas')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+
+    expect(mocks.deleteBoard).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+  it('elimina un tablero desactivado solo después de confirmar en el diálogo', async () => {
+    mocks.boards.mockReturnValue({ data: [board, archivedBoard], isLoading: false, error: null })
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar tablero Archivo 2025' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Eliminar tablero' }))
+
+    expect(mocks.deleteBoard).toHaveBeenCalledExactlyOnceWith('archived')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+  it('mantiene abierto el diálogo y explica fallos en la limpieza de Storage', async () => {
+    mocks.boards.mockReturnValue({ data: [board, archivedBoard], isLoading: false, error: null })
+    mocks.deleteBoard.mockRejectedValueOnce({ code: 'BOARD_ATTACHMENTS_DELETE_FAILED' })
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar tablero Archivo 2025' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Eliminar tablero' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent('El tablero y sus tareas siguen')
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 })
 

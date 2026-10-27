@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { type TaskWithAssignees } from '@/types'
 import { Dialog } from '@/shared/ui/Dialog'
+import { ProfileAvatar } from '@/shared/ui/ProfileAvatar'
 import { type TaskImagePreview } from './attachmentsApi'
 import { PRIORITY_COLORS } from './constants'
 
@@ -101,15 +102,14 @@ export function TaskCard({
           <div className="mt-3 flex min-h-8 items-center justify-between gap-2">
             <div className="flex -space-x-2">
               {task.assignees.slice(0, 3).map((assignee, index) => (
-                <div
+                <ProfileAvatar
                   key={`${assignee.full_name}-${index}`}
-                  className="ui-avatar border-2 border-[var(--color-surface)]"
-                  title={assignee.full_name}
-                >
-                  <span>
-                    {assignee.full_name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
+                  src={assignee.avatar_url}
+                  name={assignee.full_name}
+                  size="sm"
+                  fallback="initials"
+                  className="border-2 border-[var(--color-surface)]"
+                />
               ))}
               {task.assignees.length > 3 && (
                 <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[var(--color-surface)] bg-[var(--color-surface-elevated)]">

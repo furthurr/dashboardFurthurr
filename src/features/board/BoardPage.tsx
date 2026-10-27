@@ -21,7 +21,7 @@ import {
 import { useTasks, useUpdateTaskStatus, useCreateTask, useDeleteTask, useUpdateTask, useUpdateTaskPositions, useSetTaskAssignees } from './api'
 import { useAssignableUsers } from './assigneesApi'
 import { useComments, useCreateComment, useDeleteComment } from './commentsApi'
-import { useAttachments, useTaskImagePreviews, useUploadAttachment, useDeleteAttachment } from './attachmentsApi'
+import { useAttachments, useTaskImagePreviews, useUploadAttachment, useRenameAttachment, useDeleteAttachment } from './attachmentsApi'
 import { BOARD_COLUMNS } from './constants'
 import { BoardColumn } from './BoardColumn'
 import { TaskCard } from './TaskCard'
@@ -84,6 +84,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
   const createComment = useCreateComment()
   const deleteComment = useDeleteComment()
   const uploadAttachment = useUploadAttachment()
+  const renameAttachment = useRenameAttachment()
   const deleteAttachment = useDeleteAttachment()
 
   const sensors = useSensors(
@@ -461,13 +462,18 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
           onUploadAttachment={selectedTask && user ? (file) =>
             uploadAttachment.mutateAsync({ taskId: selectedTask.id, uploadedBy: user.id, file })
           : undefined}
+          onRenameAttachment={selectedTask ? (attachmentId, fileName) =>
+            renameAttachment.mutateAsync({ attachmentId, fileName })
+          : undefined}
           onDeleteAttachment={(attachmentId) => {
             const attachment = attachments.find((a) => a.id === attachmentId)
             if (!attachment) return Promise.reject(new Error('Adjunto no disponible'))
             return deleteAttachment.mutateAsync({ attachmentId, fileUrl: attachment.file_url })
           }}
           canDeleteComments={user?.id === selectedTask?.created_by || false}
-          canDeleteAttachments={user?.id === selectedTask?.created_by || false}
+          canManageAttachment={(attachment) => Boolean(user && (
+            isAdmin || user.id === selectedTask?.created_by || user.id === attachment.uploaded_by
+          ))}
         />
       </main>
       {profile?.role !== 'invitado' && (

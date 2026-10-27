@@ -1,15 +1,44 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchBoardMembers, fetchBoards, moveTaskToBoard, renameBoard, setBoardActive } from './api'
+import { deleteInactiveBoard, fetchBoardMembers, fetchBoards, moveTaskToBoard, renameBoard, setBoardActive } from './api'
 
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), order: vi.fn(), select: vi.fn(), from: vi.fn(), eq: vi.fn(), range: vi.fn() }))
-vi.mock('@/lib/supabase', () => ({ supabase: { rpc: mocks.rpc, from: mocks.from } }))
+const mocks = vi.hoisted(() => ({
+  rpc: vi.fn(), order: vi.fn(), select: vi.fn(), from: vi.fn(), eq: vi.fn(), range: vi.fn(),
+  storageFrom: vi.fn(), storageRemove: vi.fn(),
+}))
+vi.mock('@/lib/supabase', () => ({ supabase: { rpc: mocks.rpc, from: mocks.from, storage: { from: mocks.storageFrom } } }))
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.rpc.mockReset()
   mocks.from.mockReturnValue({ select: mocks.select })
   mocks.select.mockReturnValue({ order: mocks.order, eq: mocks.eq })
   mocks.eq.mockReturnValue({ order: mocks.order })
+  mocks.storageFrom.mockReturnValue({ remove: mocks.storageRemove })
+  mocks.storageRemove.mockResolvedValue({ error: null })
 })
+
+function mockBoardDeletionReads({ isActive = false, fileUrl = 'https://example.test/storage/v1/object/public/task-attachments/task/file.png' } = {}) {
+  const boardMaybeSingle = vi.fn().mockResolvedValue({ data: { is_active: isActive }, error: null })
+  const boardEq = vi.fn().mockReturnValue({ maybeSingle: boardMaybeSingle })
+  const boardSelect = vi.fn().mockReturnValue({ eq: boardEq })
+
+  const taskRange = vi.fn().mockResolvedValue({ data: [{ id: 'task' }], error: null })
+  const taskOrder = vi.fn().mockReturnValue({ range: taskRange })
+  const taskEq = vi.fn().mockReturnValue({ order: taskOrder })
+  const taskSelect = vi.fn().mockReturnValue({ eq: taskEq })
+
+  const attachmentRange = vi.fn().mockResolvedValue({ data: [{ file_url: fileUrl }], error: null })
+  const attachmentOrder = vi.fn().mockReturnValue({ range: attachmentRange })
+  const attachmentIn = vi.fn().mockReturnValue({ order: attachmentOrder })
+  const attachmentSelect = vi.fn().mockReturnValue({ in: attachmentIn })
+
+  mocks.from.mockImplementation((table: string) => {
+    if (table === 'boards') return { select: boardSelect }
+    if (table === 'tasks') return { select: taskSelect }
+    if (table === 'task_attachments') return { select: attachmentSelect }
+    return { select: mocks.select }
+  })
+}
+
 describe('Contratos de tableros', () => {
   it('carga todas las membresías antes de permitir reemplazar la lista', async () => {
     mocks.order.mockReturnValue({ range: mocks.range })
@@ -55,5 +84,42 @@ describe('Contratos de tableros', () => {
   it('no confirma el cambio de estado cuando el servidor lo rechaza', async () => {
     mocks.rpc.mockResolvedValue({ error: new Error('Acceso denegado') })
     await expect(setBoardActive('board', false)).rejects.toThrow('Acceso denegado')
+  })
+  it('elimina archivos adjuntos antes de solicitar el borrado transaccional del tablero inactivo', async () => {
+    mockBoardDeletionReads()
+    mocks.rpc.mockResolvedValueOnce({ error: null })
+
+    await deleteInactiveBoard('board')
+
+    expect(mocks.storageFrom).toHaveBeenCalledExactlyOnceWith('task-attachments')
+    expect(mocks.storageRemove).toHaveBeenCalledExactlyOnceWith(['task/file.png'])
+    expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('delete_inactive_board', { p_board_id: 'board' })
+    expect(mocks.storageRemove.mock.invocationCallOrder[0]).toBeLessThan(mocks.rpc.mock.invocationCallOrder[0])
+  })
+  it('no toca Storage ni elimina la base de datos si el tablero está activo', async () => {
+    mockBoardDeletionReads({ isActive: true })
+
+    await expect(deleteInactiveBoard('board')).rejects.toMatchObject({ code: '55000' })
+
+    expect(mocks.storageFrom).not.toHaveBeenCalled()
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+  it('conserva el tablero si falla la limpieza de archivos adjuntos', async () => {
+    mockBoardDeletionReads()
+    mocks.storageRemove.mockResolvedValueOnce({ error: new Error('Storage no disponible') })
+
+    await expect(deleteInactiveBoard('board')).rejects.toMatchObject({ code: 'BOARD_ATTACHMENTS_DELETE_FAILED' })
+
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+  it('señala si la base de datos rechaza el borrado después de limpiar Storage', async () => {
+    mockBoardDeletionReads()
+    mocks.rpc.mockResolvedValueOnce({ error: { code: '55000', message: 'Board must be deactivated' } })
+
+    await expect(deleteInactiveBoard('board')).rejects.toMatchObject({
+      code: 'BOARD_DELETE_FAILED_AFTER_STORAGE',
+      originalCode: '55000',
+    })
+    expect(mocks.storageRemove).toHaveBeenCalledExactlyOnceWith(['task/file.png'])
   })
 })

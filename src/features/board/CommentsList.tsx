@@ -1,4 +1,5 @@
 import { type CommentWithAuthor } from '@/types'
+import { ProfileAvatar } from '@/shared/ui/ProfileAvatar'
 
 interface CommentsListProps {
   comments: CommentWithAuthor[]
@@ -25,11 +26,7 @@ export function CommentsList({ comments, onDeleteComment, canDelete }: CommentsL
         <li key={comment.id} className="ui-list-card">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-3">
-              <div className="ui-avatar" aria-hidden="true">
-                <span>
-                  {comment.author.full_name.charAt(0).toUpperCase()}
-                </span>
-              </div>
+              <ProfileAvatar src={comment.author.avatar_url} name={comment.author.full_name} fallback="initials" />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-[var(--color-text)] [overflow-wrap:anywhere]">
                   {comment.author.full_name}

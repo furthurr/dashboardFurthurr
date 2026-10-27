@@ -99,7 +99,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const refreshProfile = async () => {
-    if (user) await fetchProfile(user.id)
+    if (!user) return
+    await fetchProfile(user.id)
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+      queryClient.invalidateQueries({ queryKey: ['comments'] }),
+      queryClient.invalidateQueries({ queryKey: ['assignable-users'] }),
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
+    ])
   }
 
   return (

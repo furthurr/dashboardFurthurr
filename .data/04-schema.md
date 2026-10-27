@@ -1,8 +1,8 @@
 # Schema de persistencia Supabase
 
-La persistencia es PostgreSQL gestionado fuera de la SPA. `supabase-schema.sql` es el bootstrap completo; `supabase/migrations/` contiene los cambios incrementales para instalaciones existentes. La secuencia hasta `202610210001_boards.sql` se aplicó y verificó en el proyecto Supabase seleccionado para GitHub Pages el 2026-10-21, y el 2026-10-22 se aplicaron además `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql`; esto no certifica otros proyectos/entornos.
+La persistencia es PostgreSQL gestionado fuera de la SPA. `supabase-schema.sql` es el bootstrap completo; `supabase/migrations/` contiene los cambios incrementales para instalaciones existentes. La documentación conserva la verificación remota histórica de las migraciones hasta `202610220002_board_lifecycle.sql` en octubre de 2026. En el árbol local existen además `202610260001_task_attachment_management.sql`, `202610260002_delete_inactive_boards.sql` y `202610260003_profile_avatars.sql`; su aplicación remota no se verificó en esta sincronización.
 
-Las migraciones `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql` **están aplicadas en el proyecto Supabase remoto** desde el 2026-10-22, en ese orden. Antes de aplicarlas se comprobó que `boards.is_active` no existía y que tampoco existían las RPCs `rename_board`, `set_board_active` y `list_boards_with_pending_counts`, ni la policy «Members read own memberships»; después de aplicarlas se comprobó que la columna, las tres RPCs y esa policy están presentes, y que el proyecto conserva sus 4 tableros y sus 32 tareas con `is_active = true` en todos. Las tres suites SQL remotas (`boards.sql`, `task_assignments.sql`, `user_access.sql`) pasan y revierten sus fixtures con `ROLLBACK`. Antes de esa aplicación también se verificaron contra PostgreSQL 16 local con Auth/Storage simulados, en dos rutas: bootstrap nuevo y base existente con ambas migraciones. El bootstrap `supabase-schema.sql` ya incorpora los mismos objetos para instalaciones nuevas.
+Ese registro remoto de 2026-10-22 cubre `202610220001`/`202610220002`, las tres suites SQL y el estado observado entonces; no se debe extrapolar a los cambios posteriores. Las pruebas de `supabase/tests/boards.sql` no se ejecutaron en esta sincronización porque no había stack Supabase local y no se consultó el remoto. El bootstrap local ya incluye también los objetos de borrado de tablero, gestión de nombre de adjunto y avatar descritos abajo.
 
 ## Modelo relacional
 
@@ -116,7 +116,7 @@ RLS está habilitado para las tablas de aplicación. La siguiente tabla resume l
 | `task_assignees` | escrituras cliente | INSERT/UPDATE/DELETE revocados; los predicados históricos no conceden permisos por sí solos | `supabase/migrations/202610200001_task_assignments.sql:5` |
 | `task_assignees` | RPC | cuenta activa de cualquier rol con acceso al tablero sustituye responsables; la RPC no edita la tarea | `supabase/migrations/202610200001_task_assignments.sql:7-45`, `supabase/migrations/202610210001_boards.sql:82-92` |
 | `comments` | select/insert/update/delete | gate activo AND políticas anteriores: lectura autenticada, alta admin/usuario, update/delete autor/admin | `supabase-schema.sql:273-309`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
-| `task_attachments` | select/insert/delete | gate activo AND políticas anteriores de lectura/carga/eliminación de metadata | `supabase-schema.sql:314-343`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
+| `task_attachments` | select/insert/update(`file_name`)/delete | gate de cuenta activa y acceso al tablero; SELECT para autenticados, INSERT admin/usuario, UPDATE de `file_name` y DELETE para uploader, creador de tarea o admin activo. El cliente no puede modificar las demás columnas | `supabase-schema.sql:314-340,458-461,617-628`, `supabase/migrations/202610260001_task_attachment_management.sql:4-22`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
 
 Los comentarios de algunas policies de Storage describen roles distintos de lo que comprueba su predicado. El predicado SQL es la evidencia de esta tabla de Storage; no se interpreta aquí la intención de seguridad. Contrastar con `specs/05-auth-roles-permisos.md` y solicitar revisión de seguridad antes de cambiarlo.
 
@@ -139,8 +139,11 @@ La migración `202610220002_board_lifecycle.sql` (aplicada en el proyecto Supaba
 | RPC `rename_board(p_board_id, p_name)` | Solo admin (`42501`); nombre recortado de 1–120 (`22023`); tablero inexistente (`P0002`); unicidad por índice `lower(name)` | `supabase/migrations/202610220002_board_lifecycle.sql:38-54` |
 | RPC `set_board_active(p_board_id, p_active)` | Solo admin (`42501`); alterna `is_active` sin borrar tareas, comentarios, adjuntos ni membresías | `supabase/migrations/202610220002_board_lifecycle.sql:56-66` |
 | RPC `list_boards_with_pending_counts()` | Devuelve `id, name, is_active, created_at, pending_count` con la misma visibilidad que RLS; `pending_count` suma tareas en `backlog`, `por_hacer` y `haciendo` | `supabase/migrations/202610220002_board_lifecycle.sql:68-85` |
+| RPC `delete_inactive_board(p_board_id)` | Solo admin activo; bloquea y vuelve a validar el tablero inactivo (`55000` si está activo), elimina tareas y luego tablero; `void` | `supabase-schema.sql:727-739`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-25` |
 
 Las tres RPCs se revocan a `public`/`anon` y se conceden a `authenticated` (`supabase/migrations/202610220002_board_lifecycle.sql:87-90`).
+
+La RPC de borrado también se revoca a `public`/`anon` y se concede a `authenticated` en el bootstrap y la migración local (`supabase-schema.sql:756-760`, `supabase/migrations/202610260002_delete_inactive_boards.sql:24-25`); la comprobación de admin activo y estado inactivo vive dentro de la función `SECURITY DEFINER`.
 
 **Justificación anti-recursión.** `INSERT ... RETURNING` de PostgREST evalúa también la policy de lectura de `boards`. Si esa policy consultara `can_access_board()` y esta leyera `public.boards`, la evaluación volvería a disparar la policy y Postgres detectaría recursión infinita en la policy. Por eso:
 
@@ -163,16 +166,30 @@ La migración `202610200002_shared_task_editing.sql` amplía el `UPDATE` de `tas
 
 La migración es idempotente respecto a la policy (usa `drop policy if exists` para el nombre anterior y el nuevo) y no toca las RPCs de asignación ni las vistas.
 
+### Gestión de adjuntos
+
+La migración `202610260001_task_attachment_management.sql` concede `UPDATE` únicamente sobre `task_attachments.file_name` y añade una policy para renombrar filas del uploader, del creador de la tarea o de un admin activo. El gate restrictivo de cuenta activa y el de acceso al tablero continúan aplicándose. El borrado conserva los mismos actores autorizados en metadata y Storage (`supabase-schema.sql:327-340`; Storage en `supabase/migrations/202610210001_boards.sql:152-159`).
+
+El renombrado modifica solo `file_name`: no mueve el objeto ni altera su path, MIME o contenido. El modelo no añade tablas ni columnas. En una instalación nueva, el grant y la policy están en `supabase-schema.sql`; en una existente se aplica `202610260001_task_attachment_management.sql` después de `202610220002_board_lifecycle.sql`. La migración no se aplicó ni verificó en Supabase remoto durante esta actualización; la suite SQL local tampoco se ejecutó porque no había un stack Supabase local disponible.
+
+### Borrado permanente de tableros inactivos
+
+`delete_inactive_board(uuid)` exige admin activo y un tablero existente con `is_active = false`. Bloquea la fila, elimina las tareas del tablero y después la fila de `boards`; las FK eliminan por cascada asignaciones, comentarios y metadata de adjuntos. La FK de `tasks.board_id` usa `ON DELETE RESTRICT`, por lo que el borrado explícito de tareas precede al de tablero (`supabase-schema.sql:727-739`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-21`).
+
+La API cliente enumera metadata/paths y elimina objetos de Storage antes de invocar la RPC. La limpieza de archivos y la transacción PostgreSQL no son atómicas: si falla Storage, la RPC no se invoca; si falla la RPC después de Storage, los objetos pueden haberse eliminado aunque las filas sigan. La migración local no se verificó en remoto (`src/features/boards/api.ts:69-145`).
+
 ## Storage
 
 | Bucket | Visibilidad declarada | Operaciones/policies del SQL | Fuente |
 | --- | --- | --- | --- |
-| `avatars` | Público | Lectura pública; upload autenticado; update por propietario según primer segmento del nombre | `supabase-schema.sql:348-351`, `supabase-schema.sql:362-381` |
+| `avatars` | Público | Lectura pública; insertar/reemplazar solo el propietario o admin activo; tamaño máximo 2 MiB y MIME JPEG/PNG/WebP | `supabase-schema.sql:348-351,363-404`, `supabase/migrations/202610260003_profile_avatars.sql:5-50` |
 | `task-attachments` | Privado (`public = false`) | Acceso condicionado por tablero y rol; el path nuevo incluye UUID de tarea; los paths legacy se resuelven mediante metadata de adjunto | `supabase-schema.sql:353-356`, `supabase/migrations/202610210001_boards.sql:133-172` |
 
-A esas policies se añaden restricciones de cuenta activa para los buckets gestionados. Lecturas de avatares públicos permanecen públicas; las lecturas de adjuntos privados y las escrituras en ambos buckets requieren estado activo. No se revocan archivos descargados ni URLs firmadas previas (`supabase/migrations/202610190001_user_administration.sql:40-52`).
+A esas policies se añaden restricciones de cuenta activa para los buckets gestionados. Lecturas de avatares públicos permanecen públicas; las lecturas de adjuntos privados y las escrituras en ambos buckets requieren estado activo. La migración de avatares local refina las escrituras a propietario o admin activo; su efecto remoto no se verificó. No se revocan archivos descargados ni URLs firmadas previas (`supabase/migrations/202610190001_user_administration.sql:40-52`).
 
-El cliente obtiene URLs firmadas de 60 segundos para detalle y miniaturas, refrescando cada 45 segundos. La metadata aún almacena `getPublicUrl`, pero no se usa directamente para mostrar el archivo; persiste la diferencia representacional D-02. El path nuevo `<taskId>/<UUID>.<ext>` y borrado comprobado alinean nuevas cargas; la policy también resuelve paths planos legacy vía metadata. La migración marca `task-attachments` privado. El contenido ya descargado o enlaces firmados ya emitidos no pueden revocarse retroactivamente.
+La carga de avatar usa `avatars/<profile-id>/avatar` con `upsert`; después actualiza `profiles.avatar_url` a la URL pública. La validación cliente y el bucket admiten JPEG, PNG o WebP hasta 2 MiB. La actualización de Storage y la fila de perfil son operaciones separadas (`src/features/users/avatarApi.ts:3-35`).
+
+El cliente obtiene URLs firmadas de 60 segundos para detalle y miniaturas, refrescando cada 45 segundos. La metadata aún almacena `getPublicUrl`, pero no se usa directamente para mostrar el archivo; persiste la diferencia representacional D-02. El path nuevo `<taskId>/<UUID>.<ext>` y borrado comprobado alinean nuevas cargas; la policy también resuelve paths planos legacy vía metadata. La migración marca `task-attachments` privado. El cambio del nombre visible invalida la lista de adjuntos y las miniaturas, sin modificar el objeto. El contenido ya descargado o enlaces firmados ya emitidos no pueden revocarse retroactivamente.
 
 ## Vistas
 

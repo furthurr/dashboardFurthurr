@@ -131,6 +131,14 @@ describe('TaskCard: apertura y movimiento independientes', () => {
     expect(screen.getByText('12', { selector: 'span[aria-hidden="true"]' })).toBeTruthy()
   })
 
+  it('muestra la foto de las personas asignadas en lugar de sus iniciales', () => {
+    const assignee = { id: 'person-1', full_name: 'Ana López', email: 'ana@example.test', avatar_url: 'https://example.test/ana.png', role: 'usuario' as const, is_active: true }
+    const { container } = render(<SortableTaskCard task={{ ...task, assignees: [assignee] }} />)
+
+    expect(screen.getByRole('img', { name: 'Foto de Ana López' })).toBeInTheDocument()
+    expect(container.querySelector('img')).toHaveAttribute('src', assignee.avatar_url)
+  })
+
   it('muestra la descripción completa conservando saltos de línea', () => {
     const description = 'Primera línea\n\nSegunda línea con contexto adicional'
     render(<SortableTaskCard task={{ ...task, description }} />)

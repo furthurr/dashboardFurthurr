@@ -6,7 +6,7 @@ import { AccountMenu } from '@/shared/ui/AccountMenu'
 import { Dialog } from '@/shared/ui/Dialog'
 import { AssigneePicker } from '@/features/board/AssigneePicker'
 import { useAssignableUsers } from '@/features/board/assigneesApi'
-import { useBoardMembers, useBoards, useCreateBoard, useRenameBoard, useSetBoardActive, useSetBoardMembers } from './api'
+import { useBoardMembers, useBoards, useCreateBoard, useDeleteBoard, useRenameBoard, useSetBoardActive, useSetBoardMembers } from './api'
 
 export function BoardsPage() {
   const { profile } = useAuth()
@@ -15,6 +15,7 @@ export function BoardsPage() {
   const [managing, setManaging] = useState<Board | null>(null)
   const [renaming, setRenaming] = useState<Board | null>(null)
   const [toggling, setToggling] = useState<Board | null>(null)
+  const [deleting, setDeleting] = useState<Board | null>(null)
   const admin = profile?.role === 'admin'
   const activeBoards = boards.data?.filter((board) => board.is_active) ?? []
   const inactiveBoards = boards.data?.filter((board) => !board.is_active) ?? []
@@ -30,19 +31,20 @@ export function BoardsPage() {
           : !boards.data?.length ? <div className="ui-empty"><strong>No tienes tableros asignados</strong><p>Solicita a un administrador que te asigne a un tablero.</p></div>
             : <>
               <BoardSection title="Tableros activos" description="Tableros en los que puedes trabajar ahora mismo." boards={activeBoards}
-                admin={admin} onManage={setManaging} onRename={setRenaming} onToggle={setToggling} />
+                admin={admin} onManage={setManaging} onRename={setRenaming} onToggle={setToggling} onDelete={setDeleting} />
               {admin && inactiveBoards.length > 0 && <BoardSection title="Tableros desactivados" description="Solo los administradores ven esta sección. Reactiva un tablero para devolverle el acceso a sus miembros." boards={inactiveBoards}
-                admin={admin} onManage={setManaging} onRename={setRenaming} onToggle={setToggling} />}
+                admin={admin} onManage={setManaging} onRename={setRenaming} onToggle={setToggling} onDelete={setDeleting} />}
             </>}
     </section>
     {creating && <CreateBoardDialog onClose={() => setCreating(false)} />}
     {managing && admin && <MembersDialog board={managing} onClose={() => setManaging(null)} />}
     {renaming && admin && <RenameBoardDialog board={renaming} onClose={() => setRenaming(null)} />}
     {toggling && admin && <ToggleBoardDialog board={toggling} onClose={() => setToggling(null)} />}
+    {deleting && admin && !deleting.is_active && <DeleteBoardDialog board={deleting} onClose={() => setDeleting(null)} />}
   </main>
 }
 
-function BoardSection({ title, description, boards, admin, onManage, onRename, onToggle }: {
+function BoardSection({ title, description, boards, admin, onManage, onRename, onToggle, onDelete }: {
   title: string
   description: string
   boards: Board[]
@@ -50,6 +52,7 @@ function BoardSection({ title, description, boards, admin, onManage, onRename, o
   onManage: (board: Board) => void
   onRename: (board: Board) => void
   onToggle: (board: Board) => void
+  onDelete: (board: Board) => void
 }) {
   return <div className="space-y-4">
     <div><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-[var(--color-text-muted)]">{description}</p></div>
@@ -63,6 +66,8 @@ function BoardSection({ title, description, boards, admin, onManage, onRename, o
             <button className="ui-button ui-button--sm" aria-label={`Cambiar nombre de ${board.name}`} onClick={() => onRename(board)}>Cambiar nombre</button>
             <button className={board.is_active ? 'ui-button ui-button--sm ui-button--danger' : 'ui-button ui-button--sm'}
               aria-label={`${board.is_active ? 'Desactivar' : 'Activar'} ${board.name}`} onClick={() => onToggle(board)}>{board.is_active ? 'Desactivar' : 'Activar'}</button>
+            {!board.is_active && <button className="ui-button ui-button--sm ui-button--danger"
+              aria-label={`Eliminar tablero ${board.name}`} onClick={() => onDelete(board)}>Eliminar tablero</button>}
           </div>}
         </li>)}
       </ul>}
@@ -88,6 +93,21 @@ export function getCreateBoardErrorMessage(cause: unknown): string {
 
 export function getBoardUpdateErrorMessage(cause: unknown): string {
   return describeBoardError(cause, 'No se pudo actualizar el tablero')
+}
+
+export function getBoardDeleteErrorMessage(cause: unknown): string {
+  const error = cause as { code?: string }
+  if (error?.code === '55000') return 'Solo se pueden eliminar tableros desactivados.'
+  if (error?.code === 'BOARD_ATTACHMENTS_DELETE_FAILED') {
+    return 'No se pudo completar el borrado porque falló la limpieza de adjuntos. El tablero y sus tareas siguen; algunos archivos podrían haberse eliminado. Inténtalo de nuevo.'
+  }
+  if (error?.code === 'BOARD_ATTACHMENT_PATH_INVALID') {
+    return 'No se pudo identificar la ruta de uno de los archivos adjuntos. El tablero y sus tareas no se eliminaron.'
+  }
+  if (error?.code === 'BOARD_DELETE_FAILED_AFTER_STORAGE') {
+    return 'No se pudo eliminar el tablero en la base de datos. El tablero y sus tareas siguen, pero sus archivos adjuntos ya se eliminaron.'
+  }
+  return describeBoardError(cause, 'No se pudo eliminar el tablero')
 }
 
 function CreateBoardDialog({ onClose }: { onClose: () => void }) {
@@ -161,6 +181,29 @@ function ToggleBoardDialog({ board, onClose }: { board: Board; onClose: () => vo
         catch (cause) { setError(getBoardUpdateErrorMessage(cause)) }
         finally { lock.current = false }
       }}>{setActive.isPending ? 'Guardando…' : activating ? 'Activar tablero' : 'Desactivar tablero'}</button></footer>
+  </Dialog>
+}
+
+function DeleteBoardDialog({ board, onClose }: { board: Board; onClose: () => void }) {
+  const remove = useDeleteBoard()
+  const lock = useRef(false)
+  const [error, setError] = useState('')
+  return <Dialog title={`Eliminar ${board.name}`} onClose={onClose} busy={remove.isPending}>
+    <div className="dialog-body space-y-4">
+      {error && <p role="alert" className="ui-feedback ui-feedback--error">{error}</p>}
+      <p>Si eliminas «{board.name}», se eliminarán todas sus tareas, comentarios, asignaciones y archivos adjuntos. No será posible recuperar ni el tablero ni las tareas que contiene.</p>
+    </div>
+    <footer className="dialog-footer">
+      <button className="ui-button" disabled={remove.isPending} onClick={onClose}>Cancelar</button>
+      <button className="ui-button ui-button--danger" disabled={remove.isPending} onClick={async () => {
+        if (lock.current) return
+        lock.current = true
+        setError('')
+        try { await remove.mutateAsync(board.id); onClose() }
+        catch (cause) { setError(getBoardDeleteErrorMessage(cause)) }
+        finally { lock.current = false }
+      }}>{remove.isPending ? 'Eliminando…' : 'Eliminar tablero'}</button>
+    </footer>
   </Dialog>
 }
 

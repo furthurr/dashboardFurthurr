@@ -23,12 +23,20 @@ describe('Selector de responsables', () => {
     await user.selectOptions(screen.getByLabelText('Asignar usuario'), 'person-b')
     const selected = within(screen.getByRole('list', { name: 'Usuarios seleccionados' }))
     expect(selected.getAllByRole('listitem')).toHaveLength(2)
+    expect(within(selected.getByRole('img', { name: 'Foto de Ana Equipo' })).getByText('A')).toBeInTheDocument()
     expect(screen.getByLabelText('Asignar usuario')).toBeDisabled()
     await user.click(selected.getByRole('button', { name: 'Desasignar a Ana Equipo' }))
     await user.click(screen.getByRole('button', { name: 'Desasignar a Bruno Equipo' }))
     expect(screen.getByText('Sin usuarios asignados.')).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /Ana Equipo/ })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /Bruno Equipo/ })).toBeInTheDocument()
+  })
+  it('muestra la foto del responsable seleccionado cuando está disponible', () => {
+    const person = { ...people[0], avatar_url: 'https://example.test/ana.png' }
+    render(<AssigneePicker users={[person]} value={[person.id]} onChange={vi.fn()} />)
+
+    const avatar = screen.getByRole('img', { name: 'Foto de Ana Equipo' })
+    expect(avatar.querySelector('img')).toHaveAttribute('src', person.avatar_url)
   })
   it('Todos añade los activos restantes sin duplicar ni retirar asignados inactivos', async () => {
     const inactive = { ...people[1], id: 'inactive', full_name: 'Inactivo', is_active: false }

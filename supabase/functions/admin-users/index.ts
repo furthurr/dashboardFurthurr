@@ -34,7 +34,7 @@ return async (request: Request) => {
     if (action.action === 'list') {
       const size = 50
       const { data, error, count } = await client.from('profiles')
-        .select('id, full_name, email, role, is_active', { count: 'exact' })
+        .select('id, full_name, email, avatar_url, role, is_active', { count: 'exact' })
         .order('created_at', { ascending: false }).order('id')
         .range((action.page - 1) * size, action.page * size - 1)
       if (error) return reply(500, { error: 'No se pudieron cargar los usuarios.' })

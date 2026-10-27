@@ -1,6 +1,6 @@
 # 06 - UI/UX Y Diseño
 
-Última actualización: 2026-10-21
+Última actualización: 2026-10-27
 
 Estado: `borrador`
 
@@ -13,7 +13,7 @@ El alcance y el plan de mejora transversal fueron aprobados. La implementación 
 - Apertura de tarjetas mediante botón; asa de arrastre independiente y controles de movimiento con nombres accesibles.
 - Diálogos con gestión de foco, Escape y cierre exterior; pestañas accesibles por flechas, Home y End.
 - Guardado, comentarios y adjuntos conservan contenido ante errores; estados pendientes impiden envíos duplicados. El cierre se bloquea durante una operación para no perder su resultado.
-- Confirmación antes de eliminar tareas, comentarios o adjuntos, conservando los permisos existentes.
+- Confirmación antes de eliminar tareas, comentarios, adjuntos o tableros inactivos, conservando los permisos existentes.
 
 ## Referencia Principal
 
@@ -37,7 +37,8 @@ Objetivo visual:
 - Creación y detalle incluyen «Usuarios asignados»: desplegable con nombre/correo y lista de seleccionados con acción de desasignar. Los ya asignados desaparecen de las opciones y vuelven al retirarlos. «Todos» agrega a todos los usuarios activos disponibles, sin duplicar ni quitar asignaciones existentes; no se ofrece cuando no quedan candidatos. Incluye carga, error/reintento y vacío; mantiene el borrador ante fallos. En el detalle hay «Guardar asignaciones» independiente y aviso de cambios pendientes para evitar descartarlos al guardar otros campos.
 - En la cabecera, las acciones de cuenta se agrupan en un botón que abre un panel lateral. Administradores: «Usuarios», «Perfil» y «Cerrar sesión»; usuarios e invitados: «Perfil» y «Cerrar sesión». Sustituye al acceso directo «Alta de Usuario».
 - El perfil propio permite actualizar el nombre completo y la contraseña. El nombre se guarda en `profiles.full_name`; la contraseña se actualiza en Supabase Auth y nunca se almacena en tablas públicas.
-- Administración de usuarios: listado paginado con nombre, correo, rol y estado, alta como usuario activo y confirmado, edición del nombre completo precargado, cambio de contraseña y confirmación de activación/desactivación. No permite desactivarse a sí mismo. Incluye estados de carga, vacío, error/reintento y envío bloqueado para evitar duplicados.
+- El menú de cuenta muestra el avatar y permite a una cuenta activa cambiar su propia foto. Acepta JPG/PNG/WebP de hasta 2 MiB; muestra estados de guardado, éxito y error.
+- Administración de usuarios: listado paginado con nombre, correo, avatar, rol y estado; alta como usuario activo y confirmado; edición del nombre completo precargado, cambio de contraseña, cambio de avatar y confirmación de activación/desactivación. No permite desactivarse a sí mismo. Incluye estados de carga, vacío, error/reintento y envío bloqueado para evitar duplicados.
 - Tablero horizontal con columnas.
 - Cada columna representa un estado.
 - Cada tarea se muestra como card.
@@ -48,6 +49,7 @@ Objetivo visual:
 - Después del login se muestra una pantalla con cards de los tableros accesibles; elegir una card abre ese tablero concreto. «Cambiar tablero» devuelve al selector.
 - El selector distingue carga, error/reintento y cuenta sin tableros. Admin ve todas las cards, puede crear tableros y gestionar miembros; las cuentas no admin solo ven sus membresías.
 - La creación solicita nombre, muestra duplicados/errores y explica que el tablero nuevo inicia sin miembros.
+- Solo administradores activos ven la sección de tableros desactivados. En cada tablero inactivo pueden reactivarlo o iniciar una eliminación permanente mediante confirmación que identifica el tablero y advierte que no se puede recuperar.
 - Inicialmente «Offline» recibe tareas existentes y miembros activos actuales; «General» inicia vacío. Las nuevas tareas se crean en el tablero que está abierto.
 - El detalle permite elegir otro tablero accesible y confirmar el traslado; se informa que la tarea desaparecerá del origen y conserva información/relaciones. Debe evitarse perder cambios de detalle sin guardar.
 
@@ -68,6 +70,7 @@ Cada card debe mostrar como mínimo:
 - Miniaturas de los adjuntos de imagen; al seleccionarlas, mostrar la imagen ampliada en un diálogo.
 - Prioridad.
 - Avatares de asignados.
+- Avatar de autor de comentario, cuando está disponible.
 - Indicador de comentarios.
 - Indicador de adjuntos si existen.
 
@@ -86,6 +89,7 @@ Debe mostrar:
 - Comentarios.
 - El control para añadir adjuntos se presenta como un botón visible «Seleccionar archivo», muestra el nombre elegido e indica el límite de 5 MB.
 - Al elegir un archivo válido se inicia la subida automáticamente, sin un botón adicional de envío; durante la carga se informa su estado y, si falla, se conserva el archivo para reintentar volviéndolo a seleccionar.
+- En la lista de adjuntos, uploader, creador de la tarea o administrador activo con acceso al tablero puede cambiar el nombre mostrado o eliminar el archivo. Renombrar conserva el objeto de Storage; eliminar solicita confirmación con el nombre del archivo y comunica errores/éxito.
 
 El modal de detalle se cierra al hacer clic fuera del panel, igual que al usar el botón de cierre o Escape, salvo mientras una operación esté en curso.
 

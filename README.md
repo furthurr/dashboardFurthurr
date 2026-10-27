@@ -1,6 +1,6 @@
 # Dashboard Furthurr
 
-Dashboard web para organizar tareas en un tablero Kanban. Incluye autenticación con Supabase, columnas por estado, prioridades, visualización de asignaciones, comentarios y adjuntos. La aplicación es una SPA estática; las operaciones administrativas de usuarios se ejecutan en una Edge Function de Supabase.
+Dashboard web para organizar tareas en tableros Kanban. Incluye autenticación con Supabase, asignaciones, comentarios, adjuntos y avatares de perfil. La aplicación cliente es una SPA estática; las operaciones administrativas de usuarios y tableros se validan en servicios gestionados de Supabase.
 
 ## Stack
 
@@ -42,13 +42,19 @@ El cliente necesita estas variables tanto en desarrollo como durante el build:
 
 En GitHub Actions se proporcionan mediante secretos con esos nombres. No uses `VITE_SUPABASE_KEY`, no incluyas credenciales en el repositorio y nunca expongas una `service_role` en el frontend. `.env.local` debe mantenerse fuera de Git.
 
-El schema de referencia, incluidas tablas, RLS, Storage y vistas, está en [`supabase-schema.sql`](supabase-schema.sql). Según las instrucciones del proyecto, los cambios al schema se realizan allí y se aplican desde Supabase SQL Editor. Contrasta permisos con [`specs/05-auth-roles-permisos.md`](specs/05-auth-roles-permisos.md).
+El bootstrap de referencia, incluidas tablas, RLS, Storage, vistas, grants y RPCs, está en [`supabase-schema.sql`](supabase-schema.sql). Para una instalación existente usa únicamente las migraciones incrementales pendientes en el orden de [`supabase/README.md`](supabase/README.md); no vuelvas a ejecutar el bootstrap sobre esa base. Contrasta permisos con [`specs/05-auth-roles-permisos.md`](specs/05-auth-roles-permisos.md).
 
-**Administración de usuarios:** antes de publicar esta versión, aplica la migración de estado/permisos, despliega `admin-users` y deshabilita el registro público de Auth siguiendo [`supabase/README.md`](supabase/README.md). El build de GitHub Pages no despliega funciones ni SQL. Las altas administrativas quedan confirmadas y activas sin enviar un enlace por correo.
+**Administración de usuarios:** el alta, cambios de contraseña, activación y promoción a administrador pasan por la Edge Function `admin-users`; la función valida la sesión y el rol en servidor. El registro público de Auth debe estar deshabilitado. Las altas administrativas quedan confirmadas y activas sin enviar un enlace por correo. El build de GitHub Pages no despliega funciones ni SQL; consulta [`supabase/README.md`](supabase/README.md) para instalación y operación.
 
-**Ciclo de vida de tableros:** el selector consulta el catálogo con la RPC `list_boards_with_pending_counts` y administra nombre y estado con `rename_board` y `set_board_active`. Esa versión requiere `supabase/migrations/202610220001_board_access_returning.sql` y `supabase/migrations/202610220002_board_lifecycle.sql`, aplicadas en ese orden según [`supabase/README.md`](supabase/README.md); sin ellas el selector de tableros falla. Ambas se aplicaron en el proyecto de producción el 2026-10-22 y las tres suites SQL remotas quedaron en `PASS`.
+**Ciclo de vida de tableros:** el selector consulta `list_boards_with_pending_counts`; el administrador puede renombrar, activar y desactivar. Desactivar conserva tareas y membresías, pero retira el acceso a los miembros. La interfaz local también permite eliminar permanentemente un tablero solo si ya está desactivado. Requiere `202610220001_board_access_returning.sql`, `202610220002_board_lifecycle.sql` y `202610260002_delete_inactive_boards.sql` en instalaciones existentes. El registro de aplicación remota de las migraciones `202610220001`/`202610220002` y de sus suites corresponde al 2026-10-22; no acredita la aplicación de `202610260002`.
 
 **Responsables de tareas:** creación y detalle permiten asignar/desasignar varias personas mediante un desplegable por nombre/correo. Los ya asignados desaparecen de las opciones y «Todos» añade a todos los usuarios activos disponibles. Requiere también la migración `202610200001_task_assignments.sql` de la misma guía. Cualquier cuenta activa, incluidos invitados, puede guardar asignaciones en tareas ajenas sin obtener permiso para editar otros campos. La tarea y sus responsables iniciales se crean en una sola transacción. El tablero permite filtrar por personas y precarga esas personas al crear una tarea; con el filtro «Todos» se inicia sin asignados.
+
+**Adjuntos de tareas:** la cuenta que subió un archivo, quien creó la tarea o un administrador activo con acceso al tablero puede cambiar el nombre visible o eliminarlo. Renombrar actualiza solo `task_attachments.file_name`, sin mover ni cambiar el objeto de Storage. El borrado confirma la acción y elimina el objeto y su metadata; Storage y PostgreSQL son operaciones separadas. Instalaciones existentes requieren `202610260001_task_attachment_management.sql`.
+
+**Avatares:** las personas pueden cambiar su propia foto y un administrador puede cambiar la de cualquier cuenta. Se aceptan JPG, PNG y WebP de hasta 2 MiB. El bucket `avatars` es público para lectura; no cargues imágenes sensibles. Instalaciones existentes requieren `202610260003_profile_avatars.sql`.
+
+Las migraciones `202610260001`–`202610260003` están en el árbol local y su aplicación remota no se verificó en esta actualización. Aplica las pendientes en el orden indicado en [`supabase/README.md`](supabase/README.md) antes de usar esos cambios en una base existente.
 
 ## Rutas y GitHub Pages
 
@@ -74,15 +80,16 @@ src/
   App.tsx                    Providers y rutas
   main.tsx                   Entrada React
   features/auth/             Login, sesión y rutas protegidas
-  features/users/            Administración de usuarios
-  features/boards/           Selector de tableros, miembros y ciclo de vida
+  features/users/            Administración de usuarios y avatares
+  features/boards/           Selector, miembros y ciclo de vida de tableros
   features/board/            Tablero, tareas, comentarios y adjuntos
-  lib/supabase.ts             Cliente Supabase
+  shared/ui/                 Componentes compartidos, incluido ProfileAvatar
+  lib/                       Cliente Supabase y utilidades Storage
   types/index.ts             Tipos compartidos
   index.css                  Estilos globales y tokens visuales
 specs/                       Especificaciones de producto (fuente de verdad SDD)
 supabase-schema.sql          Schema SQL de referencia
-supabase/                    Edge Function, migración y guía de despliegue
+supabase/                    Edge Function, migraciones, pruebas SQL y guía operativa
 ```
 
 Antes de implementar funcionalidad, actualiza o crea la especificación correspondiente en `specs/`. El progreso se sigue contra esas especificaciones.
@@ -94,6 +101,7 @@ Antes de implementar funcionalidad, actualiza o crea la especificación correspo
 - [Sistema de diseño](.design/README.md) — fundamentos visuales, componentes y deuda de UI.
 - [Mapa de navegación](.navigator/ai-context.md) — contexto breve; [mapa de módulos](.navigator/module-map.json).
 - [Especificaciones](specs/README.md) — requisitos, modelo de datos, permisos, UI/UX y flujo Kanban.
+- [Operación Supabase](supabase/README.md) — orden de migraciones, pruebas SQL y publicación de Edge Functions.
 
 La documentación canónica describe y referencia las fuentes de implementación; `specs/` conserva la intención funcional, el SQL define el schema fuente y el código describe el comportamiento actualmente implementado.
 

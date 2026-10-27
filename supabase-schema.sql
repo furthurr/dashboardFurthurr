@@ -344,9 +344,12 @@ create policy "Creators, assignees, and admins can delete attachments"
 -- ============================================
 
 -- Avatar bucket for user profile photos
-insert into storage.buckets (id, name, public)
-values ('avatars', 'avatars', true)
-on conflict (id) do nothing;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 2097152, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update
+  set public = excluded.public,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
 
 -- Task attachments bucket
 insert into storage.buckets (id, name, public)
@@ -362,20 +365,42 @@ create policy "Public read access for avatars"
     on storage.objects for select
     using (bucket_id = 'avatars');
 
--- Authenticated users can upload avatars (file size limited to 2MB in client)
-create policy "Authenticated users can upload avatars"
+-- Users can upload their own avatar; active admins can upload for other users.
+create policy "Avatar owners and admins can upload"
     on storage.objects for insert
     with check (
         bucket_id = 'avatars'
-        and auth.role() = 'authenticated'
+        and (
+            (storage.foldername(name))[1] = auth.uid()::text
+            or exists (
+                select 1 from public.profiles
+                where id = auth.uid() and role = 'admin' and is_active
+            )
+        )
     );
 
--- Users can update their own avatar
-create policy "Users can update own avatar"
+-- Users and active admins can replace an avatar in its profile folder.
+create policy "Avatar owners and admins can update"
     on storage.objects for update
     using (
         bucket_id = 'avatars'
-        and auth.uid()::text = (storage.foldername(name))[1]
+        and (
+            (storage.foldername(name))[1] = auth.uid()::text
+            or exists (
+                select 1 from public.profiles
+                where id = auth.uid() and role = 'admin' and is_active
+            )
+        )
+    )
+    with check (
+        bucket_id = 'avatars'
+        and (
+            (storage.foldername(name))[1] = auth.uid()::text
+            or exists (
+                select 1 from public.profiles
+                where id = auth.uid() and role = 'admin' and is_active
+            )
+        )
     );
 
 -- Task attachments: authenticated users can view
@@ -458,6 +483,7 @@ grant delete on public.comments to authenticated;
 grant select on public.task_attachments to authenticated;
 grant insert on public.task_attachments to authenticated;
 grant delete on public.task_attachments to authenticated;
+grant update (file_name) on public.task_attachments to authenticated;
 
 -- NOTE: Storage permissions are handled via RLS policies in the storage.objects table.
 -- Policies for storage were defined earlier in this file.
@@ -613,6 +639,18 @@ language sql stable security definer set search_path = '' as $$
 $$;
 revoke all on function public.is_board_admin(), public.can_access_board(uuid), public.can_access_task(uuid) from public, anon;
 grant execute on function public.is_board_admin(), public.can_access_board(uuid), public.can_access_task(uuid) to authenticated;
+create policy "Attachment managers can rename attachments"
+  on public.task_attachments for update to authenticated
+  using (
+    uploaded_by = auth.uid()
+    or public.is_board_admin()
+    or exists(select 1 from public.tasks where id = task_id and created_by = auth.uid())
+  )
+  with check (
+    uploaded_by = auth.uid()
+    or public.is_board_admin()
+    or exists(select 1 from public.tasks where id = task_id and created_by = auth.uid())
+  );
 alter table public.boards enable row level security;
 alter table public.board_members enable row level security;
 revoke all on public.boards, public.board_members from anon, authenticated;
@@ -686,6 +724,19 @@ begin
   update public.boards set is_active = p_active where id = p_board_id;
 end;
 $$;
+create function public.delete_inactive_board(p_board_id uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+declare current_is_active boolean;
+begin
+  if not public.is_board_admin() then raise exception 'Admin required' using errcode = '42501'; end if;
+  if p_board_id is null then raise exception 'Invalid board' using errcode = '22023'; end if;
+  select b.is_active into current_is_active from public.boards b where b.id = p_board_id for update;
+  if not found then raise exception 'Board not found' using errcode = 'P0002'; end if;
+  if current_is_active then raise exception 'Board must be deactivated' using errcode = '55000'; end if;
+  delete from public.tasks where board_id = p_board_id;
+  delete from public.boards where id = p_board_id;
+end;
+$$;
 -- Accessible boards with pending tasks (backlog, por_hacer, haciendo).
 create function public.list_boards_with_pending_counts()
 returns table (id uuid, name text, is_active boolean, created_at timestamptz, pending_count bigint)
@@ -703,8 +754,10 @@ language sql stable security definer set search_path = '' as $$
   order by b.name;
 $$;
 revoke all on function public.rename_board(uuid, text), public.set_board_active(uuid, boolean),
+  public.delete_inactive_board(uuid),
   public.list_boards_with_pending_counts() from public, anon;
 grant execute on function public.rename_board(uuid, text), public.set_board_active(uuid, boolean),
+  public.delete_inactive_board(uuid),
   public.list_boards_with_pending_counts() to authenticated;
 
 alter function public.set_task_assignees(uuid, uuid[]) rename to set_task_assignees_internal;

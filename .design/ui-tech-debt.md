@@ -2,6 +2,12 @@
 
 Hallazgos visuales/documentales detectados en los componentes y estilos revisados. Esta revisión es documental: no se modificó UI ni se ejecutó una auditoría automatizada de accesibilidad.
 
+## Revisión focalizada — tableros y avatares, 2026-10-26
+
+La eliminación permanente de tableros inactivos usa la variante destructiva existente y una confirmación con nombre/advertencia; los controles de avatar tienen nombre accesible, estados de espera/error y fallback si la imagen no carga (`src/features/boards/BoardsPage.tsx:69-70,187-207`, `src/shared/ui/AccountMenu.tsx:61-73`, `src/shared/ui/ProfileAvatar.tsx:17-45`). No se detecta un hallazgo de accesibilidad verificable nuevo por lectura estática. No se ejecutaron pruebas, comprobación visual en navegador, contraste ni lector de pantalla durante esta actualización; por tanto, no se declaran esas propiedades validadas visualmente.
+
+No se añaden tokens ni clases CSS. El SVG de fallback de `ProfileAvatar` se suma a los SVG inline ya observados y queda dentro del hallazgo opcional R-02 (sin proponer una nueva abstracción para un único icono).
+
 ## Revisión focalizada — visor de imágenes de tareas, 2026-10-23
 
 El diálogo usa el título de tarea como nombre accesible y asocia el nombre del archivo como descripción (`src/shared/ui/Dialog.tsx:87-94`). La navegación usa botones con nombres accesibles, solo aparece con varias imágenes y deshabilita el sentido que no corresponde en los extremos; la descripción de la tarea queda debajo de la imagen (`src/features/board/TaskCard.tsx:220-267`). No se introduce un hallazgo de accesibilidad verificable nuevo ni tokens/clases CSS propios; las flechas SVG inline quedan dentro del hallazgo opcional R-02. Evidencia: 140 pruebas Vitest, TypeScript/build y lint correctos. No hubo revisión visual en navegador, prueba con lector de pantalla ni auditoría de contraste para este cambio.
@@ -43,7 +49,7 @@ Estado basado en lectura del código en esa fecha; ese código ya está versiona
 | ID | Prioridad | Hallazgo y evidencia | Seguimiento documental/técnico |
 | --- | --- | --- | --- |
 | R-01 (U-03) | Baja | Excepciones directas: hover danger `#492636`, halo auth y backdrop (`src/index.css:175`, `src/index.css:137`, `src/index.css:146`); radios locales en adjunto/avatar excedente (`src/features/board/AttachmentsList.tsx:35`, `src/features/board/TaskCard.tsx:83`). | Evaluar consolidación si se reutilizan; la centralización actual no es total. |
-| R-02 (U-04) | Baja | Paths/trazos/tamaños SVG locales; el icono del botón de comentarios y las flechas anterior/siguiente son inline y decorativos, mientras sus botones ofrecen nombres accesibles (`src/features/board/TaskCard.tsx:129-138,145-147,167-211,241-258`). | Queda consolidación opcional de estilos de icono; no exige una abstracción compartida sin reutilización demostrada. |
+| R-02 (U-04) | Baja | Paths/trazos/tamaños SVG locales; el icono del botón de comentarios, flechas anterior/siguiente y fallback de avatar son inline y decorativos, dentro de controles/componentes nombrados (`src/features/board/TaskCard.tsx:129-138,145-147,167-211,241-258`, `src/shared/ui/ProfileAvatar.tsx:40-42`). | Queda consolidación opcional de estilos de icono; no exige una abstracción compartida sin reutilización demostrada. |
 | R-03 | Corregida | En Chromium se reprodujo transición de tarjetas de 0s por duración inválida; `src/features/board/TaskCard.tsx:39` usa ahora `duration-150 ease-out`. | GREEN de estilo computado: 0,15s y 0,00001s con movimiento reducido. Evidencia en spec de entrega. |
 
 ### Evidencia de pruebas y límites
