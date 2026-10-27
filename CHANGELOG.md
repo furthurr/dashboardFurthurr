@@ -1,5 +1,28 @@
 # Changelog
 
+## [v0.10.0] - 2026-10-27
+
+### Funcionalidades
+
+- Permitir renombrar y eliminar adjuntos desde el detalle de tarea, con confirmación y permisos por uploader, creador de la tarea o administrador activo.
+- Permitir eliminar permanentemente tableros desactivados; se eliminan tareas y relaciones asociadas.
+- Añadir avatares de perfil propios y edición administrativa, con imágenes JPG/PNG/WebP de hasta 2 MiB.
+
+### Backend y permisos
+
+- Añadir migraciones para gestión de adjuntos, borrado de tableros inactivos y políticas de avatares; actualizar el bootstrap SQL.
+- Limitar el cambio de metadata de adjuntos a `file_name`; asegurar las operaciones de eliminación de tableros mediante RPC y limpieza de Storage.
+
+### Documentación y verificación
+
+- Actualizar specs, guías operativas, contratos de datos y documentación de arquitectura, diseño y navegación.
+- Verificar TypeScript, ESLint, 174 pruebas Vitest, 11 pruebas Deno y build de Vite correctos. El build mantiene el aviso de chunk principal superior a 500 kB.
+- La aplicación remota de las migraciones `202610260001`–`202610260003` y sus pruebas SQL no se verificaron en este release.
+
+### Instalaciones existentes
+
+- Aplicar las migraciones pendientes `202610260001_task_attachment_management.sql`, `202610260002_delete_inactive_boards.sql` y `202610260003_profile_avatars.sql`, en ese orden y después de las migraciones de tableros. El build de GitHub Pages no aplica SQL.
+
 ## [v0.9.0] - 2026-10-23
 
 ### Funcionalidades
