@@ -8,6 +8,12 @@ import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { BoardRoute } from '@/features/boards/BoardRoute'
 import { BoardsPage } from '@/features/boards/BoardsPage'
 import { ProfilePage } from '@/features/auth/ProfilePage'
+import { OAuthConsentPage } from '@/features/auth/OAuthConsentPage'
+import { OAuthConnectionsPage } from '@/features/auth/OAuthConnectionsPage'
+import { normalizeConsentLocation } from '@/features/auth/mcpOAuth'
+
+const consentLocation = normalizeConsentLocation(window.location)
+if (consentLocation) window.history.replaceState({}, '', consentLocation)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,6 +37,8 @@ function App() {
             <Route path="/register" element={<Navigate to="/users" replace />} />
             <Route path="/users" element={<ProtectedRoute adminOnly><UsersPage /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/profile/connections" element={<ProtectedRoute><OAuthConnectionsPage /></ProtectedRoute>} />
+            <Route path="/oauth/consent" element={<OAuthConsentPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route
               path="/board/:boardId"

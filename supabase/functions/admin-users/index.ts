@@ -24,6 +24,16 @@ return async (request: Request) => {
     // getUser verifies the token with Auth; decoding a JWT is not authorization.
     const { data: identity, error: identityError } = await client.auth.getUser(authorization.slice(7))
     if (identityError || !identity.user) return reply(401, { error: 'La sesión no es válida.' })
+    // Decode ONLY after Auth has verified the exact token. OAuth sessions are not
+    // portal sessions, even when their user happens to be an administrator.
+    let claims: Record<string, unknown>
+    try {
+      const payload = authorization.slice(7).split('.')[1]
+      claims = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+    } catch { return reply(401, { error: 'La sesión no es válida.' }) }
+    if (claims.client_id != null || claims.role !== 'authenticated') {
+      return reply(403, { error: 'Las conexiones OAuth no pueden administrar usuarios.' })
+    }
     const { data: actor, error: actorError } = await client.from('profiles').select('role, is_active').eq('id', identity.user.id).single()
     if (actorError || actor?.role !== 'admin' || !actor.is_active) return reply(403, { error: 'Solo administradores activos pueden gestionar usuarios.' })
 

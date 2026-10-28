@@ -42,6 +42,7 @@ export function ProfilePage() {
         <div><label className="ui-label" htmlFor="profile-password">Nueva contraseña</label><input id="profile-password" className="ui-field" type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} maxLength={128} /><p className="mt-2 text-sm text-[var(--color-text-muted)]">Déjala vacía si no quieres cambiarla. Si la cambias, usa entre 8 y 128 caracteres.</p></div>
         <button className="ui-button ui-button--primary" type="submit" disabled={busy}>{busy ? 'Guardando…' : 'Guardar cambios'}</button>
       </form>
+      <Link to="/profile/connections" className="ui-button mt-5">Gestionar conexiones MCP</Link>
     </section>
   </main>
 }

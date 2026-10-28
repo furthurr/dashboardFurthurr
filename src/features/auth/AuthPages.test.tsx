@@ -20,6 +20,19 @@ it('después del login lleva al selector y no entra a un tablero automáticament
   expect(await screen.findByRole('heading', { name: 'Seleccionar tablero' })).toBeVisible()
 })
 
+it('conserva la solicitud MCP después del login sin aceptar un redirect arbitrario', async () => {
+  const user = userEvent.setup()
+  auth.signInWithPassword.mockResolvedValueOnce({ error: null })
+  render(<MemoryRouter initialEntries={['/login?authorization_id=00000000-0000-0000-0000-000000000001&redirect=https://evil.test']}><Routes>
+    <Route path="/login" element={<LoginPage />} />
+    <Route path="/oauth/consent" element={<h1>Consentimiento MCP</h1>} />
+  </Routes></MemoryRouter>)
+  await user.type(screen.getByLabelText('Correo electrónico'), 'equipo@example.test')
+  await user.type(screen.getByLabelText('Contraseña'), 'fixture-password')
+  await user.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
+  expect(await screen.findByRole('heading', { name: 'Consentimiento MCP' })).toBeVisible()
+})
+
 describe.each([
   { name: 'acceso', Component: LoginPage, action: 'Iniciar sesión', pending: 'Iniciando sesión…', method: 'signInWithPassword' as const },
 ])('Accesibilidad de $name', ({ Component, action, pending, method }) => {

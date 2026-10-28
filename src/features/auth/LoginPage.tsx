@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { authorizationId, consentPath } from './mcpOAuth'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -23,7 +25,8 @@ export function LoginPage() {
       setError(error.message)
       setIsLoading(false)
     } else {
-      navigate('/boards')
+      const id = authorizationId(params.get('authorization_id'))
+      navigate(id ? consentPath(id) : '/boards')
     }
   }
 

@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "@modelcontextprotocol/sdk/server/mcp.js": "npm:@modelcontextprotocol/sdk@1.32.2/server/mcp.js",
+    "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js": "npm:@modelcontextprotocol/sdk@1.32.2/server/webStandardStreamableHttp.js",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.105.1",
+    "jose": "npm:jose@6.2.13"
+  }
+}

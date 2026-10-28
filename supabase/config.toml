@@ -5,3 +5,20 @@ enable_signup = false
 [functions.admin-users]
 # Token is verified explicitly with auth.getUser inside the function (supports publishable keys).
 verify_jwt = false
+
+[functions.mcp]
+# Discovery is public. The handler validates issuer, audience, signature and live session.
+verify_jwt = false
+
+# Activate OAuth and the token hook together ONLY after applying the MCP migration,
+# setting mcp_oauth_configuration.resource_url and publishing the consent UI.
+# OAuth Server remains beta; do not push unrelated Auth settings blindly.
+# [auth.oauth_server]
+# enabled = true
+# With Auth Site URL set to the deployed SPA root, this joins to that root.
+# Do not put a query in this path: GoTrue appends ?authorization_id itself.
+# authorization_url_path = "/"
+# allow_dynamic_registration = true
+# [auth.hook.custom_access_token]
+# enabled = true
+# uri = "pg-functions://postgres/public/mcp_access_token_hook"

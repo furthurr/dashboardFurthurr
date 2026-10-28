@@ -37,8 +37,8 @@ function fixture(role = 'admin', active = true, valid = true, failures: { create
   }
   const makeClient = (() => { reads++; return client }) as unknown as typeof createClient
   const handle = createHandler(makeClient)
-  const send = (body: unknown, token = true) => handle(new Request('https://example.test/admin-users', {
-    method: 'POST', headers: token ? { Authorization: 'Bearer test' } : {}, body: JSON.stringify(body),
+  const send = (body: unknown, token: boolean | Record<string, unknown> = true) => handle(new Request('https://example.test/admin-users', {
+    method: 'POST', headers: token ? { Authorization: `Bearer fixture.${btoa(JSON.stringify(typeof token === 'object' ? token : { role: 'authenticated' }))}.fixture` } : {}, body: JSON.stringify(body),
   }))
   return { send, calls, projections, reads: () => reads, handle }
 }
@@ -61,6 +61,14 @@ Deno.test('creates confirmed accounts and forces usuario/active ignoring caller 
   assert(f.calls[0].email_confirm === true)
   assert(f.calls[0].email === 'person@example.test')
   assert(f.calls[1].role === 'usuario' && f.calls[1].is_active === true)
+})
+
+Deno.test('OAuth tokens cannot use administrative actions even for an active admin', async () => {
+  for (const claims of [{ role: 'mcp_identity', client_id: otherId }, { role: 'authenticated', client_id: otherId }, { role: 'mcp_identity' }]) {
+    const f = fixture()
+    assert((await f.send({ action: 'list' }, claims)).status === 403)
+    assert(f.calls.length === 0 && f.projections.length === 0)
+  }
 })
 Deno.test('sets passwords and state; rejects self-deactivation', async () => {
   const f = fixture()
