@@ -10,7 +10,15 @@ end $$;
 create schema auth;
 create schema storage;
 create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}');
-create table auth.sessions (id uuid primary key, user_id uuid references auth.users, oauth_client_id uuid, not_after timestamptz);
+create type auth.oauth_client_type as enum ('public', 'confidential');
+create type auth.oauth_registration_type as enum ('dynamic', 'manual');
+create table auth.oauth_clients (
+  id uuid primary key, client_name text, redirect_uris text, grant_types text,
+  client_type auth.oauth_client_type, token_endpoint_auth_method text,
+  registration_type auth.oauth_registration_type, client_secret_hash text,
+  created_at timestamptz, updated_at timestamptz
+);
+create table auth.sessions (id uuid primary key, user_id uuid references auth.users, oauth_client_id uuid references auth.oauth_clients, not_after timestamptz);
 create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
 create function auth.uid() returns uuid language sql stable as $$ select (auth.jwt() ->> 'sub')::uuid $$;
 create function auth.role() returns text language sql stable as $$ select auth.jwt() ->> 'role' $$;

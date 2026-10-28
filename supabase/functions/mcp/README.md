@@ -85,7 +85,27 @@ bootstrap sobre una base existente ni aplicar migraciones previas a ciegas.
     denegación; renovación; revocación con JWT todavía vigente; cuenta inactiva;
     acceso directo denegado a tablas, RPCs, Storage y `admin-users`; login web normal.
 
-No se han aplicado estos pasos en remoto desde la implementación local.
+### Estado del piloto (2026-10-28)
+
+Se aplicó únicamente `202610280002_mcp_identity` y se configuró el recurso MCP en
+el proyecto del portal mediante Supabase CLI 2.121.0. No se reejecutó el bootstrap
+ni se aplicaron migraciones anteriores ajenas al MCP. Se desplegaron `mcp` y la
+protección OAuth de `admin-users`; se habilitaron el hook, OAuth/DCR y el retorno
+al root publicado. El diff posterior no mostró cambios declarados pendientes.
+
+GitHub Pages publicó el frontend del commit `133f382`, workflow `40757148648`.
+Se comprobaron las rutas públicas, metadatos MCP/Auth, desafío 401 y retorno 302
+con un ID opaco de 32 caracteres. El probe `mcp_identity.sql` pasó en Supabase real
+y revirtió sus fixtures. Los conteos de perfiles, tareas y tableros no cambiaron.
+
+OpenCode CLI 1.18.34 completó discovery y DCR como cliente público sin secreto.
+El intento interactivo de `opencode mcp auth furthurr` abrió el flujo, pero terminó
+por timeout sin completar el login. **No se ha validado todavía `whoami` con una
+sesión OAuth real, ni renovación/revocación end-to-end ni OpenCode Desktop.**
+El archivo `opencode.json` del proyecto configura la URL sin credenciales. Reinicia
+OpenCode Desktop para cargarlo y autoriza la conexión desde su interfaz; como
+alternativa ejecuta `opencode mcp auth furthurr` en tu terminal y completa el login
+en el navegador. No copies contraseñas ni tokens al chat.
 
 ## Clientes
 
@@ -96,7 +116,7 @@ instalan configuraciones automáticamente en el equipo del usuario.
 | Cliente | Configuración orientativa | Estado |
 | --- | --- | --- |
 | OpenCode Desktop/CLI | `mcp.furthurr = {"type":"remote","url":"https://PROJECT_REF.supabase.co/functions/v1/mcp"}` | HTTP/OAuth documentados; sin prueba real por variante. |
-| Kiro IDE/CLI | `mcpServers.furthurr = {"url":"https://PROJECT_REF.supabase.co/functions/v1/mcp","oauthScopes":["email","profile"]}` | HTTP/OAuth documentados en ambas superficies; sin prueba real. Scopes explícitos evitan `offline_access`, no soportado por Supabase. |
+| Kiro IDE/CLI | `mcpServers.furthurr = {"url":"https://PROJECT_REF.supabase.co/functions/v1/mcp","oauthScopes":["email","profile"]}` | HTTP/OAuth documentados en ambas superficies; sin prueba real. Los scopes explícitos minimizan la solicitud de identidad. |
 | Copilot en VS Code | `servers.furthurr = {"type":"http","url":"https://PROJECT_REF.supabase.co/functions/v1/mcp"}` en formato VS Code | Transporte documentado; OAuth/end-to-end pendientes para versión instalada. |
 | Copilot CLI | `mcpServers.furthurr = {"type":"http","url":"https://PROJECT_REF.supabase.co/functions/v1/mcp","tools":["whoami"]}` | HTTP documentado; OAuth/end-to-end pendientes. No lee el formato `servers` de VS Code. |
 | Antigravity App/IDE/CLI | `mcpServers.furthurr = {"serverUrl":"https://PROJECT_REF.supabase.co/functions/v1/mcp"}` | HTTP/OAuth documentados; sin prueba real por variante. |

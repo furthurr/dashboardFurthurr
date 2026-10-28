@@ -9,11 +9,12 @@ insert into auth.users(id, email, raw_user_meta_data) values(current_setting('te
 update public.profiles set role = 'admin' where id = current_setting('test.mcp_user')::uuid;
 
 -- Use a real OAuth client fixture on Supabase (auth.sessions has an FK there).
--- The plain-Postgres harness intentionally has no oauth_clients table.
+-- The plain-Postgres harness models the enum/FK needed for this fixture too.
 do $$ begin
   if to_regclass('auth.oauth_clients') is not null then
-    execute 'insert into auth.oauth_clients(id, client_name, redirect_uris, grant_types, client_type, token_endpoint_auth_method, registration_type, client_secret_hash, created_at, updated_at) values ($1, $2, $3, $4, $5, $6, ''manual'', '''', now(), now())'
-      using current_setting('test.mcp_client')::uuid, 'MCP fixture', 'https://example.test/callback', 'authorization_code,refresh_token', 'public', 'none';
+    -- Enum literals must be coerced by PostgreSQL, not bound as typed text.
+    execute 'insert into auth.oauth_clients(id, client_name, redirect_uris, grant_types, client_type, token_endpoint_auth_method, registration_type, client_secret_hash, created_at, updated_at) values ($1, ''MCP fixture'', ''https://example.test/callback'', ''authorization_code,refresh_token'', ''public'', ''none'', ''manual'', '''', now(), now())'
+      using current_setting('test.mcp_client')::uuid;
   end if;
 end $$;
 insert into auth.sessions(id, user_id, oauth_client_id) values(current_setting('test.mcp_session')::uuid, current_setting('test.mcp_user')::uuid, current_setting('test.mcp_client')::uuid);

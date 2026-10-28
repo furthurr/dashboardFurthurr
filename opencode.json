@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "furthurr": {
+      "type": "remote",
+      "url": "https://uujxatuuktccwkvavksr.supabase.co/functions/v1/mcp",
+      "oauth": {
+        "scope": "email profile"
+      },
+      "enabled": true
+    }
+  }
+}
