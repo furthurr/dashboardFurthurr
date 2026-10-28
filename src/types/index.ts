@@ -35,8 +35,12 @@ export interface Board {
   name: string
   is_active: boolean
   pending_count: number
+  my_pending_count: number
+  people: BoardPerson[]
   created_at: string
 }
+
+export type BoardPerson = Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
 
 export type AssigneeProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url' | 'role' | 'is_active'>
 

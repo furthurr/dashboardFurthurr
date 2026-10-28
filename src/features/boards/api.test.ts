@@ -50,14 +50,14 @@ describe('Contratos de tableros', () => {
     expect(mocks.range).toHaveBeenNthCalledWith(2, 500, 999)
   })
   it('consulta los tableros accesibles con el conteo de pendientes sin filtrar membresías en cliente', async () => {
-    mocks.rpc.mockResolvedValueOnce({ data: [{ id: 'board', name: 'Offline', is_active: true, pending_count: 4, created_at: '2026-10-21' }], error: null })
-    expect(await fetchBoards()).toEqual([{ id: 'board', name: 'Offline', is_active: true, pending_count: 4, created_at: '2026-10-21' }])
+    mocks.rpc.mockResolvedValueOnce({ data: [{ id: 'board', name: 'Offline', is_active: true, pending_count: 4, my_pending_count: 2, people: [{ id: 'p', full_name: 'Ana', avatar_url: null }], created_at: '2026-10-21' }], error: null })
+    expect(await fetchBoards()).toEqual([{ id: 'board', name: 'Offline', is_active: true, pending_count: 4, my_pending_count: 2, people: [{ id: 'p', full_name: 'Ana', avatar_url: null }], created_at: '2026-10-21' }])
     expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('list_boards_with_pending_counts')
     expect(mocks.from).not.toHaveBeenCalled()
   })
   it('normaliza el estado y el conteo devueltos por el servidor', async () => {
-    mocks.rpc.mockResolvedValueOnce({ data: [{ id: 'board', name: 'Archivo', is_active: false, pending_count: '7', created_at: '2026-10-21' }], error: null })
-    expect(await fetchBoards()).toEqual([{ id: 'board', name: 'Archivo', is_active: false, pending_count: 7, created_at: '2026-10-21' }])
+    mocks.rpc.mockResolvedValueOnce({ data: [{ id: 'board', name: 'Archivo', is_active: false, pending_count: '7', my_pending_count: '0', people: null, created_at: '2026-10-21' }], error: null })
+    expect(await fetchBoards()).toEqual([{ id: 'board', name: 'Archivo', is_active: false, pending_count: 7, my_pending_count: 0, people: [], created_at: '2026-10-21' }])
   })
   it('propaga el fallo del catálogo sin confundirlo con ausencia de tableros', async () => {
     mocks.rpc.mockResolvedValueOnce({ data: null, error: new Error('Fallo catálogo') })

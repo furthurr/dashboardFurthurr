@@ -23,8 +23,9 @@ vi.mock('@/features/board/assigneesApi', () => ({ useAssignableUsers: mocks.user
 vi.mock('@/features/board/BoardPage', () => ({ BoardPage: ({ boardId, boardName }: { boardId: string; boardName: string }) => <h1>{boardName} · {boardId}</h1> }))
 vi.mock('react-router-dom', async (original) => ({ ...await original<typeof import('react-router-dom')>(), useParams: () => ({ boardId: mocks.boardId }) }))
 
-const board = { id: 'offline', name: 'Offline', is_active: true, pending_count: 3, created_at: '2026-10-21' }
-const archivedBoard = { id: 'archived', name: 'Archivo 2025', is_active: false, pending_count: 7, created_at: '2026-10-21' }
+const board = { id: 'offline', name: 'Offline', is_active: true, pending_count: 3, my_pending_count: 0, people: [], created_at: '2026-10-21' }
+const assignedBoard = { id: 'assigned', name: 'Marketing', is_active: true, pending_count: 4, my_pending_count: 2, people: [{ id: 'ana', full_name: 'Ana Pérez', avatar_url: null }], created_at: '2026-10-21' }
+const archivedBoard = { id: 'archived', name: 'Archivo 2025', is_active: false, pending_count: 7, my_pending_count: 0, people: [], created_at: '2026-10-21' }
 const ana = { id: 'ana', full_name: 'Ana', email: 'ana@example.test', role: 'usuario' as const, is_active: true, avatar_url: null }
 const renderPage = () => render(<MemoryRouter><BoardsPage /></MemoryRouter>)
 
@@ -59,6 +60,21 @@ describe('Selección y gestión de tableros', () => {
     expect(screen.getByRole('link', { name: 'Offline' })).toHaveAttribute('href', '/board/offline')
     expect(screen.getByRole('button', { name: 'Crear tablero' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Gestionar miembros de Offline' })).toBeVisible()
+  })
+  it('separa tableros con mis tareas pendientes y muestra conteos y personas asignadas', () => {
+    mocks.boards.mockReturnValue({ data: [board, assignedBoard], isLoading: false, error: null })
+    renderPage()
+    const assignedSection = screen.getByRole('heading', { name: 'Tableros con mis tareas pendientes' }).parentElement?.parentElement as HTMLElement
+    const assignedCard = within(assignedSection).getByRole('link', { name: 'Marketing' }).closest('li') as HTMLElement
+    expect(within(assignedCard).getByText('Tareas pendientes:')).toBeVisible()
+    expect(within(assignedCard).getByText('4')).toBeVisible()
+    expect(within(assignedCard).getByText('Mis tareas pendientes:')).toBeVisible()
+    expect(within(assignedCard).getByText('2')).toBeVisible()
+    expect(within(assignedCard).getByText('Ana')).toBeVisible()
+    expect(within(assignedCard).getByRole('img', { name: 'Foto de Ana Pérez' })).toBeVisible()
+    const activeSection = screen.getByRole('heading', { name: 'Tableros activos' }).parentElement?.parentElement as HTMLElement
+    expect(within(activeSection).queryByRole('link', { name: 'Marketing' })).not.toBeInTheDocument()
+    expect(within(activeSection).getByRole('link', { name: 'Offline' })).toBeVisible()
   })
   it.each(['usuario', 'invitado'])('no ofrece creación ni gestión a %s', (role) => {
     mocks.role = role

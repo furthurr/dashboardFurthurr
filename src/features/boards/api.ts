@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { getStorageObjectPath } from '@/lib/storage'
-import type { AssigneeProfile, Board } from '@/types'
+import type { AssigneeProfile, Board, BoardPerson } from '@/types'
 
-type BoardRow = { id: string; name: string; is_active: boolean; pending_count: number | string; created_at: string }
+type BoardRow = { id: string; name: string; is_active: boolean; pending_count: number | string; my_pending_count: number | string; people: BoardPerson[] | null; created_at: string }
 const boardDataPageSize = 500
 const storageRemovalBatchSize = 100
 
@@ -12,7 +12,7 @@ function boardError(code: string, message: string) {
 }
 
 export async function fetchBoards(): Promise<Board[]> {
-  // The RPC applies the same visibility as RLS and adds the pending task count.
+  // The RPC applies visibility and returns task counts plus people shown on cards.
   const { data, error } = await supabase.rpc('list_boards_with_pending_counts')
   if (error) throw error
   return (data ?? []).map((row: BoardRow) => ({
@@ -20,6 +20,8 @@ export async function fetchBoards(): Promise<Board[]> {
     name: String(row.name),
     is_active: Boolean(row.is_active),
     pending_count: Number(row.pending_count ?? 0),
+    my_pending_count: Number(row.my_pending_count ?? 0),
+    people: row.people ?? [],
     created_at: String(row.created_at),
   }))
 }
@@ -173,7 +175,10 @@ export function useSetBoardMembers() {
       const { error } = await supabase.rpc('set_board_members', { p_board_id: boardId, p_profile_ids: [...new Set(profileIds)] })
       if (error) throw error
     },
-    onSuccess: () => { void cache.invalidateQueries({ queryKey: ['board-members'] }) },
+    onSuccess: () => {
+      void cache.invalidateQueries({ queryKey: ['board-members'] })
+      void cache.invalidateQueries({ queryKey: ['boards'] })
+    },
   })
 }
 
@@ -192,6 +197,7 @@ export function useMoveTaskToBoard() {
       cache.removeQueries({ queryKey: ['attachments'] })
       cache.removeQueries({ queryKey: ['task-image-previews'] })
       await cache.invalidateQueries({ queryKey: ['tasks'] })
+      await cache.invalidateQueries({ queryKey: ['boards'] })
     },
   })
 }

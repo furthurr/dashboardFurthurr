@@ -128,23 +128,35 @@ alter table public.task_attachments enable trigger attachment_task_path;
 insert into storage.objects(bucket_id, name) values('task-attachments', current_setting('app.board_task') || '-legacy.txt');
 set local role authenticated;
 
--- Assignment alone never grants board/task/file access.
+-- An assignment grants access to an active board; removing the last assignment revokes it.
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('app.board_outsider'), 'role', 'authenticated')::text, true);
 do $$ begin
-  if exists(select 1 from public.tasks where id = current_setting('app.board_task')::uuid)
-    or exists(select 1 from public.comments where task_id = current_setting('app.board_task')::uuid)
-    or exists(select 1 from public.task_attachments where task_id = current_setting('app.board_task')::uuid)
-    or exists(select 1 from public.task_assignees where task_id = current_setting('app.board_task')::uuid)
-    or exists(select 1 from public.tasks_with_stats where id = current_setting('app.board_task')::uuid)
-    or exists(select 1 from public.tasks_with_assignees where id = current_setting('app.board_task')::uuid)
-    or exists(select 1 from storage.objects where name in (current_setting('app.board_task') || '/probe.txt',
-      current_setting('app.board_task') || '/member.txt', current_setting('app.board_task') || '-legacy.txt')) then
-    raise exception 'Nonmember can read board resources';
+  if not public.can_access_board(current_setting('app.board_source')::uuid)
+    or not public.can_access_task(current_setting('app.board_task')::uuid)
+    or not exists(select 1 from public.boards where id = current_setting('app.board_source')::uuid)
+    or not exists(select 1 from public.tasks where id = current_setting('app.board_task')::uuid)
+    or not exists(select 1 from public.comments where task_id = current_setting('app.board_task')::uuid)
+    or not exists(select 1 from public.task_attachments where task_id = current_setting('app.board_task')::uuid)
+    or not exists(select 1 from public.tasks_with_stats where id = current_setting('app.board_task')::uuid)
+    or not exists(select 1 from public.tasks_with_assignees where id = current_setting('app.board_task')::uuid)
+    or not exists(select 1 from storage.objects where name = current_setting('app.board_task') || '/probe.txt') then
+    raise exception 'Assigned user cannot read board resources';
   end if;
-  begin
-    perform public.set_task_assignees(current_setting('app.board_task')::uuid, '{}');
-    raise exception 'Nonmember can call assignment RPC';
-  exception when insufficient_privilege then null; end;
+  if not exists(select 1 from public.list_boards_with_pending_counts() where id = current_setting('app.board_source')::uuid) then
+    raise exception 'Assigned user cannot see the board in the catalog';
+  end if;
+  if (select my_pending_count from public.list_boards_with_pending_counts() where id = current_setting('app.board_source')::uuid) <> 1
+    or not (select people @> jsonb_build_array(jsonb_build_object('id', current_setting('app.board_outsider')::uuid))
+      from public.list_boards_with_pending_counts() where id = current_setting('app.board_source')::uuid) then
+    raise exception 'The assigned user pending count or board people projection is incorrect';
+  end if;
+  perform public.set_task_assignees(current_setting('app.board_task')::uuid, '{}');
+  if public.can_access_board(current_setting('app.board_source')::uuid)
+    or public.can_access_task(current_setting('app.board_task')::uuid)
+    or exists(select 1 from public.boards where id = current_setting('app.board_source')::uuid)
+    or exists(select 1 from public.tasks where id = current_setting('app.board_task')::uuid) then
+    raise exception 'Removing the final assignment did not revoke access';
+  end if;
   begin
     perform public.move_task_to_board(current_setting('app.board_task')::uuid, current_setting('app.board_target')::uuid);
     raise exception 'Nonmember can move task';
@@ -155,6 +167,9 @@ do $$ begin
   exception when insufficient_privilege then null; end;
 end $$;
 
+-- Restore the fixture assignment for subsequent transfer and revocation probes.
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('app.board_admin'), 'role', 'authenticated')::text, true);
+select public.set_task_assignees(current_setting('app.board_task')::uuid, array[current_setting('app.board_outsider')::uuid]);
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('app.board_user'), 'role', 'authenticated')::text, true);
 do $$ begin
   if (select count(*) from public.boards where id in (current_setting('app.board_source')::uuid, current_setting('app.board_target')::uuid, current_setting('app.board_private')::uuid)) <> 2 then
@@ -204,7 +219,7 @@ do $$ begin
     update public.task_attachments set file_url = 'https://example.test/changed'
       where id = current_setting('app.member_attachment')::uuid;
     raise exception 'Attachment storage path is client-writable';
-  exception when insufficient_privilege then null; end;
+  exception when insufficient_privilege or invalid_parameter_value then null; end;
 end $$;
 
 -- A deactivated board disappears for its members and only admins can change it.

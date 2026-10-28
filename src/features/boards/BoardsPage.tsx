@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import type { AssigneeProfile, Board } from '@/types'
 import { useAuth } from '@/features/auth/AuthContext'
 import { AccountMenu } from '@/shared/ui/AccountMenu'
+import { ProfileAvatar } from '@/shared/ui/ProfileAvatar'
 import { Dialog } from '@/shared/ui/Dialog'
 import { AssigneePicker } from '@/features/board/AssigneePicker'
 import { useAssignableUsers } from '@/features/board/assigneesApi'
@@ -17,7 +18,9 @@ export function BoardsPage() {
   const [toggling, setToggling] = useState<Board | null>(null)
   const [deleting, setDeleting] = useState<Board | null>(null)
   const admin = profile?.role === 'admin'
-  const activeBoards = boards.data?.filter((board) => board.is_active) ?? []
+  const assignedBoards = boards.data?.filter((board) => board.is_active && board.my_pending_count > 0) ?? []
+  const assignedBoardIds = new Set(assignedBoards.map((board) => board.id))
+  const activeBoards = boards.data?.filter((board) => board.is_active && !assignedBoardIds.has(board.id)) ?? []
   const inactiveBoards = boards.data?.filter((board) => !board.is_active) ?? []
   return <main className="board-shell">
     <header className="board-header">
@@ -32,6 +35,8 @@ export function BoardsPage() {
             : <>
               <BoardSection title="Tableros activos" description="Tableros en los que puedes trabajar ahora mismo." boards={activeBoards}
                 admin={admin} onManage={setManaging} onRename={setRenaming} onToggle={setToggling} onDelete={setDeleting} />
+              {assignedBoards.length > 0 && <BoardSection title="Tableros con mis tareas pendientes" description="Tableros activos con tareas pendientes asignadas a ti." boards={assignedBoards}
+                admin={admin} onManage={setManaging} onRename={setRenaming} onToggle={setToggling} onDelete={setDeleting} showMyPending />}
               {admin && inactiveBoards.length > 0 && <BoardSection title="Tableros desactivados" description="Solo los administradores ven esta sección. Reactiva un tablero para devolverle el acceso a sus miembros." boards={inactiveBoards}
                 admin={admin} onManage={setManaging} onRename={setRenaming} onToggle={setToggling} onDelete={setDeleting} />}
             </>}
@@ -44,7 +49,7 @@ export function BoardsPage() {
   </main>
 }
 
-function BoardSection({ title, description, boards, admin, onManage, onRename, onToggle, onDelete }: {
+function BoardSection({ title, description, boards, admin, onManage, onRename, onToggle, onDelete, showMyPending = false }: {
   title: string
   description: string
   boards: Board[]
@@ -53,6 +58,7 @@ function BoardSection({ title, description, boards, admin, onManage, onRename, o
   onRename: (board: Board) => void
   onToggle: (board: Board) => void
   onDelete: (board: Board) => void
+  showMyPending?: boolean
 }) {
   return <div className="space-y-4">
     <div><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-[var(--color-text-muted)]">{description}</p></div>
@@ -61,6 +67,16 @@ function BoardSection({ title, description, boards, admin, onManage, onRename, o
         {boards.map((board) => <li key={board.id} className="ui-list-card min-w-0 space-y-4">
           <Link to={`/board/${board.id}`} className="ui-button ui-button--secondary block w-full justify-start whitespace-normal break-words text-left"><span className="text-lg font-semibold">{board.name}</span></Link>
           <p className="flex flex-wrap items-center gap-2 text-sm text-[var(--color-text-muted)]">Tareas pendientes: <span className="ui-badge">{board.pending_count}</span></p>
+          {showMyPending && <p className="flex flex-wrap items-center gap-2 text-sm text-[var(--color-text-muted)]">Mis tareas pendientes: <span className="ui-badge">{board.my_pending_count}</span></p>}
+          <ul aria-label={`Personas asignadas a ${board.name}`} className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {board.people.map((person) => {
+              const firstName = person.full_name.trim().split(/\s+/)[0] || 'Usuario'
+              return <li key={person.id} className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)]">
+                <ProfileAvatar src={person.avatar_url} name={person.full_name} size="sm" fallback="initials" />
+                <span>{firstName}</span>
+              </li>
+            })}
+          </ul>
           {admin && <div className="flex flex-wrap gap-2">
             <button className="ui-button ui-button--sm" aria-label={`Gestionar miembros de ${board.name}`} onClick={() => onManage(board)}>Gestionar miembros</button>
             <button className="ui-button ui-button--sm" aria-label={`Cambiar nombre de ${board.name}`} onClick={() => onRename(board)}>Cambiar nombre</button>

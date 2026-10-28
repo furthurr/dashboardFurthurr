@@ -622,14 +622,21 @@ create function public.is_board_admin() returns boolean
 language sql stable security definer set search_path = '' as $$
   select exists(select 1 from public.profiles where id = auth.uid() and is_active and role = 'admin');
 $$;
+create function public.has_board_assignment(p_board_id uuid) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select public.is_active_account() and exists (
+    select 1 from public.tasks t join public.task_assignees ta on ta.task_id = t.id
+    where t.board_id = p_board_id and ta.profile_id = auth.uid()
+  );
+$$;
 create function public.can_access_board(p_board_id uuid) returns boolean
 language sql stable security definer set search_path = '' as $$
-  -- Members only reach active boards; active admins reach every board.
-  select public.is_active_account() and (
-    public.is_board_admin() or exists (
-      select 1 from public.board_members m
-      join public.boards b on b.id = m.board_id
-      where m.board_id = p_board_id and m.profile_id = auth.uid() and b.is_active
+  select public.is_active_account() and exists (
+    select 1 from public.boards b where b.id = p_board_id and (
+      public.is_board_admin() or (b.is_active and (
+        exists(select 1 from public.board_members m where m.board_id = b.id and m.profile_id = auth.uid())
+        or public.has_board_assignment(b.id)
+      ))
     )
   );
 $$;
@@ -637,8 +644,8 @@ create function public.can_access_task(p_task_id uuid) returns boolean
 language sql stable security definer set search_path = '' as $$
   select exists(select 1 from public.tasks where id = p_task_id and public.can_access_board(board_id));
 $$;
-revoke all on function public.is_board_admin(), public.can_access_board(uuid), public.can_access_task(uuid) from public, anon;
-grant execute on function public.is_board_admin(), public.can_access_board(uuid), public.can_access_task(uuid) to authenticated;
+revoke all on function public.is_board_admin(), public.has_board_assignment(uuid), public.can_access_board(uuid), public.can_access_task(uuid) from public, anon;
+grant execute on function public.is_board_admin(), public.has_board_assignment(uuid), public.can_access_board(uuid), public.can_access_task(uuid) to authenticated;
 create policy "Attachment managers can rename attachments"
   on public.task_attachments for update to authenticated
   using (
@@ -664,6 +671,7 @@ create policy "Accessible boards" on public.boards for select to authenticated
         select 1 from public.board_members m
         where m.board_id = boards.id and m.profile_id = auth.uid()
       ))
+      or (boards.is_active and public.has_board_assignment(boards.id))
     )
   );
 create policy "Admins create boards" on public.boards for insert to authenticated with check (public.is_board_admin());
@@ -739,17 +747,32 @@ end;
 $$;
 -- Accessible boards with pending tasks (backlog, por_hacer, haciendo).
 create function public.list_boards_with_pending_counts()
-returns table (id uuid, name text, is_active boolean, created_at timestamptz, pending_count bigint)
+returns table (id uuid, name text, is_active boolean, created_at timestamptz, pending_count bigint, my_pending_count bigint, people jsonb)
 language sql stable security definer set search_path = '' as $$
   select b.id, b.name, b.is_active, b.created_at,
     (select count(*) from public.tasks t
-      where t.board_id = b.id and t.status in ('backlog', 'por_hacer', 'haciendo'))
+      where t.board_id = b.id and t.status in ('backlog', 'por_hacer', 'haciendo')),
+    (select count(*) from public.tasks t join public.task_assignees ta on ta.task_id = t.id
+      where t.board_id = b.id and ta.profile_id = auth.uid()
+        and t.status in ('backlog', 'por_hacer', 'haciendo')),
+    coalesce((
+      select jsonb_agg(jsonb_build_object('id', people.id, 'full_name', people.full_name, 'avatar_url', people.avatar_url)
+        order by people.full_name)
+      from (
+        select distinct p.id, p.full_name, p.avatar_url
+        from public.profiles p
+        where exists(select 1 from public.board_members m where m.board_id = b.id and m.profile_id = p.id)
+          or exists(select 1 from public.task_assignees ta join public.tasks t on t.id = ta.task_id
+            where t.board_id = b.id and ta.profile_id = p.id)
+      ) people
+    ), '[]'::jsonb)
   from public.boards b
   where public.is_active_account() and (
     public.is_board_admin()
     or (b.is_active and exists (
       select 1 from public.board_members m where m.board_id = b.id and m.profile_id = auth.uid()
     ))
+    or (b.is_active and public.has_board_assignment(b.id))
   )
   order by b.name;
 $$;

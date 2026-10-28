@@ -94,6 +94,7 @@ export function useUpdateTaskStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['boards'] })
     },
   })
 }
@@ -123,6 +124,7 @@ export function useCreateTask() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['boards'] })
     },
   })
 }
@@ -154,6 +156,7 @@ export function useSetTaskAssignees() {
     onSuccess: (assignees, { taskId }) => {
       queryClient.setQueriesData<TaskWithAssignees[]>({ queryKey: ['tasks'] }, (tasks) => tasks?.map((task) => task.id === taskId ? { ...task, assignees } : task))
       void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['boards'] })
     },
   })
 }
@@ -184,6 +187,7 @@ export function useUpdateTask() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['boards'] })
     },
   })
 }
@@ -202,6 +206,7 @@ export function useDeleteTask() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['boards'] })
     },
   })
 }
