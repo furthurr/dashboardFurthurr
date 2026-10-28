@@ -33,10 +33,10 @@ export function BoardsPage() {
         : boards.error ? <div className="ui-feedback ui-feedback--error"><p role="alert">No se pudieron cargar los tableros.</p><button className="ui-button mt-3" onClick={() => { void boards.refetch() }}>Reintentar</button></div>
           : !boards.data?.length ? <div className="ui-empty"><strong>No tienes tableros asignados</strong><p>Solicita a un administrador que te asigne a un tablero.</p></div>
             : <>
-              <BoardSection title="Tableros activos" description="Tableros en los que puedes trabajar ahora mismo." boards={activeBoards}
-                admin={admin} onManage={setManaging} onRename={setRenaming} onToggle={setToggling} onDelete={setDeleting} />
               {assignedBoards.length > 0 && <BoardSection title="Tableros con mis tareas pendientes" description="Tableros activos con tareas pendientes asignadas a ti." boards={assignedBoards}
                 admin={admin} onManage={setManaging} onRename={setRenaming} onToggle={setToggling} onDelete={setDeleting} showMyPending />}
+              <BoardSection title="Tableros activos" description="Tableros en los que puedes trabajar ahora mismo." boards={activeBoards}
+                admin={admin} onManage={setManaging} onRename={setRenaming} onToggle={setToggling} onDelete={setDeleting} />
               {admin && inactiveBoards.length > 0 && <BoardSection title="Tableros desactivados" description="Solo los administradores ven esta sección. Reactiva un tablero para devolverle el acceso a sus miembros." boards={inactiveBoards}
                 admin={admin} onManage={setManaging} onRename={setRenaming} onToggle={setToggling} onDelete={setDeleting} />}
             </>}

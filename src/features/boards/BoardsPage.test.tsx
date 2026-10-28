@@ -62,8 +62,11 @@ describe('Selección y gestión de tableros', () => {
     expect(screen.getByRole('button', { name: 'Gestionar miembros de Offline' })).toBeVisible()
   })
   it('separa tableros con mis tareas pendientes y muestra conteos y personas asignadas', () => {
-    mocks.boards.mockReturnValue({ data: [board, assignedBoard], isLoading: false, error: null })
+    mocks.boards.mockReturnValue({ data: [board, assignedBoard, archivedBoard], isLoading: false, error: null })
     renderPage()
+    expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual([
+      'Tableros con mis tareas pendientes', 'Tableros activos', 'Tableros desactivados',
+    ])
     const assignedSection = screen.getByRole('heading', { name: 'Tableros con mis tareas pendientes' }).parentElement?.parentElement as HTMLElement
     const assignedCard = within(assignedSection).getByRole('link', { name: 'Marketing' }).closest('li') as HTMLElement
     expect(within(assignedCard).getByText('Tareas pendientes:')).toBeVisible()
