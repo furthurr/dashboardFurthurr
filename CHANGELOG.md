@@ -1,5 +1,21 @@
 # Changelog
 
+## [v0.11.0] - 2026-10-28
+
+### Funcionalidades
+
+- Añadir «Tableros con mis tareas pendientes» sin repetir sus tarjetas en «Tableros activos».
+- Mostrar el conteo «Mis tareas pendientes» además del total del tablero.
+- Mostrar avatar y primer nombre de miembros y responsables en las tarjetas, sin duplicados.
+- Refrescar el listado tras cambios en tareas, responsables, miembros y traslados.
+
+### Backend y permisos
+
+- Conceder acceso a tableros activos mientras la cuenta conserve alguna tarea asignada, manteniendo la membresía explícita como vía adicional.
+- Ampliar la RPC del catálogo con conteos personales y personas del tablero.
+- Aplicar `202610280001_board_assignment_access.sql` por separado de Pages; aplicada y verificada en Supabase remoto el 2026-10-28 con pruebas transaccionales de acceso, conteos, deduplicación, desactivación y revocación.
+- Esta migración no aplica las migraciones anteriores de adjuntos, borrado de tableros o avatares; su despliegue no queda acreditado por esta release.
+
 ## [v0.10.0] - 2026-10-27
 
 ### Funcionalidades
