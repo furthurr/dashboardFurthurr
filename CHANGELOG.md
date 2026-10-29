@@ -1,5 +1,41 @@
 # Changelog
 
+## [v0.12.0] - 2026-10-28
+
+### Funcionalidades
+
+- Incorporar el servidor MCP remoto con OAuth/PKCE, identidad `whoami`, consentimiento y presets de instalación por cliente.
+- Añadir `get_task` para consultar por UUID título, descripción, estado, prioridad, notas, tablero, responsables, comentarios y adjuntos, con paginación independiente para comentarios y archivos.
+- Exigir autorización adicional de lectura por sesión desde Conexiones; nuevas sesiones no heredan permisos y retirar lectura conserva el acceso a identidad.
+- Permitir copiar el UUID completo desde la tarjeta y el detalle de tarea, con confirmación y fallback manual si el portapapeles falla.
+- Agrupar a la derecha los iconos de copiar ID y comentarios con el mismo estilo de botón.
+
+### Correcciones
+
+- Priorizar los tableros con tareas pendientes propias, según el cambio de tableros ya incorporado tras v0.11.0.
+- Validar el piloto OAuth remoto y aclarar autenticación e instalación en OpenCode y otros clientes.
+
+### Backend y permisos
+
+- Agregar `202610280003_mcp_task_read.sql` y su equivalente en el bootstrap para consentimiento por sesión y RPC de lectura, sin grants directos de tablas/Storage ni herramientas MCP de escritura.
+- Exigir membresía explícita en un tablero activo para cuentas no administradoras; la asignación sola, admitida por el portal, no concede lectura MCP. Administradores activos conservan acceso a tableros desactivados.
+- Generar enlaces de adjuntos de 60 segundos exclusivamente en servidor tras autorizar la tarea y validar origen, bucket y path. Las rutas legacy no validables conservan metadata con `download_error`.
+- Mantener aislados los tokens OAuth y la credencial privilegiada de firma; no exponerla en frontend, presets ni clientes MCP.
+
+### Documentación y verificación
+
+- Actualizar contratos, arquitectura, diseño y guía gestionada de documentación; añadir `docs/prueba-mcp.md` con secuencia de activación, matriz de permisos y registro de resultados.
+- Verificar `npm ci`, build, lint y 200 pruebas Vitest en el árbol de trabajo, además de 11 pruebas Deno MCP y 12 de administración.
+- Ejecutar cuatro suites SQL locales en bootstrap e incremental sobre PostgreSQL 16 desechable con Auth/Storage simulados y fixtures revertidos. No equivale a E2E OAuth ni firma real en Supabase.
+
+### Instalaciones existentes y límites
+
+- Esta publicación de Git no aplica SQL ni despliega Edge Functions. Revisar ledger y objetos reales, aplicar únicamente la migración pendiente y desplegar `mcp` por separado; no ejecutar `db push` a ciegas ni reejecutar el bootstrap.
+- Pages publica únicamente la SPA. El MCP remoto de fase 2, la descarga real de archivos y la autorización con clientes reales siguen pendientes de verificación según `docs/prueba-mcp.md`.
+- La versión de aplicación del servidor MCP es `0.2.0`; no confundirla con la versión del proyecto `0.12.0` ni con la versión numérica de despliegue Edge.
+- Advertencias de dependencias: `npm ci` reportó 12 vulnerabilidades (1 baja, 1 moderada y 10 altas); `npm audit --omit=dev` reportó 4 altas en React Router, ws y Zod. El MCP fija Zod `4.3.6`, dentro del rango afectado señalado por npm; requiere revisión y remediación de dependencias. No se ejecutó `npm audit fix` ni se certifica la seguridad de esta versión.
+- Persiste el aviso de bundle principal superior a 500 kB. Retirar permisos no invalida retroactivamente enlaces emitidos ni datos descargados; no se interpreta el contenido de archivos.
+
 ## [v0.11.0] - 2026-10-28
 
 ### Funcionalidades
