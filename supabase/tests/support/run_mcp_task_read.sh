@@ -20,8 +20,10 @@ for database in bootstrap incremental; do
     # Baseline of this implementation; intentionally excludes the new migration.
     git -C "$root" show 267cc910b2f5623f3b9e1ee3d86f3bfebd2c40e9:supabase-schema.sql | sql "$database"
     sql "$database" < "$root/supabase/migrations/202610280003_mcp_task_read.sql"
+    sql "$database" < "$root/supabase/migrations/202610290001_mcp_workflow.sql"
   fi
   sql "$database" < "$root/supabase/tests/mcp_task_read.sql"
+  sql "$database" < "$root/supabase/tests/mcp_workflow.sql"
   sql "$database" < "$root/supabase/tests/mcp_identity.sql"
   sql "$database" < "$root/supabase/tests/boards.sql"
   sql "$database" < "$root/supabase/tests/task_assignments.sql"

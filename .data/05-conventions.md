@@ -6,33 +6,43 @@
 
 - El endpoint MCP usa Streamable HTTP y Supabase Auth OAuth 2.1 Authorization Code
   + PKCE/DCR. Cada herramienta recibe Bearer por header; no se aceptan tokens de
-  sesión del portal, query-string ni token passthrough (`supabase/functions/mcp/index.ts:61-91`).
+  sesión del portal, query-string ni token passthrough (`supabase/functions/mcp/index.ts:106-145`).
 - El 401 incluye `WWW-Authenticate` con la URL de Protected Resource Metadata y
   scopes mínimos `email profile`. Son scopes OIDC de identidad, no permisos de
   Postgres. La autorización de datos se impone mediante `role=mcp_identity`, la
-  audiencia exacta del recurso y `mcp_whoami()` (`supabase/functions/mcp/index.ts:43-45,84-91`,
+  audiencia exacta del recurso y `mcp_whoami()` (`supabase/functions/mcp/index.ts:50-53,129-150`,
   `supabase/migrations/202610280002_mcp_identity.sql:23-74`).
-- `mcp_identity` no hereda `authenticated`/`service_role`, no recibe grants directos
-  de tablas/vistas/Storage y ejecuta únicamente `mcp_whoami()` y `mcp_get_task(...)`
-  en fase 2 local. No puede invocar RPCs de escritura ni concederse lectura. Las cuentas inactivas,
-  sesiones revocadas y clientes/audiencias no coincidentes se rechazan. `admin-users`
-  también rechaza los claims OAuth después de verificar la firma del token.
+- `mcp_identity` no hereda `authenticated`/`service_role` ni recibe grants directos
+  de tablas/vistas/Storage. El código local concede solo `mcp_whoami()`, consulta de
+  tarea/adjunto y el RPC allowlist de workflow; no puede gestionar permisos. Cuentas
+  inactivas, sesiones revocadas y claims/client/audiencia no coincidentes se rechazan.
+  `admin-users` también rechaza claims OAuth después de verificar la firma del token.
 - OAuth Server/DCR de Supabase está en beta; el cliente DCR declara su propio nombre
   y callback, lo que no prueba que sea confiable. La UI muestra esos valores y exige
   consentimiento; no se activa `autoApprove` en los presets. El usuario puede
   revocar grants desde el portal.
-- `whoami` devuelve PII de identidad. `get_task` añade textos privados, nombres/IDs
-  de personas y enlaces temporales; requiere consentimiento por sesión y membresía
-  en tablero activo para no admin. La lectura por asignación del portal no basta.
-  El contenido es dato no confiable, no instrucciones; no registrarlo ni publicarlo.
-- El consentimiento de lectura se gestiona por RPC con la sesión ordinaria del
-  portal; no es un nuevo scope OAuth. Nuevas sesiones requieren otra aprobación,
-  las antiguas no se amplían automáticamente y la FK elimina el permiso al borrar
-  la sesión. Retirar lectura no revoca `whoami`.
-- La firma de adjuntos usa credencial servidor solo tras consulta autorizada y
-  validación de origen/bucket/path. No es acceso privilegiado del cliente MCP ni se
-  usa para leer tareas. Fuentes: `supabase/functions/mcp/index.ts:63-84,131-154`,
-  `supabase/migrations/202610280003_mcp_task_read.sql:4-116`.
+- `whoami` devuelve PII de identidad. `get_task` añade texto privado, nombres/IDs y
+  enlaces temporales. En el código local todas las herramientas de tarea requieren
+  asignación —también admin—, acceso previo al tablero y estado `backlog`, `por_hacer`
+  o `haciendo`; membresía explícita sigue siendo necesaria para no admin. El contenido
+  de tarea/comentarios/adjuntos es dato no confiable, no instrucciones.
+- En el código local una aceptación OAuth conjunta autoriza lectura, adjuntos, inicio,
+  comentario y revisión. Perfil → Conexiones solo muestra/retira permisos; no habilita
+  permisos. Consentimientos de grants antiguos no se amplían silenciosamente: pueden
+  conservar identidad y acceso legado de lectura, pero escritura requiere aceptación
+  ampliada. Retirar permisos no revoca `whoami`; revocar grant invalida sesiones.
+  `202610290001` no se ha confirmado aplicada remotamente.
+- `read_task_attachment` descarga desde Storage solo en Edge después de autorización;
+  máximo 5 MiB, timeout 15 s, sin redirects/hosts externos. Texto UTF-8/código por
+  fragmentos e imágenes PNG/JPEG/GIF/WebP como contenido MCP visual. PDF y otros
+  formatos no se extraen; un enlace temporal no equivale a archivo estudiado. Enlaces
+  emitidos/contenido recibido no se revocan retroactivamente.
+- El SQL local permite backlog/por_hacer → haciendo y haciendo → en_revision; no hay
+  acción MCP para finalizadas, asignación o reapertura. Los flags de aprobación son
+  declaraciones del cliente, no prueba verificable de conversación. El comentario
+  MCP registra resultado, aclaraciones, validaciones declaradas y observaciones.
+- Fuentes: `supabase/functions/mcp/index.ts:145-203`, `supabase/functions/mcp/workflow.ts:4-122`,
+  `202610280003_mcp_task_read.sql:63-116`, `202610290001_mcp_workflow.sql:15-294`.
 - En Supabase, aplicar únicamente migraciones pendientes verificadas. El proyecto
   remoto consultado tenía un ledger incompleto respecto a objetos observados; la
   reconciliación se documenta en `supabase/README.md` antes de cualquier `db push`.
@@ -92,10 +102,11 @@
   `get_task` sí pagina comentarios y adjuntos por separado: 50 por defecto, 1–100,
   `offset` y `next_offset` por colección; orden `created_at,id`. No hay snapshot entre
   peticiones: cambios concurrentes pueden desplazar resultados. [Contrato](01-endpoints.md).
-- MCP usa `Cache-Control: no-store`, timeout de 10 s por fetch y sin retry propio.
-  La firma se procesa en lotes de hasta cinco; tras 15 s no inicia nuevas firmas
-  (no cancela las ya iniciadas). Un fallo individual devuelve metadata con error,
-  no una URL permanente. Fuente: `supabase/functions/mcp/task.ts:41-92`.
+- MCP usa `Cache-Control: no-store`, timeout de 10 s por fetch RPC y sin retry propio.
+  La firma de listas se procesa en lotes de cinco; tras 15 s no inicia nuevas firmas.
+  `read_task_attachment` descarga como máximo 5 MiB, con stream limitado, timeout
+  15 s y sin seguir redirects. No se afirma que su descarga real remota esté probada.
+  Fuentes: `supabase/functions/mcp/task.ts:41-92`, `workflow.ts:28-50`.
 - Administración pagina de 50 en 50; usuarios asignables se recuperan en lotes de 500 y se filtran por nombre/correo en cliente (`supabase/functions/admin-users/index.ts:34-41`, `src/features/board/assigneesApi.ts:5-15`).
 - Las respuestas de Edge usan `{ error: string }`; el cliente extrae JSON del error HTTP o muestra fallback de conexión. No devuelve contraseñas ni errores internos en crudo. Las RPC propagan el error del SDK y la UI conserva borrador con mensaje seguro (`src/features/users/api.ts:11-24`, `supabase/functions/admin-users/index.ts:73-75`).
 - El upload de adjuntos en UI rechaza archivos mayores a 5 MiB; el bucket `task-attachments` no declara `file_size_limit` en el bootstrap, así que no asumir enforcement servidor de ese máximo (`src/features/board/CreateTaskModal.tsx`, `src/features/board/TaskDetailModal.tsx`, `supabase-schema.sql:354-357`). Los avatares son distintos: el bucket `avatars` declara máximo 2 MiB y MIME permitidos en el bootstrap/migración (`supabase-schema.sql:348-352`, `supabase/migrations/202610260003_profile_avatars.sql:5-10`).
@@ -103,9 +114,10 @@
 ## Nombres, versiones y serialización
 
 - Estados, prioridades y roles se representan como uniones TypeScript y enums Postgres; deben mantenerse alineados (`src/types/index.ts:1-5`, `supabase-schema.sql:10-14`).
-- No hay una estrategia de versionado/validación runtime general del portal. MCP
-  fase 2 anuncia `serverInfo.version=0.2.0` y valida su DTO con Zod; no confundir esa
-  versión de aplicación con la versión numérica del despliegue Edge.
+- No hay una estrategia de versionado/validación runtime general del portal. El código
+  MCP local anuncia `serverInfo.version=0.3.0` y valida DTOs con Zod; no confundir
+  esa versión de aplicación con la versión numérica del despliegue Edge. La migración
+  y código actuales no se han verificado desplegados.
 - Los adjuntos nuevos generan path `<taskId>/<UUID>.<extensión segura>` y almacenan metadata; el trigger verifica que el objeto pertenezca a la tarea y el borrado comprueba error. La lectura resuelve también referencias flat-path preexistentes. D-02 conserva una discrepancia entre URL almacenada y bucket privado (`src/features/board/attachmentsApi.ts`, `supabase/migrations/202610210001_boards.sql:133-172`).
 - Avatares usan el path fijo `<profile-id>/avatar` con reemplazo (`upsert`) y la URL pública queda en `profiles.avatar_url`; el archivo se limita a JPEG/PNG/WebP de hasta 2 MiB (`src/features/users/avatarApi.ts:3-35`).
 - Nombre administrativo 1–120 caracteres tras `trim`; contraseña 8–128 más política de Auth; email normalizado a minúsculas en alta. `rename` no modifica metadata de Auth. Los responsables se envían como UUIDs deduplicados; conjunto vacío significa retirar todos y no un error (`supabase/functions/admin-users/validation.ts:16-31`, `src/features/board/api.ts:94-112`).

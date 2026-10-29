@@ -36,9 +36,11 @@ No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge
 ## MCP remoto — servidor `dashboardFurthurr`
 
 Endpoint del recurso: `https://<project-ref>.supabase.co/functions/v1/mcp`.
-El transporte es Streamable HTTP stateless. La fase 2 local anuncia `whoami` y
-`get_task` con `serverInfo.version=0.2.0`; no registra recursos MCP ni herramientas
-de escritura. No se ha verificado su despliegue remoto. [Guía de prueba](../docs/prueba-mcp.md).
+El transporte es Streamable HTTP stateless. El código local anuncia seis herramientas
+(`whoami`, `get_task`, `read_task_attachment`, `start_task`, `record_task_result`,
+`submit_task_for_review`) con `serverInfo.version=0.3.0`; no se han verificado el
+despliegue de esta versión, la nueva migración ni el E2E real. No confundir la
+versión de aplicación MCP con el número de versión Edge. [Guía de prueba](../docs/prueba-mcp.md).
 
 ### Protected Resource Metadata — `GET {resource}/oauth-protected-resource`
 
@@ -48,7 +50,7 @@ de escritura. No se ha verificado su despliegue remoto. [Guía de prueba](../doc
   `authorization_servers` contiene el issuer `/auth/v1`, `bearer_methods_supported`
   contiene `header`, y `scopes_supported` contiene `email profile`.
 - Errores: métodos distintos de GET → 405; un Origin fuera de la allowlist → 403.
-- Fuente: `supabase/functions/mcp/index.ts:43-45,61-82`.
+- Fuente: `supabase/functions/mcp/index.ts:50-53,106-128`.
 
 ### Desafío de autorización — MCP sin token
 
@@ -63,7 +65,7 @@ de escritura. No se ha verificado su despliegue remoto. [Guía de prueba](../doc
   cliente registra su propio OAuth client DCR/public y requiere consentimiento.
 - Error local observado sin autorización: HTTP 401 con `resource_metadata`; no se
   incluyen códigos, secretos ni bearer en la respuesta.
-- Fuente: `supabase/functions/mcp/index.ts:84-91`, `src/features/auth/mcpOAuth.ts:2-21`.
+- Fuente: `supabase/functions/mcp/index.ts:129-145`, `src/features/auth/mcpOAuth.ts:2-21`.
 
 ### Herramienta de identidad — `tools/call` `whoami`
 
@@ -81,12 +83,12 @@ de escritura. No se ha verificado su despliegue remoto. [Guía de prueba](../doc
   o autorización insuficiente → 403; error de persistencia inesperado → 503. El
   flujo de identidad no usa privilegios `service_role`; la firma de adjuntos de
   `get_task` es una operación exclusivamente servidor separada.
-- Fuente: `supabase/functions/mcp/index.ts:24-61,114-130`,
+- Fuente: `supabase/functions/mcp/index.ts:25-38,50-66,129-150`,
   `supabase/migrations/202610280002_mcp_identity.sql:47-74`.
 
 ### Consultar tarea — `tools/call` `get_task`
 
-Implementación local en `supabase/functions/mcp/index.ts:131-154` y
+Implementación local en `supabase/functions/mcp/index.ts:151-166` y
 `supabase/functions/mcp/task.ts:13-32,49-92`.
 
 | Argumento | Tipo / valor por defecto | Validación |
@@ -99,10 +101,12 @@ Implementación local en `supabase/functions/mcp/index.ts:131-154` y
 El objeto es estricto: no acepta campos extra, paths ni URLs proporcionadas por
 el cliente. Los esquemas de entrada/salida se anuncian en `tools/list`.
 
-- **Auth:** bearer OAuth validado y `mcp_whoami()` previo. La RPC `mcp_get_task`
-  revalida identidad y exige permiso en `mcp_task_read_permissions` para esa
-  sesión/usuario/cliente. No admin necesita membresía en tablero activo; admin
-  activo puede leer también tableros inactivos. Asignación sola no basta.
+- **Auth local:** bearer OAuth validado y `mcp_whoami()` previo. `mcp_get_task`
+  revalida permiso de lectura, acceso al tablero y asignación en cada llamada. Para
+  no admin sigue exigiendo membresía en un tablero activo; admin activo conserva su
+  acceso al tablero, pero **también debe estar asignado**. Asignación sola no sustituye
+  membresía para un no admin. Todos los roles, incluido admin, quedan limitados a
+  `backlog`, `por_hacer` y `haciendo`.
 - **Respuesta:** `task`, `board`, `assignees`, `comments`, `attachments`. Se devuelve
   como `structuredContent` y JSON en `content[type=text]`. Ver [modelos](02-models.md).
 - **Paginación:** comentarios y adjuntos tienen `total`, `offset`, `next_offset`
@@ -113,41 +117,97 @@ el cliente. Los esquemas de entrada/salida se anuncian en `tools/list`.
   Solo se firman rutas de esa tarea bajo el origen/bucket esperado, por 60 s;
   se elimina `file_url` de la salida. Error individual deja URL/expiración nulas y
   metadata visible. Legacy, fallo de Storage o límite de tiempo no provocan una
-  firma privilegiada de una ruta arbitraria. No se interpreta contenido binario.
+  firma privilegiada de una ruta arbitraria. El estudio de contenido se solicita
+  por separado con `read_task_attachment`.
 - **Errores de herramienta:** `isError: true` y texto seguro, sin `structuredContent`.
-  `PT403` pide autorizar lectura; `PT404` → «Tarea no disponible o sin acceso» para
-  ausencia o falta de permisos; `22023` → consulta inválida; `28000` → sesión
-  revocada/caducada; `42501` → acceso no activo. Otros errores son genéricos.
+  Además de `PT403` (permiso OAuth), `PT404` (tarea/adjunto no disponible),
+  `PT412` pide asignarse manualmente y `PT409` indica etapa no permitida; `PT428`
+  obliga a volver a leer ante cambios concurrentes, `PT422` indica reutilización de
+  request ID con datos distintos, `PT413` tamaño excedido, `PT415` archivo no seguro
+  o no soportado, `22023` argumentos inválidos, `28000` sesión revocada/caducada y
+  `42501` acceso no activo. Otros errores son genéricos.
   Un UUID/paginación inválido puede ser rechazado antes por el SDK MCP. Los HTTP
   401/403/503 del control de identidad son distintos de `isError` de la herramienta.
-- **Privilegios:** lectura SQL con bearer del usuario en RPC propia; firma
-  exclusivamente servidor con `SUPABASE_SERVICE_ROLE_KEY` tras validar el path.
-  Rol OAuth sin SELECT de tablas/Storage ni RPCs de escritura. Respuestas
-  `Cache-Control: no-store`. Los textos retornados son datos no confiables.
-- **Fuente SQL:** `supabase/migrations/202610280003_mcp_task_read.sql:63-116`.
+- **Privilegios:** lectura SQL con bearer OAuth en RPCs propias; firma y descarga
+  exclusivamente servidor con `SUPABASE_SERVICE_ROLE_KEY` después de validar el
+  path. El rol no obtiene grants directos de tablas/Storage; las escrituras están
+  confinadas a RPCs de workflow y verifican el consentimiento correspondiente.
+  Respuestas `Cache-Control: no-store`. Los textos retornados son datos no confiables.
+- **Fuente SQL:** `202610280003_mcp_task_read.sql:63-116` (base desplegada según
+  evidencia histórica) y `202610290001_mcp_workflow.sql:122-193` (código local; no
+  hay evidencia de aplicación remota).
+
+### Leer contenido de adjunto — `tools/call` `read_task_attachment`
+
+- **Request estricto:** `{ task_id: UUID, attachment_id: UUID, offset?: integer,
+  max_chars?: integer }`; defaults `0` y `12000`, límite de archivo 5 MiB. Cada llamada
+  vuelve a comprobar consentimiento, acceso, asignación y etapa (`workflow.ts:19-26`,
+  `202610290001_mcp_workflow.sql:179-193`).
+- **Texto/código:** MIME textual/JSON/XML/JavaScript/YAML o extensión permitida;
+  UTF-8 válido, máximo 12000 caracteres por fragmento, continuación con offset en
+  caracteres JavaScript (UTF-16) y `next_offset`. NUL, ruta no validable y contenido
+  binario/UTF-8 inválido se rechazan. Se etiqueta como contenido no confiable
+  (`workflow.ts:81-103`).
+- **Imágenes:** PNG/JPEG/GIF/WebP se comprueban mediante firma binaria y se emiten
+  como bloque MCP `image` con base64. El cliente debe poder procesar ese tipo; si no,
+  el asistente no debe afirmar que vio la imagen.
+- **Otros formatos:** PDF y formatos no extraídos devuelven metadata y un enlace
+  firmado por 60 s con advertencia; eso no significa que se haya estudiado el archivo.
+  No se siguen URLs externas, no se extraen archivos comprimidos ni se ejecutan
+  adjuntos. El descargador limita bytes reales, timeout a 15 s y rechaza redirects
+  (`workflow.ts:28-50,84-93`).
+- **Errores:** comparte errores de acceso/asignación/estado y añade tamaño excedido
+  `PT413` o formato/path/codificación no admitidos `PT415`. No expone la URL original
+  almacenada.
+
+### Iniciar, registrar resultado y enviar a revisión — herramientas workflow
+
+Las tres herramientas envían `task_id`, `request_id` UUID y `expected_updated_at`
+de la lectura/operación previa; el request ID sirve para reintentar exactamente el
+mismo payload y la versión evita sobrescribir una tarea que cambió. No existe una
+acción genérica de estado ni una herramienta para `finalizadas`.
+
+| Herramienta | Entrada adicional | Efecto local del servidor | Gate |
+| --- | --- | --- | --- |
+| `start_task` | `user_approved: true`, `context_summary` (1–12000 caracteres) | `backlog`/`por_hacer` → `haciendo`; si ya está `haciendo`, conserva el estado | Consentimiento `start_task`, asignación y etapa permitida |
+| `record_task_result` | `summary`, `changes`, `clarifications`, `validation`, `observations` (cada uno 1–12000) | Inserta comentario de trabajo MCP con nombre de cliente declarado como no verificado, client ID e intervención/request ID; devuelve `comment_id` | `haciendo`, permiso `comment_task` y versión actual |
+| `submit_task_for_review` | `user_validated: true`, `comment_id` | `haciendo` → `en_revision`; requiere comentario resultado existente del mismo usuario/cliente y vigente para la versión actual | Consentimiento `review_task`, declaración de validación y asignación |
+
+Las banderas `user_approved`/`user_validated` son declaraciones incluidas por el
+cliente MCP; SQL no puede comprobar el diálogo ni que el modelo realmente aclaró
+todo el contexto. `workflowInstructions` guía el orden conversacional, mientras
+SQL impone estados, permisos y transiciones. En `en_revision` y `finalizadas` se
+rechazan lectura de tarea, lectura de adjunto y mutaciones; la persona debe moverla
+manualmente a `haciendo`. Admin no omite asignación ni límites de etapa.
+
+Los resultados se almacenan como comentario y, para idempotencia, también se guarda
+un recibo/payload en `mcp_task_operations`; no hay política de retención en el SQL
+local. Fuentes: `supabase/functions/mcp/workflow.ts:4-17,106-122`,
+`supabase/functions/mcp/index.ts:145-203`,
+`supabase/migrations/202610290001_mcp_workflow.sql:195-296`.
 
 ### Consentimiento y concesiones OAuth
 
 - UI Pages: `/oauth/consent?authorization_id=<opaque-id>` muestra cliente, callback,
-  scopes y cuenta; la persona puede autorizar o denegar. Después de login, `LoginPage`
-  vuelve al consentimiento. El callback procede solo del `redirect_url` de Auth y
-  permite HTTPS o loopback HTTP del cliente público.
-- Gestión: `/profile/connections` lista grants y permite `revokeGrant(clientId)`;
-  Auth elimina sesiones del cliente y `mcp_whoami()` vuelve a comprobar la sesión.
-- Lectura adicional: el portal confirma `mcp_set_task_read_access(p_client_id,
-  p_enabled)` con su sesión `authenticated` ordinaria. `true` autoriza todas las
-  sesiones OAuth vivas actuales del mismo usuario/cliente; `false` retira sus
-  permisos sin revocar identidad. Nuevas sesiones no heredan el permiso.
-- `mcp_list_task_read_access()` devuelve `{ client_id, enabled,
-  needs_authorization }[]`: `enabled` significa que **alguna** sesión viva tiene
-  lectura y `needs_authorization` que **alguna** no la tiene. Pueden ser ambos
-  `true`; la UI permite retirar todas o confirmar autorización de sesiones nuevas.
-  Ninguna RPC de gestión se concede a `mcp_identity`, ni expone IDs de sesión.
-- Scopes `email`/`profile` determinan claims de identidad; **no son permisos de base
-  de datos**. El aislamiento real está en el rol SQL dedicado y grants/policies.
-- Fuente: `src/App.tsx:11-16,39-42`, `src/features/auth/OAuthConsentPage.tsx:18-78`,
-  `src/features/auth/OAuthConnectionsPage.tsx:14-108`, `src/features/auth/mcpTaskAccess.ts:3-17`,
-  `supabase/migrations/202610280003_mcp_task_read.sql:4-61`.
+  scopes y cuenta; una aceptación concede identidad más los cinco permisos workflow.
+  Si Auth autoaprueba un consentimiento antiguo por scopes, la página aún solicita
+  aceptación explícita para ampliar permisos o permite continuar con identidad sin
+  ampliación. El callback procede solo del `redirect_url` de Auth.
+- Gestión: `/profile/connections` lista identidad y permisos de tareas; permite
+  retirar permisos individualmente/todos sin perder `whoami`, o revocar el grant
+  OAuth completo. El permiso workflow se asocia al consentimiento OAuth activo y su
+  fecha, no a un scope nuevo; sesiones válidas del mismo grant aplican esa concesión.
+- Las concesiones antiguas de lectura por sesión (`mcp_task_read_permissions`) se
+  muestran como permisos efectivos de lectura para compatibilidad, pero no confieren
+  escritura. `mcp_list_workflow_access()` devuelve cliente y arreglo de permisos;
+  `mcp_revoke_workflow_permission()` limita la retirada al perfil activo del portal.
+  Un consentimiento OAuth nuevo no hereda automáticamente la concesión anterior.
+- Scopes `email`/`profile` son de identidad, no permisos SQL. El aislamiento real
+  usa rol SQL, consentimiento y checks en cada RPC. Fuente: `src/App.tsx:11-16,39-42`,
+  `src/features/auth/OAuthConsentPage.tsx:18-106`,
+  `src/features/auth/OAuthConnectionsPage.tsx:10-89`,
+  `src/features/auth/mcpWorkflowAccess.ts:1-34`,
+  `supabase/migrations/202610290001_mcp_workflow.sql:15-107`.
 
 ## PostgreSQL vía Supabase
 

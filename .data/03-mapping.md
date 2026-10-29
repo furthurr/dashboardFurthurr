@@ -57,7 +57,7 @@ Fuente: `src/features/boards/api.ts`, `src/features/board/BoardPage.tsx:411`, `s
 ```text
 OAuth client
   └── authorization_code + PKCE + resource=<MCP resource URL>
-        ↓ Supabase Auth, consentimiento en Pages
+        ↓ Supabase Auth, consentimiento conjunto explícito en Pages
 OAuth access token { sub, client_id, session_id, role=mcp_identity, aud=<resource> }
         ↓ firma/issuer/audience/exp y sesión comprobadas por la Edge Function
 PostgREST RPC mcp_whoami() bajo auth.uid() / rol SQL mcp_identity
@@ -70,33 +70,46 @@ McpIdentity { id, email, full_name, role, client_id }
   `mcp_oauth_configuration.resource_url`.
 - El JWT `role=mcp_identity` es un rol de conexión Postgres aislado y distinto de
   `profiles.role`, que aparece en la respuesta como rol de producto.
-- La Edge Function usa el bearer solo en las RPCs del mismo recurso:
-  `mcp_whoami()` y, en fase 2, `mcp_get_task()`. No lo convierte en sesión del portal
+- La Edge Function usa el bearer solo en RPCs del mismo recurso: `mcp_whoami()`,
+  consulta/adjuntos y `mcp_work_task()`. No lo convierte en sesión ordinaria del portal
   ni lo reenvía a APIs ajenas. Firma JWT y sesión SQL son controles complementarios.
 - `McpIdentity` es PII (email/nombre/IDs) que el agente recibe en contexto. El
   contrato JSON Schema es [`contracts/mcp-whoami.schema.json`](contracts/mcp-whoami.schema.json).
 
-Fuente: `supabase/functions/mcp/index.ts:23-58,90-105`,
+Fuente: `supabase/functions/mcp/index.ts:25-38,50-66,129-150`,
 `supabase/migrations/202610280002_mcp_identity.sql:23-74`.
 
-## UUID de tarjeta → MCP `get_task` (fase 2 local)
+## UUID de tarjeta → MCP contexto y flujo de trabajo (local, sin despliegue acreditado)
 
 1. `CopyTaskId` copia `Task.id` completo, sin prefijos, desde tarjeta o detalle.
 2. `taskInput` valida UUID/offsets/page size, rechaza campos extra y normaliza el
    UUID a minúsculas. Edge compara además el ID retornado con el solicitado.
-3. RPC `mcp_get_task` revalida sesión, permiso de lectura y tablero; proyecta tarea,
-   tablero, nombres/IDs de asignados y autores, y páginas de comentarios/adjuntos.
+3. RPC `mcp_get_task` vuelve a validar sesión, permiso, acceso al tablero, asignación
+   y estado; proyecta tarea, tablero, nombres/IDs de personas y páginas independientes.
 4. `rawTaskSchema.parse` valida el JSON de la RPC. `addDownloads` toma `file_url`
    solo como metadata interna, valida origen/bucket/path de la tarea y pide firma
    al cliente privilegiado exclusivamente servidor. No acepta URLs/paths del caller.
 5. El DTO final elimina `file_url`, agrega enlace/expiración o error por adjunto,
    valida `taskOutput` y se devuelve como JSON de texto y `structuredContent`.
+6. `read_task_attachment` vuelve a validar el mismo acceso, obtiene metadata por RPC,
+   restringe el path al bucket/tarea, firma y descarga solo hasta 5 MiB. Texto y código
+   UTF-8 salen en fragmentos; las imágenes PNG/JPEG/GIF/WebP salen como contenido MCP
+   visual. Otros formatos conservan URL y advertencia, no se declaran estudiados.
+7. Tras aclaraciones y aceptación, `mcp_work_task` inicia solo `backlog`/`por_hacer`
+   en `haciendo`; comentario y revisión son acciones separadas. El resultado escribe
+   comentario en `comments` y recibo idempotente en `mcp_task_operations`. La revisión
+   solo cambia `haciendo` a `en_revision`, con flag declarado y comentario previo.
+   Las versiones obsoletas se rechazan (`PT428`) y Finalizadas no es un destino.
 
-La proyección pública no añade correos de terceros, ni transporta el bearer, ni
-interpreta archivos. No se mezclan estos DTOs con las queries/caché de TanStack.
-Los textos son datos de usuario; no instrucciones para el agente.
+La proyección pública no añade correos de terceros ni transporta el bearer. El
+lector de adjuntos interpreta formatos acotados a texto UTF-8 e imágenes seguras;
+no ejecuta archivos ni descarga URLs arbitrarias. No se mezclan estos DTOs con las
+queries/caché de TanStack. La conversación debe preguntar dudas antes de iniciar,
+pero los flags de aprobación son una declaración del cliente que SQL no puede
+contrastar con el diálogo. Tarea, comentario y archivo son datos, no instrucciones.
 
 Fuentes: `src/features/board/CopyTaskId.tsx:9-51`,
-`supabase/functions/mcp/index.ts:63-84,131-154`,
-`supabase/functions/mcp/task.ts:13-92`,
-`supabase/migrations/202610280003_mcp_task_read.sql:63-116`.
+`supabase/functions/mcp/index.ts:67-104,151-192`,
+`supabase/functions/mcp/task.ts:13-92`, `supabase/functions/mcp/workflow.ts:4-122`,
+`supabase/migrations/202610280003_mcp_task_read.sql:63-116`,
+`supabase/migrations/202610290001_mcp_workflow.sql:122-294`.

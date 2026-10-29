@@ -1,6 +1,6 @@
 # Modelos y tipos
 
-Los tipos del portal viven en `src/types/index.ts`; los casts de queries no validan ni completan campos. La excepción MCP fase 2 valida entrada/salida con Zod en `supabase/functions/mcp/task.ts:4-32`; la gestión de permisos del portal valida la proyección de la RPC en `src/features/auth/mcpTaskAccess.ts:3-17`. El esquema SQL es `supabase-schema.sql`.
+Los tipos del portal viven en `src/types/index.ts`; los casts de queries no validan ni completan campos. MCP valida DTOs de tarea/adjuntos y argumentos workflow con Zod en `supabase/functions/mcp/task.ts:4-35` y `supabase/functions/mcp/workflow.ts:6-25`; el portal valida los permisos MCP con Zod en `src/features/auth/mcpWorkflowAccess.ts:3-24`. El esquema de instalación nueva es `supabase-schema.sql`; `202610290001_mcp_workflow.sql` existe localmente y no hay evidencia de despliegue remoto.
 
 ## Enumeraciones
 
@@ -54,7 +54,7 @@ cliente OAuth. No es el JWT ni una sesión completa y no se persiste como tabla.
 | `client_id` | UUID string | Sí | Identificador de integración | Cliente OAuth registrado en `auth.oauth_clients` |
 
 El JSON Schema completo está en [`contracts/mcp-whoami.schema.json`](contracts/mcp-whoami.schema.json). No incluye access/refresh token, `session_id`, tablas de negocio ni referencias a tableros.
-Fuente: `supabase/functions/mcp/index.ts:12-18,100-105`, `supabase/migrations/202610280002_mcp_identity.sql:65-71`.
+Fuente: `supabase/functions/mcp/index.ts:14-19,145-150`, `supabase/migrations/202610280002_mcp_identity.sql:65-71`.
 
 ## `TaskInput`, `RawTask` y `TaskResult` — `get_task`
 
@@ -70,6 +70,13 @@ no casts a `TaskWithAssignees`. El catálogo detalla [argumentos y errores](01-e
 | `attachments` | Página de `{ id, file_name, mime_type, file_size, created_at, download_url, expires_at, download_error }`; URL/expiración/error son nullable |
 | Página | `{ total, offset, next_offset, items }`; contadores/offsets enteros no negativos, `next_offset` nullable y `items` siempre array |
 
+`read_task_attachment` recibe IDs de tarea/adjunto, `offset` (0 por defecto) y
+`max_chars` (12000 por defecto, máximo 12000); tamaño máximo descargado 5 MiB.
+Devuelve metadata firmada más texto UTF-8 con `untrusted_content`, posición,
+`total_chars` y `next_offset`, o un bloque MCP `image` para PNG/JPEG/GIF/WebP.
+Otros formatos solo devuelven metadata/enlace y aviso de formato no extraído. Fuente:
+`supabase/functions/mcp/workflow.ts:19-26,67-103`.
+
 `RawTask` es la respuesta SQL interna y lleva `file_url` por adjunto. `TaskResult`
 lo elimina y agrega los campos de descarga; el contrato no devuelve credenciales
 ni IDs de sesión. Un fallo de firma preserva la metadata y devuelve URL/expiración
@@ -77,9 +84,30 @@ nulas con `download_error`. Los enlaces no son persistencia y caducan a los 60 s
 Los esquemas se anuncian al cliente MCP; no hay un segundo JSON Schema generado
 en esta entrega documental.
 
-`TaskReadAccess`, usado solo por el portal: `{ client_id: string, enabled: boolean,
-needs_authorization: boolean }`; ambos booleanos pueden ser `true` en un conjunto
-mixto de sesiones. Fuente: `src/features/auth/mcpTaskAccess.ts:3-17`.
+`WorkflowAccess`, usado solo por el portal: `{ client_id: UUID, permissions:
+WorkflowPermission[] }`, donde permiso es `read_tasks`, `read_attachments`, `start_task`,
+`comment_task` o `review_task`. El listado puede representar grants antiguos de
+lectura por sesión sin conceder permisos de trabajo. Fuente:
+`src/features/auth/mcpWorkflowAccess.ts:3-24`,
+`supabase/migrations/202610290001_mcp_workflow.sql:68-86`.
+
+## Contratos de adjunto y operaciones MCP
+
+| DTO | Forma / validación |
+| --- | --- |
+| `AttachmentInput` | `{ task_id, attachment_id, offset=0, max_chars=12000 }`; GUIDs, offset entero `0..5 MiB`, caracteres `1..12000` |
+| Texto de adjunto | `{ kind: "text", untrusted_content, offset, total_chars, next_offset, ...metadata }`; solo UTF-8 válido; no garantiza una captura inmutable entre fragmentos |
+| Imagen de adjunto | Metadata en bloque de texto y `{ type: "image", data: base64, mimeType }`; PNG/JPEG/GIF/WebP verificadas por firma |
+| Formato no extraído | `{ kind: "unsupported", warning, download_url, expires_at, ...metadata }`; enlace no significa que el asistente haya estudiado el archivo |
+| Entrada de mutación | `task_id`, `request_id` GUID, `expected_updated_at`; flags literales `user_approved: true` o `user_validated: true` para las acciones que lo requieren |
+| Resultado de mutación | `{ request_id, replayed, task_id?, status?, updated_at?, comment_id? }`; `status` solo `haciendo` o `en_revision` |
+| Comentario de trabajo | `summary`, `changes`, `clarifications`, `validation`, `observations`, cada uno texto no vacío hasta 12000 caracteres |
+
+Los flags son declaraciones del cliente MCP: el servidor valida el valor, pero no
+puede verificar el contenido de la conversación ni que un modelo haya inspeccionado
+todo el contexto. Los textos del adjunto y comentario son contenido no confiable.
+Fuente: `supabase/functions/mcp/workflow.ts:6-25`,
+`supabase/migrations/202610290001_mcp_workflow.sql:209-294`.
 
 ## `Task` y `TaskWithAssignees`
 

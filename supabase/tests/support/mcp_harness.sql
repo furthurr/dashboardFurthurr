@@ -19,6 +19,13 @@ create table auth.oauth_clients (
   created_at timestamptz, updated_at timestamptz
 );
 create table auth.sessions (id uuid primary key, user_id uuid references auth.users, oauth_client_id uuid references auth.oauth_clients, not_after timestamptz);
+create table auth.oauth_consents (id uuid primary key default gen_random_uuid(), user_id uuid references auth.users on delete cascade,
+  client_id uuid references auth.oauth_clients on delete cascade, granted_at timestamptz not null default now(), revoked_at timestamptz,
+  unique(user_id, client_id));
+create table auth.oauth_authorizations (id uuid primary key default gen_random_uuid(), authorization_id text unique not null,
+  user_id uuid references auth.users, client_id uuid references auth.oauth_clients, status text default 'pending',
+  expires_at timestamptz not null default now() + interval '3 minutes',
+  redirect_uri text default 'https://example.test/callback', scope text default 'email profile');
 create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
 create function auth.uid() returns uuid language sql stable as $$ select (auth.jwt() ->> 'sub')::uuid $$;
 create function auth.role() returns text language sql stable as $$ select auth.jwt() ->> 'role' $$;

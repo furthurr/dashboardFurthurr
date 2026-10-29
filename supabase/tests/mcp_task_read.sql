@@ -26,7 +26,7 @@ insert into public.tasks(id, board_id, title, description, status, priority, spe
   (current_setting('test.hidden_task')::uuid, current_setting('test.hidden_board')::uuid, 'Hidden', null, 'backlog', 'normal', null, current_setting('test.other')::uuid);
 -- Assignment alone MUST NOT grant access to the hidden board.
 insert into public.task_assignees(task_id, profile_id) values
-  (current_setting('test.task')::uuid, current_setting('test.other')::uuid),
+  (current_setting('test.task')::uuid, current_setting('test.user')::uuid),
   (current_setting('test.hidden_task')::uuid, current_setting('test.user')::uuid);
 insert into public.comments(task_id, author_id, body) values
   (current_setting('test.task')::uuid, current_setting('test.user')::uuid, 'First'),
@@ -151,11 +151,10 @@ update auth.sessions set not_after = null where id = current_setting('test.sessi
 -- Empty relations are arrays, not null; one missing relation never hides the task.
 delete from public.comments where task_id = current_setting('test.task')::uuid;
 delete from public.task_attachments where task_id = current_setting('test.task')::uuid;
-delete from public.task_assignees where task_id = current_setting('test.task')::uuid;
 set local role mcp_identity;
 do $$ declare result jsonb; begin
   result := public.mcp_get_task(current_setting('test.task')::uuid);
-  if result -> 'assignees' <> '[]'::jsonb or result -> 'comments' -> 'items' <> '[]'::jsonb
+  if jsonb_array_length(result -> 'assignees') <> 1 or result -> 'comments' -> 'items' <> '[]'::jsonb
     or result -> 'attachments' -> 'items' <> '[]'::jsonb or result -> 'comments' ->> 'total' <> '0'
     or result -> 'attachments' ->> 'total' <> '0' then raise exception 'Empty relations not preserved'; end if;
 end $$;

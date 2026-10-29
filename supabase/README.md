@@ -1,8 +1,124 @@
 # Operación y despliegue de Supabase
 
-La SPA sigue alojada en GitHub Pages. Las operaciones privilegiadas se ejecutan en la Edge Function `admin-users`, nunca en el navegador.
+La SPA sigue alojada en GitHub Pages. La administración privilegiada se ejecuta en
+`admin-users`; el servidor remoto MCP se ejecuta en `mcp`. La firma privilegiada
+de adjuntos MCP ocurre solo en Edge, nunca en navegador, presets ni cliente MCP.
+
+## Estado operativo MCP — 2026-10-29
+
+Baseline de producto: `c2677c9b9084e3a56b6db36a1783c5d722e82780` (`v0.12.1`),
+correcciones en `a6adb89`; fase 2 implementada en `9ecc905`. Proyecto identificado
+mediante CLI autenticada: **`furthurr'sDashboard`**, ref `uujxatuuktccwkvavksr`.
+Esta actualización documental reutiliza la evidencia operativa anterior de esta
+sesión y las [notas de release](https://github.com/furthurr/dashboardFurthurr/releases/tag/v0.12.1),
+no vuelve a aplicar SQL, desplegar ni probar servicios.
+
+| Capa | Resultado comprobado |
+| --- | --- |
+| PostgreSQL | Aplicada y registrada **solo `202610280003_mcp_task_read.sql`**; definiciones, columnas, RLS, grants y FK/cascada comprobados |
+| Edge MCP (evidencia remota) | **v3 ACTIVE**, `verify_jwt=false`; correspondía al código de fase 2 (`index.ts`, `task.ts`, `deno.json`); aplicación `0.2.0` |
+| Pages | [Run 40923924908](https://github.com/furthurr/dashboardFurthurr/actions/runs/40923924908), success para `c2677c9`; HTML y assets nuevos responden 200 |
+| SQL remoto | `mcp_task_read.sql` y `mcp_identity.sql`: PASS, fixtures revertidos; ausencia de cuentas/clientes/tableros de prueba residuales y cero permisos de lectura al finalizar |
+| Cliente real | `whoami` correcto tras despliegue; OpenCode CLI 1.18.34 informa OAuth conectado. Catálogo fresco y consulta MCP de tarea aún no acreditados |
+
+No confundir release `0.12.1`, aplicación MCP `0.2.0` y Edge v3. El registro no
+acredita OAuth E2E, consentimiento en navegador, comparación completa MCP/UI ni
+descarga real/caducidad/renovación de archivos. Esos casos y sus bloqueos están en
+[la guía de prueba](../docs/prueba-mcp.md#8-registro-de-resultados-sin-secretos).
+
+El árbol local posterior añade `202610290001_mcp_workflow.sql`, `workflow.ts` y
+`serverInfo.version=0.3.0`; no hay evidencia de aplicación, despliegue ni prueba con
+servicios reales. No presentar este código como Edge v3 desplegada ni ejecutar la
+migración automáticamente como parte de la lectura de esta guía.
+
+### Discrepancia del ledger: conservar, no «reparar» a ciegas
+
+Ledger observado tras la activación: `202610190001`, `202610200001`, `202610200002`,
+`202610210001`, `202610220001`, `202610280002`, **`202610280003`**.
+El inventario histórico del 2026-10-28 observó objetos de `202610220002`,
+`202610280001` y parte de `202610260003` sin sus entradas, y no encontró la policy
+de renombrado `202610260001` ni `delete_inactive_board` de `202610260002`.
+La activación del día 29 no certifica esas migraciones como aplicadas ni resuelve
+esa discrepancia; no inferir registro de una migración por presencia de objetos.
+
+Antes de fase 2 se comprobaron ledger, objetos y precondiciones reales. Se descargó
+el historial registrado con `migration fetch` a un directorio temporal independiente
+y se añadió una copia idéntica de `202610280003`. El `db push --dry-run` aislado
+seleccionó exclusivamente ese archivo; se aplicó con `--skip-vault`, sin roles ni
+seeds, y se comprobó después su registro. La CLI usada fue 2.122.0 vía `npx`.
+No se alteraron entradas históricas ni se ejecutó un push global del directorio
+del repositorio. Esto describe una ejecución ya realizada, **no un comando para
+repetir la migración**: no es idempotente y sus objetos ya existen.
+
+### Operación y fronteras de fase 2
+
+- `mcp_identity` conserva identidad/sesión OAuth y puede ejecutar `mcp_get_task`,
+  sin grants directos de tareas/Storage ni ejecución de gestión del consentimiento.
+  El portal `authenticated` activo puede gestionar sus sesiones, no ejecutar la
+  RPC MCP como sustituto del flujo OAuth.
+- Conexiones exige consentimiento adicional para sesiones actuales. Las nuevas no
+  heredan permisos; retirar lectura conserva `whoami`, y borrar la sesión elimina
+  su permiso por cascada. No admin requiere membresía explícita y tablero activo;
+  asignación sola no basta. Admin activo con consentimiento puede leer inactivos.
+- Ese resumen describe el consentimiento de lectura por sesión ya comprobado. El
+  workflow local propuesto sustituye el paso de habilitar en Perfil por aceptación
+  conjunta al conectar; el permiso se asocia al grant OAuth. La implementación local
+  exige asignación para todos los roles y estados backlog/por_hacer/haciendo.
+- La firma de 60 s usa credencial exclusivamente servidor después de autorizar
+  tarea y validar origen/bucket/path. No se confirmó su funcionamiento con Storage
+  real: falta descarga, caducidad y renovación. No mover archivos legacy para
+  eludir validación; se conservan con `download_error`.
+- Edge sin bearer devuelve 401 con challenge. Preflight Pages permitido, localhost
+  y origen ajeno denegados. El portal usa RPC Supabase para consentimiento; cliente
+  nativo sin `Origin` no necesita CORS. No cambiar allowlist ni Auth global por
+  una prueba fallida sin revisar entorno y cliente.
+- Dependencias corregidas en v0.12.1: React Router DOM 7.18.5, Zod 4.6.7 también en
+  MCP, Vite 8.3.5 y transitivas npm. Auditorías locales npm/Deno sin vulnerabilidades
+  conocidas reportadas; no certifican seguridad integral del servicio desplegado.
+
+Comandos de comprobación para una futura operación autorizada (identificar primero
+el proyecto; no imprimen credenciales). No ejecutados por esta actualización:
+
+```bash
+npx supabase@2.122.0 functions list --project-ref <project-ref>
+npx supabase@2.122.0 db query --linked --project-ref <project-ref> --file supabase/tests/mcp_task_read.sql
+npx supabase@2.122.0 db query --linked --project-ref <project-ref> --file supabase/tests/mcp_identity.sql
+```
+
+Las suites crean fixtures Auth/Postgres y terminan con `ROLLBACK`; revisar schema
+administrado y usar un entorno autorizado. **Nunca ejecutar `tests/support/mcp_harness.sql`
+contra Supabase**. Las cuatro suites del harness local usan Auth/Storage simulados;
+SQL remoto no es OAuth E2E. Esta operación no redesplegó `admin-users` ni cambió
+hooks/Auth globales. Para conectar usuarios: [guía de clientes](../mcp/README.md).
+
+### Workflow MCP local, pendiente de aplicación y despliegue
+
+`202610290001_mcp_workflow.sql` se añade después de la base OAuth/lectura; modifica
+`mcp_get_task`, crea `mcp_workflow_permissions` y `mcp_task_operations`, añade RPCs
+para aceptar/listar/retirar permisos, leer adjuntos y ejecutar tres acciones de tarea.
+La nueva instalación recibe estos objetos desde `supabase-schema.sql`; una base
+existente requiere preflight para confirmar qué migraciones/objetos están realmente
+presentes y aplicar solo la migración pendiente mediante el procedimiento aprobado.
+El ledger anterior incluye `202610280003`, no incluye evidencia de `202610290001`.
+No reejecutar la migración si los objetos ya existen ni intentar arreglar el ledger
+con un push global.
+
+Pruebas locales documentadas: seis suites SQL más concurrencia en PostgreSQL 16
+desechable con Auth/Storage simulados; no son E2E remoto. Tras un eventual SQL
+aprobado, Edge `mcp` y SPA deben desplegarse como cambios separados y probarse con
+una cuenta asignada en entorno de prueba. No conceder permiso por SQL para suplir el
+consentimiento OAuth de usuario.
 
 ## Instalación existente
+
+La secuencia siguiente es una guía histórica de instalación base, no el conjunto
+pendiente del proyecto ya activado. Contrastar siempre con el estado anterior.
+Después de esa base existen `202610280001_board_assignment_access.sql`,
+`202610280002_mcp_identity.sql` y `202610280003_mcp_task_read.sql`; no aplicarlas
+en bloque para reconciliar el ledger. El bootstrap actual también incluye MCP.
+`202610290001_mcp_workflow.sql` es una ampliación local posterior; el estado remoto
+documentado no la incluye. Revisarla en la subsección «Workflow MCP local» y no
+añadirla a la lista de instalación base sin verificar sus precondiciones.
 
 1. Realiza una copia de seguridad y prueba primero en un proyecto de pruebas.
 2. Ejecuta **solo las migraciones pendientes**, en este orden:
@@ -40,7 +156,7 @@ Para una instalación nueva, `../supabase-schema.sql` incluye el modelo de table
 
 ### Tableros y acceso por membresía
 
-`202610210001_boards.sql` crea `boards` y `board_members`, asigna las tareas/usuarios activos existentes a `Offline`, y crea `General` vacío. `202610220001_board_access_returning.sql` corrige la comprobación RLS usada al devolver la fila recién creada por PostgREST. `202610220002_board_lifecycle.sql` añade `boards.is_active`, las RPCs de renombrado y de activación, y el listado con tareas pendientes. Admin activo accede a todos los tableros, crea tableros y sustituye miembros; usuarios e invitados solo acceden a tableros donde sean miembros. Ser responsable de una tarea no concede acceso. Las cuentas nuevas no reciben membresías automáticamente.
+`202610210001_boards.sql` crea `boards` y `board_members`, asigna las tareas/usuarios activos existentes a `Offline`, y crea `General` vacío. `202610220001_board_access_returning.sql` corrige la comprobación RLS usada al devolver la fila recién creada por PostgREST. `202610220002_board_lifecycle.sql` añade `boards.is_active`, las RPCs de renombrado y de activación, y el listado con tareas pendientes. El contrato base de membresía de estas migraciones se amplía en el portal por `202610280001`: membresía **o asignación** en tablero activo, además de admin activo. MCP mantiene membresía explícita para no admin; no reutilizar el helper más amplio del portal para autorizar `get_task`. Las cuentas nuevas no reciben membresías automáticamente.
 
 ### Ciclo de vida de los tableros
 

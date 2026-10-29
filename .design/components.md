@@ -2,9 +2,9 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
-## Actualización focalizada — copia de UUID y lectura MCP, 2026-10-28
+## Actualización focalizada — copia de UUID y workflow MCP, 2026-10-29
 
-Describe cambios locales sin commit sobre `be391de`, no una publicación. No añade
+Describe cambios locales sin commit sobre el producto publicado `c2677c9`, no una publicación. No añade
 tokens ni clases CSS propias; los botones reutilizan `ui-button ui-button--sm`,
 SVG decorativo de 16 px y estilos de foco existentes. Las entradas siguientes
 prevalecen sobre las descripciones históricas del botón de comentarios.
@@ -14,18 +14,18 @@ prevalecen sobre las descripciones históricas del botón de comentarios.
 | `CopyTaskId` | Botón con solo icono, tooltip y `aria-label` «Copiar ID de {título}». Copia solo UUID completo. Estado `copying` bloquea doble envío; éxito `role=status` por 4 s; fallo `role=alert` muestra UUID seleccionable y opción de copia manual/reintento. No propaga clic/pointer-down al contenedor | `src/features/board/CopyTaskId.tsx:9-50` |
 | Acciones de tarjeta | Copiar ID y comentarios juntos a la derecha, contenedor `ml-auto flex ... gap-2`. Ambos usan el mismo estilo de botón e icono de 16 px; comentarios mantiene badge solo con total >0 y su nombre accesible con singular/plural. Copiar sigue disponible sin asignados ni callback de comentarios | `src/features/board/TaskCard.tsx:102-144`, `src/features/board/TaskCard.test.tsx:36-52` |
 | ID en detalle | Fila de solo lectura por encima de las tres pestañas; UUID completo seleccionable siempre visible e icono de copiar. No depende de permiso de edición y no guarda ni cierra el detalle al copiar | `src/features/board/TaskDetailModal.tsx:165-171`, `src/features/board/CopyTaskId.tsx:35-47` |
-| Consentimiento OAuth | La conexión inicial sigue siendo identidad; texto explica que consultar tareas exige autorización adicional posterior en Gestionar conexiones. No crea scope OAuth nuevo ni autoriza lectura al aprobar identidad | `src/features/auth/OAuthConsentPage.tsx:65-78` |
-| Permisos en Conexiones | Lista grants y luego permisos. Sin verificar deshabilita lectura; error no impide revocar OAuth. Autorizar requiere un `Dialog` que describe textos, nombres, adjuntos/enlaces de 60 s y ausencia de escritura. Cancelar no concede permisos; un fallo conserva diálogo/error; confirmar muestra feedback de éxito | `src/features/auth/OAuthConnectionsPage.tsx:20-108` |
-| Sesiones mixtas y retirada | Si existen sesiones nuevas sin permiso junto a autorizadas, muestra aviso y botón «Autorizar nuevas sesiones», con otra confirmación. «Retirar lectura de tareas» quita permisos de todas sin revocar `whoami`; «Revocar conexión» elimina el grant OAuth | `src/features/auth/OAuthConnectionsPage.tsx:44-67,79-106` |
+| Consentimiento OAuth | Una aprobación muestra identidad y permisos de lectura, adjuntos, inicio, comentarios y revisión. No añade scopes OAuth. Si Auth reusa una aprobación antigua de identidad, solo amplía permisos tras aceptar explícitamente; puede continuar sin ampliarlos. El retorno usa callback de Auth | `src/features/auth/OAuthConsentPage.tsx:23-79,84-110`, `src/features/auth/mcpWorkflowAccess.ts:17-30` |
+| Conexiones autorizadas | Para cada grant muestra identidad y los cinco permisos como autorizados/no autorizados. Cada permiso puede retirarse, se pueden retirar todos los permisos de tareas o revocar el grant. La retirada conserva identidad; errores de consulta dejan permisos sin verificar pero no bloquean revocar el grant | `src/features/auth/OAuthConnectionsPage.tsx:18-61,64-91` |
+| Límites de workflow mostrados en consentimiento/perfil | Solo tareas asignadas y etapas permitidas; acciones de inicio/revisión requieren aceptación en la conversación. Finalizadas, reasignación y reapertura no se ofrecen. Advierte que adjuntos/contenido se comparten y que enlaces/archivos ya emitidos no se revocan retroactivamente | `src/features/auth/OAuthConsentPage.tsx:100-106`, `src/features/auth/OAuthConnectionsPage.tsx:69-70` |
 
 ### Verificación y pendientes
 
-Se reutilizan 200 pruebas Vitest (22 archivos), 11 Deno MCP y lint/build correctos
-de la implementación de esta conversación, no ejecuciones documentales nuevas.
-Las pruebas DOM cubren teclado, texto exacto copiado, bloqueo/error del portapapeles,
-agrupación de botones, confirmación, permisos mixtos y fallos de migración/RPC.
-No hay validación real nueva de navegador responsive, descarga de archivos,
-lector de pantalla o contraste; la publicación de esta UI está pendiente.
+Se reutilizan 203 pruebas Vitest (22 archivos), 19 Deno MCP y suites SQL locales,
+lint/build correctos de la implementación; esta sincronización no repite comandos.
+17 pruebas DOM OAuth cubren aprobación conjunta, permisos visibles/retirada,
+autoaprobación OAuth antigua y errores de autorización. No hay revisión de navegador
+responsive, descarga real, lector de pantalla o contraste; la UI y migración nuevas
+no se han verificado desplegadas. No se declara conformidad WCAG.
 [Guía de test](../docs/prueba-mcp.md) y [contratos de datos](../.data/01-endpoints.md).
 
 ## Registro de fase 1 — OAuth MCP y conexiones, 2026-10-28

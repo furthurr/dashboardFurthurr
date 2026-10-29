@@ -68,7 +68,8 @@ Deno.test('MCP initialize, tools/list and whoami remain compatible, with no cros
   const initialized = await initialize.json()
   assert(initialized.result.serverInfo.name === 'dashboardFurthurr')
   const tools = await (await handle(request('POST', rpc('tools/list'), token))).json()
-  assert(tools.result.tools.length === 2 && tools.result.tools[0].name === 'whoami' && tools.result.tools[1].name === 'get_task')
+  assert(tools.result.tools.length === 6 && tools.result.tools[0].name === 'whoami' && tools.result.tools[1].name === 'get_task')
+  assert(initialized.result.instructions.includes('Nunca finalices'))
   const result = await (await handle(request('POST', rpc('tools/call', { name: 'whoami', arguments: {} }), token))).json()
   assert(result.result.structuredContent.id === id && result.result.structuredContent.role === 'admin')
   assert(!JSON.stringify(result).includes(token))
@@ -128,16 +129,58 @@ Deno.test('get_task rejects invalid UUIDs, unknown arguments and invalid paginat
 Deno.test('get_task requires new explicit consent, hides access/existence and never signs on query errors', async () => {
   let signs = 0
   const token = await sign()
-  for (const code of ['PT403', 'PT404', '28000', '42501', 'internal']) {
+  for (const code of ['PT403', 'PT404', 'PT412', 'PT409', '28000', '42501', 'internal']) {
     const handle = createHandler(config, { verify: verifier, identify: async () => identity,
       getTask: () => Promise.reject(new TaskError(code)), signAttachment: async () => { signs++; return '' } })
     const result = (await (await handle(request('POST', rpc('tools/call', { name: 'get_task', arguments: { task_id: id } }), token))).json()).result
     assert(result.isError && !result.structuredContent)
-    if (code === 'PT403') assert(result.content[0].text.includes('Autoriza la lectura'))
+    if (code === 'PT403') assert(result.content[0].text.includes('Vuelve a autorizar'))
+    if (code === 'PT412') assert(result.content[0].text.includes('Asígnate manualmente'))
+    if (code === 'PT409') assert(result.content[0].text.includes('muévela manualmente'))
     if (code === 'PT404') assert(result.content[0].text === 'Tarea no disponible o sin acceso.')
     assert(!JSON.stringify(result).includes('internal'))
   }
   assert(signs === 0)
+})
+
+Deno.test('workflow tools validate user approval, dispatch bounded actions and never offer finalization', async () => {
+  const token = await sign()
+  const calls: string[] = []
+  const handle = createHandler(config, { verify: verifier, identify: async () => identity,
+    workTask: (bearer, action, args) => {
+      assert(bearer === token && args.task_id === id)
+      calls.push(action)
+      return Promise.resolve({ request_id: args.request_id, replayed: false, task_id: id,
+        status: action === 'review_task' ? 'en_revision' : 'haciendo', updated_at: '2026-10-29T12:00:00Z',
+        comment_id: action === 'comment_task' ? clientId : null })
+    } })
+  const args = { task_id: id, request_id: clientId, expected_updated_at: '2026-10-29T12:00:00Z' }
+  for (const [name, extra] of [
+    ['start_task', { user_approved: true, context_summary: 'Agreed' }],
+    ['record_task_result', { summary: 'Done', changes: 'Files', clarifications: 'Agreed', validation: 'Passed', observations: 'None' }],
+    ['submit_task_for_review', { user_validated: true, comment_id: clientId }],
+  ] as const) {
+    const result = (await (await handle(request('POST', rpc('tools/call', { name, arguments: { ...args, ...extra } }), token))).json()).result
+    assert(!result.isError && result.structuredContent.task_id === id)
+  }
+  assert(calls.join() === 'start_task,comment_task,review_task')
+  for (const extra of [{ user_approved: false, context_summary: 'No' }, { user_approved: true, context_summary: 'Yes', status: 'finalizadas' }]) {
+    const result = await (await handle(request('POST', rpc('tools/call', { name: 'start_task', arguments: { ...args, ...extra } }), token))).json()
+    assert(result.error || result.result?.isError)
+  }
+  assert(calls.length === 3)
+})
+
+Deno.test('attachment tool reauthorizes before download and never exposes metadata paths', async () => {
+  const token = await sign()
+  let downloads = 0
+  const handle = createHandler(config, { verify: verifier, identify: async () => identity,
+    getAttachment: () => Promise.reject(new TaskError('PT412')),
+    download: async () => { downloads++; return new Uint8Array() } })
+  const result = (await (await handle(request('POST', rpc('tools/call', {
+    name: 'read_task_attachment', arguments: { task_id: id, attachment_id: clientId },
+  }), token))).json()).result
+  assert(result.isError && downloads === 0 && result.content[0].text.includes('Asígnate'))
 })
 
 Deno.test('get_task preserves empty relations and reports signing failures without leaking internal errors', async () => {

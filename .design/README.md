@@ -6,8 +6,8 @@ Documentación canónica de lo visual. Léela antes de añadir pantallas, compon
 
 - Tecnología detectada: React + TypeScript, Tailwind CSS v4 y CSS custom properties.
 - Commit base revisado: `eb25418de42c045d6be32a3091f8bb3f36b24ba0` (2026-10-21), contiene el selector y los componentes de tableros documentados aquí.
-- Baseline Git consultado: `HEAD=be391defd2601dee3e7105d7ec14937f33f32efc`. Copia de ID, lectura MCP y esta sincronización son cambios locales sin commit: **pendiente de baseline Git**; no se atribuyen a `HEAD`. Cambios ajenos de `BoardsPage` no se incorporan.
-- Última sincronización focalizada: 2026-10-28; botones icon-only de copiar/comentarios, UUID visible en detalle y consentimiento adicional de lectura por sesión MCP. Reutiliza `ui-*`, `auth-*` y `Dialog`; no añade tokens, clases CSS propias ni tema. Ver [componentes](components.md).
+- Baseline de producto consultado: `HEAD=c2677c9b9084e3a56b6db36a1783c5d722e82780`; los cambios locales de OAuth/workflow y la documentación actual no están en ese commit. **Baseline documental Git pendiente**; los cambios ajenos de `BoardsPage` no se incorporan.
+- Última sincronización focalizada: 2026-10-29; además de copiar UUID y consentimiento, documenta permisos MCP conjuntos, retirada individual/todos y acciones de tarea. Reutiliza `ui-*`, `auth-*` y layout existente; no añade tokens, clases CSS propias ni tema. Cambios locales sin commit; baseline documental Git pendiente. Ver [componentes](components.md).
 - Los botones de copiar y comentarios usan `ui-button ui-button--sm` e iconos de 16 px; quedan agrupados a la derecha con `gap-2`, no separados por la fila de avatares (`src/features/board/TaskCard.tsx:102-144`, `src/features/board/CopyTaskId.tsx:33-50`).
 - La revisión cubre los avatares de `AccountMenu`, `UsersPage` y el componente `ProfileAvatar`; no es un inventario completo del flujo visual de `ProfilePage`.
 - Historial de despliegue: la UI de ciclo de vida de tableros se publicó con `v0.6.0` el 2026-10-22 (workflow «Deploy to GitHub Pages», run `39860177282`, `headSha=21a44df`). No usar esa evidencia histórica como publicación de los cambios locales actuales.
@@ -27,9 +27,9 @@ Documentación canónica de lo visual. Léela antes de añadir pantallas, compon
 - **Avatares de perfil (2026-10-26):** `ProfileAvatar` enseña la imagen recortada en círculo, con fallback de icono o iniciales y tamaños `sm/md/lg`. `AccountMenu` permite cargar foto propia; admin lo puede hacer desde el editor de usuarios. Se aceptan JPG/PNG/WebP de hasta 2 MB, se muestran preview, espera y feedback. No se crean tokens ni clases visuales (`src/shared/ui/ProfileAvatar.tsx:17-45`, `src/shared/ui/AccountMenu.tsx:58-75`, `src/features/users/UsersPage.tsx:37-54,138-173`).
 - **Detalle y traslado:** permite escoger destino y exige confirmación; informa que la tarea sale del tablero actual y conserva contenido/relaciones. El destino se limita a tableros accesibles y activos. Usa Dialog y controles existentes, sin tokens nuevos (`src/features/board/TaskDetailModal.tsx`, `src/features/board/BoardPage.tsx:411`).
 - **Menú de cuenta:** «Usuarios» aparece para admin, y todas las cuentas activas tienen «Tableros», «Perfil» y «Cerrar sesión». El panel muestra el avatar/nombre/rol y ofrece cambiar la foto propia; el resto de la página de perfil no forma parte de esta revisión focalizada (`src/shared/ui/AccountMenu.tsx:58-83`).
-- **Consentimiento MCP:** `OAuthConsentPage` reutiliza el panel `auth-shell`/`auth-panel`; muestra cuenta, nombre/ID del cliente, callback y scopes, e incluye estados de carga/error, cuenta inactiva y acciones explícitas autorizar/denegar. El `authorization_id` opaco se mantiene en el HashRouter; el retorno solo acepta la URL provista por Auth y HTTPS/loopback (`src/features/auth/OAuthConsentPage.tsx:18-78`, `src/features/auth/mcpOAuth.ts:2-36`).
+- **Consentimiento MCP:** `OAuthConsentPage` reutiliza `auth-shell`, `auth-panel`, `ui-feedback` y botones existentes; muestra cuenta, nombre/ID de cliente, callback, scopes y cinco permisos explícitos (lectura, adjuntos, inicio, comentario y revisión). OAuth autoaprobado bajo un grant antiguo no amplía permisos silenciosamente: presenta la aceptación ampliada o permite continuar con identidad. Conserva estados de carga/error/inactividad; navegación usa `authorization_id` opaco y callback devuelto por Auth (`src/features/auth/OAuthConsentPage.tsx:18-112`, `src/features/auth/mcpWorkflowAccess.ts:17-30`, `src/features/auth/mcpOAuth.ts:2-36`).
 - **Copia de ID:** icono sin texto visible en tarjeta/detalle, `aria-label` con título de tarea y tooltip «Copiar ID de tarea». Copia el UUID completo sin abrir tarea ni iniciar arrastre; feedback de éxito inline por 4 s, error con UUID seleccionable y reintento. El detalle siempre muestra el UUID por encima de las pestañas (`src/features/board/CopyTaskId.tsx:9-50`, `src/features/board/TaskDetailModal.tsx:165-171`).
-- **Conexiones MCP:** lista grants y permisos adicionales (`Sin verificar`, `Requiere autorización`, `Autorizada en las sesiones actuales`). «Autorizar lectura de tareas» abre `Dialog` de confirmación; «Retirar lectura» conserva identidad. Permisos mixtos muestran aviso y «Autorizar nuevas sesiones». Si falla la consulta de permisos, lectura queda deshabilitada pero revocar OAuth sigue disponible (`src/features/auth/OAuthConnectionsPage.tsx:20-108`).
+- **Conexiones MCP:** lista cada grant, identidad y los cinco permisos como `Autorizado`/`No autorizado`. Permite retirar un permiso, todos los permisos de tarea o revocar la conexión OAuth; retirar permisos conserva identidad. Carga, fallo de permisos y fallo de revocación tienen feedback; si no se pueden consultar permisos, quedan como «Sin verificar» y sigue disponible revocar OAuth. No hay control de habilitar permisos desde Perfil (`src/features/auth/OAuthConnectionsPage.tsx:18-91`, `src/features/auth/mcpWorkflowAccess.ts:32-41`).
 - **Avatares compartidos:** `ProfileAvatar` presenta las imágenes/fallback de responsables en `AssigneePicker` y tarjetas, autor de comentario, menú de cuenta y administración de usuarios. Las iniciales se conservan cuando no hay imagen o falla la carga (`src/shared/ui/ProfileAvatar.tsx:17-45`, `src/features/board/AssigneePicker.tsx:27-34`, `src/features/board/TaskCard.tsx:101-117`, `src/features/board/CommentsList.tsx:27-37`).
 - **Responsables:** `AssigneePicker` compartido en creación y detalle: búsqueda, casillas múltiples y chips retirables; cada persona seleccionada muestra avatar/iniciales; conserva asignados inactivos sin ofrecerlos como nuevas opciones. En detalle, «Guardar asignaciones» es independiente, disponible para todas las cuentas activas, incluidos invitados (`src/features/board/AssigneePicker.tsx:17-52`, `src/features/board/TaskDetailModal.tsx:87-97`, `:207-216`).
 - **Edición compartida de tareas (2026-10-20):** en el detalle, título, descripción, estado y prioridad son editables para cualquier cuenta activa con acceso al tablero, sobre tareas propias o ajenas; «Eliminar tarea» solo se ofrece al creador o a un admin. No se introdujeron tokens, estilos ni componentes nuevos: cambia la disponibilidad de controles ya existentes (`src/features/board/BoardPage.tsx`, `src/features/board/TaskDetailModal.tsx`).
@@ -44,14 +44,12 @@ Documentación canónica de lo visual. Léela antes de añadir pantallas, compon
 
 ### MCP — alcance y límites de validación visual
 
-Pages aloja el consentimiento de fase 1 según evidencia histórica; la nueva UI de
-lectura por sesión solo está comprobada en el árbol local. Evidencia reutilizada de
-implementación: 200 pruebas Vitest (22 archivos), incluidas 14 de páginas OAuth y
-pruebas de copia/agrupación de botones; lint/build correctos con aviso de bundle
->500 kB. Esta sincronización no repitió pruebas ni hizo revisión visual responsive,
-portapapeles real, contraste o lector de pantalla. No se declara cumplimiento WCAG
-ni despliegue de fase 2. La comprobación histórica de `whoami` en OpenCode Desktop
-no valida `get_task`. [Checklist manual](../docs/prueba-mcp.md).
+La autorización conjunta y la vista de permisos corresponden al código local; no
+hay evidencia de publicación de esta UI, `202610290001` ni Edge `0.3.0`. Se reutiliza
+evidencia local: 17 pruebas DOM OAuth dentro de 203 Vitest, Deno/SQL local, lint y
+build correctos. Esta sincronización no repitió pruebas ni hizo revisión responsive,
+contraste o lector de pantalla. No se declara conformidad WCAG ni E2E OAuth/Storage.
+[Checklist y estado](../docs/prueba-mcp.md).
 
 ### Evidencia posterior a la revisión estática
 

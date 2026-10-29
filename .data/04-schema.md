@@ -1,8 +1,49 @@
 # Schema de persistencia Supabase
 
-La persistencia es PostgreSQL gestionado fuera de la SPA. `supabase-schema.sql` es el bootstrap completo; `supabase/migrations/` contiene cambios incrementales. Fase 2 local agrega `202610280003_mcp_task_read.sql` y sus objetos al bootstrap; no se ha verificado su aplicación remota. Sesiones y clientes OAuth pertenecen al schema administrado `auth`; la nueva tabla de permisos es del producto.
+La persistencia es PostgreSQL gestionado fuera de la SPA. `supabase-schema.sql` es el bootstrap completo; `supabase/migrations/` contiene cambios incrementales. La lectura por sesión de `202610280003_mcp_task_read.sql` sí figura en la evidencia remota del 2026-10-29. La migración local `202610290001_mcp_workflow.sql` añade consentimiento conjunto, lectura de adjuntos y acciones de tarea; **no hay evidencia de que esté aplicada o desplegada remotamente**. Sesiones, OAuth clients/consents/authorizations pertenecen al schema administrado `auth`; las tablas workflow son del producto.
 
-Última evidencia remota registrada de fase 1 (2026-10-28, no repetida aquí): `202610280002` se ejecutó transaccionalmente y `tests/mcp_identity.sql` pasó con `ROLLBACK`. El ledger enumeraba `202610190001`, `202610200001`, `202610200002`, `202610210001`, `202610220001` y `202610280002`, pero el schema incluía cambios de `202610220002`, `202610280001` y algunas policies de `202610260003`. No se encontraron la policy de renombrado `202610260001` ni la RPC `202610260002`. No inferir migraciones aplicadas por objetos ni ejecutar `db push` a ciegas. [Preparación de fase 2](../docs/prueba-mcp.md); `supabase/README.md` conserva una guía anterior, no sustituye esta discrepancia.
+Baseline de producto: `c2677c9b9084e3a56b6db36a1783c5d722e82780` (`v0.12.1`).
+Actualización focalizada del 2026-10-29 con evidencia de la operación previa en
+esta sesión; no se consultó de nuevo Supabase durante la edición documental.
+
+Ledger tras activar fase 2: `202610190001`, `202610200001`, `202610200002`,
+`202610210001`, `202610220001`, `202610280002`, **`202610280003`**. El inventario
+histórico del día 28 observó objetos de `202610220002`, `202610280001` y algunas
+policies de `202610260003` sin esas entradas; no encontró la policy de renombrado
+`202610260001` ni la RPC `202610260002`. La activación del día 29 no resuelve esa
+discrepancia ni certifica las migraciones históricas como aplicadas. No inferir
+aplicación registrada por presencia de objetos ni ejecutar `db push` a ciegas.
+Detalle operativo: [Supabase](../supabase/README.md); [registro de fase 2](../docs/prueba-mcp.md#8-registro-de-resultados-sin-secretos).
+
+La nueva `202610290001_mcp_workflow.sql` es local y posterior a ese ledger
+documentado; no se ha aplicado ni verificado en remoto. No inferir despliegue del
+hecho de estar también en `supabase-schema.sql`, que solo sirve como bootstrap de
+instalación nueva.
+
+## Comprobación remota de fase 2 — 2026-10-29
+
+- Se inspeccionaron ledger, definiciones, columnas, grants, policies y precondiciones
+  de tareas/tableros y `auth.sessions`/`auth.oauth_clients` antes de aplicar SQL.
+- Un directorio temporal contenía el historial remoto descargado y una copia
+  idéntica de la nueva migración. El dry-run seleccionó solo `202610280003`; se
+  aplicó sin roles/seeds ni actualización de Vault. No se modificó el ledger como
+  atajo ni se reaplicaron migraciones históricas, y se comprobó el registro posterior.
+- `mcp_task_read_permissions` quedó con RLS, PK/FK de sesión y FK de perfil con
+  cascada, sin grants cliente/MCP. La comprobación de privilegios confirmó que
+  `mcp_identity` puede ejecutar `mcp_get_task`, pero no consultar directamente tareas
+  ni Storage ni ejecutar `mcp_set_task_read_access`. `authenticated` puede gestionar
+  consentimiento, no ejecutar la RPC de lectura MCP.
+- `mcp_task_read.sql` y `mcp_identity.sql` remotas pasaron con fixtures revertidos.
+  Cubren datos/páginas, roles usuario/invitado/admin, membresía frente a asignación,
+  estados inactivos, expiración/revocación, consentimiento retirado manteniendo
+  identidad, sesión nueva sin herencia y eliminación del permiso por cascada.
+- La comprobación posterior no encontró cuentas/clientes/tableros de prueba
+  residuales, conservó la audiencia canónica y registró cero permisos de lectura.
+  No se concedió lectura automáticamente a conexiones reales para forzar el E2E.
+
+Esta evidencia SQL no acredita OAuth/consentimiento desde navegador, catálogo MCP
+renovado, consulta real de `get_task` ni firma/descarga de Storage. No ampliar su
+alcance a otras migraciones, entornos o configuración de seguridad completa.
 
 ## Modelo relacional
 
@@ -84,9 +125,31 @@ erDiagram
     boolean singleton PK
     text resource_url
   }
+  MCP_WORKFLOW_PERMISSIONS {
+    uuid consent_id PK
+    uuid profile_id FK
+    uuid client_id
+    timestamptz consent_granted_at
+    text_array permissions
+    timestamptz granted_at
+  }
+  MCP_TASK_OPERATIONS {
+    uuid task_id PK
+    uuid profile_id PK
+    uuid client_id PK
+    uuid request_id PK
+    text action
+    jsonb payload
+    jsonb result
+    timestamptz created_at
+  }
 ```
 
-Fuente: `supabase-schema.sql` y `supabase/migrations/202610210001_boards.sql:4-22`, `supabase/migrations/202610220002_board_lifecycle.sql:5`.
+`MCP_WORKFLOW_PERMISSIONS.consent_id` referencia `auth.oauth_consents(id)`; la
+relación externa administrada por Supabase no se dibuja como tabla de producto.
+`MCP_TASK_OPERATIONS` usa clave compuesta `(task_id, profile_id, client_id, request_id)`
+y elimina operaciones por cascada al borrar tarea/perfil. Fuente: `supabase-schema.sql`
+y `supabase/migrations/202610290001_mcp_workflow.sql:4-13,195-207`.
 
 ## Enumeraciones y reglas de persistencia
 
@@ -189,13 +252,14 @@ La API cliente enumera metadata/paths y elimina objetos de Storage antes de invo
 
 ## Role, hook y persistencia auxiliar del MCP
 
-El MCP no agrega columnas de negocio a `profiles`. Declara configuración de recurso
-y, en fase 2, una tabla de consentimiento por sesión. Usa `auth.sessions` para
-comprobar revocación/expiración:
+El MCP no agrega columnas de negocio a `profiles`. Declara configuración de recurso,
+lectura por sesión legacy y, en la migración local no desplegada, permiso workflow
+por consentimiento OAuth y recibos de mutación. `mcp_whoami()` sigue comprobando
+sesión/revocación en `auth.sessions`:
 
 | Objeto | Propósito y permisos | Fuente |
 | --- | --- | --- |
-| Rol SQL `mcp_identity` | `NOLOGIN NOINHERIT`; no hereda roles privilegiados ni tiene grants de tablas/vistas/Storage. Fase 2 permite `mcp_whoami()` y `mcp_get_task(...)`, no RPCs de escritura ni de autoautorización | `supabase/migrations/202610280002_mcp_identity.sql:4-10,73-109`, `202610280003_mcp_task_read.sql:39-40,60-61,115-116` |
+| Rol SQL `mcp_identity` | `NOLOGIN NOINHERIT`; no hereda roles privilegiados ni tiene grants de tablas/vistas/Storage. El código local permite `mcp_whoami`, `mcp_get_task`, `mcp_get_attachment` y `mcp_work_task`; no tiene RPC de grants/gestión OAuth | `supabase/migrations/202610280002_mcp_identity.sql:4-10,73-109`, `202610280003_mcp_task_read.sql:115-116`, `202610290001_mcp_workflow.sql:192-193,293-294` |
 | `public.mcp_oauth_configuration` | Singleton `{ singleton: true, resource_url: text }`; RLS activado y sin grants cliente/MCP. La URL debe coincidir byte a byte con JWT `aud` | `supabase/migrations/202610280002_mcp_identity.sql:12-21` |
 | `public.mcp_access_token_hook(event jsonb)` | Auth la ejecuta como `supabase_auth_admin`. Tokens ordinarios salen inalterados; OAuth requiere un perfil activo y recibe `client_id`, `role=mcp_identity`, `aud=resource_url` | `supabase/migrations/202610280002_mcp_identity.sql:23-45` |
 | `public.mcp_whoami()` | `SECURITY DEFINER`, path vacío; requiere rol, cliente y audiencia MCP, sesión vigente en `auth.sessions` con el mismo usuario/cliente y perfil `is_active`. Devuelve identidad, no acceso general a datos | `supabase/migrations/202610280002_mcp_identity.sql:47-74` |
@@ -203,18 +267,27 @@ comprobar revocación/expiración:
 | `mcp_task_read_permissions` | `session_id uuid` PK/FK `auth.sessions(id)` con `ON DELETE CASCADE`; `profile_id uuid` FK `profiles(id)` con cascada; `client_id uuid not null`; `granted_at timestamptz not null default now()`. RLS, sin grants cliente/MCP; índice `(profile_id, client_id)` | `supabase/migrations/202610280003_mcp_task_read.sql:4-12` |
 | `mcp_set_task_read_access(uuid, boolean)` | Solo portal `authenticated` sin `client_id`, perfil activo. Autoriza sesiones vivas propias del cliente indicado o elimina sus permisos. No autoriza sesiones futuras | `supabase/migrations/202610280003_mcp_task_read.sql:16-40` |
 | `mcp_list_task_read_access()` | Solo portal activo; agrupa sesiones propias vivas por cliente. `enabled=bool_or(permiso)` y `needs_authorization=bool_or(sin permiso)`; no expone IDs de sesión | `supabase/migrations/202610280003_mcp_task_read.sql:42-61` |
-| `mcp_get_task(uuid, integer, integer, integer)` | Solo rol MCP; identidad/sesión, consentimiento y acceso por membresía/admin explícitos. SQL estable, `SECURITY DEFINER`, path vacío. Proyecciones y páginas, sin escrituras | `supabase/migrations/202610280003_mcp_task_read.sql:63-116` |
+| `mcp_workflow_permissions` (local) | `consent_id` PK/FK a `auth.oauth_consents(id)` con cascada; perfil, cliente, fecha de concesión y subset de cinco permisos. RLS sin grants directos; cada consulta compara consentimiento activo/fecha | `supabase/migrations/202610290001_mcp_workflow.sql:4-13,110-120` |
+| `mcp_task_operations` (local) | Clave `(task_id, profile_id, client_id, request_id)`; almacena acción, payload, recibo y timestamp para deduplicar/reintentar; cascada por tarea/perfil, RLS y sin grants directos | `supabase/migrations/202610290001_mcp_workflow.sql:195-207,235-243,287-294` |
+| `mcp_authorize_workflow(text)` / `mcp_workflow_authorization_details(text)` | Solo portal `authenticated` activo; valida solicitud Auth aprobada y propiedad del usuario. Un RPC añade cinco permisos; el otro devuelve metadata de consentimiento sin authorization code | `supabase/migrations/202610290001_mcp_workflow.sql:15-66` |
+| `mcp_list_workflow_access()` / `mcp_revoke_workflow_permission(uuid,text)` | Solo portal activo; lista permisos de grants y compatibilidad con lectura legacy, o retira un permiso/todos sin revocar identidad OAuth | `supabase/migrations/202610290001_mcp_workflow.sql:68-107` |
+| `mcp_get_task(uuid, integer, integer, integer)` | En SQL local, identidad/permisos, membresía/admin y asignación; estados permitidos `backlog`, `por_hacer`, `haciendo`. No admin necesita tablero activo. Páginas de tareas/comentarios/adjuntos; metadata file URL se omite si no tiene permiso adjunto | `supabase/migrations/202610290001_mcp_workflow.sql:122-177`; despliegue remote histórico de base `202610280003_mcp_task_read.sql:63-116` |
+| `mcp_get_attachment(uuid,uuid)` | Revalida acceso a tarea, asignación, estado y permiso de adjuntos; devuelve metadata solo del adjunto de esa tarea. Edge firma/descarga en servidor, no concede Storage directo | `supabase/migrations/202610290001_mcp_workflow.sql:179-193`, `supabase/functions/mcp/workflow.ts:28-103` |
+| `mcp_work_task(uuid,text,uuid,timestamptz,jsonb)` | Solo rol MCP; tres acciones allowlist, permiso por acción, asignación, estado, bloqueo de filas y `updated_at`; transiciones acotadas, comentario y recibo idempotente | `supabase/migrations/202610290001_mcp_workflow.sql:209-294` |
 
 `mcp_identity` es un rol de conexión Postgres, **no** un valor adicional de
 `profiles.role`. El hook opera sobre cualquier cliente OAuth del proyecto, no sólo
 MCP; no sustituir un hook anterior ni habilitar el patrón en proyectos con otros
 clientes OAuth sin revisar el efecto global.
 
-La nueva migración presupone la fase 1, tablas/relaciones de tareas y tableros,
-`boards.is_active` y el esquema OAuth de Supabase. El bootstrap incluye fase 1 y
-fase 2 para instalaciones nuevas; no se reejecuta sobre una base existente. Los
-probes locales revierten fixtures, pero **la migración sí crea objetos persistentes**
-al aplicarla. No ejecutar el harness simulado contra un proyecto Supabase.
+`202610290001` presupone las fases previas, tablas/relaciones de tareas y tableros,
+`boards.is_active`, `mcp_task_read_permissions` y `auth.oauth_consents`/
+`auth.oauth_authorizations`. El bootstrap incluye los objetos para instalaciones
+nuevas; no se reejecuta sobre una base existente. La nueva migración SQL local y los
+probes locales pasaron PostgreSQL 16 desechable en rutas incremental y bootstrap,
+con Auth/Storage simulados, fixtures revertidos y concurrencia/idempotencia probadas.
+**No se aplicó ni verificó en Supabase remoto.** Los probes crean objetos persistentes
+si se aplica la migración; nunca ejecutar `mcp_harness.sql` contra Supabase.
 
 ## Storage
 
@@ -229,11 +302,14 @@ La carga de avatar usa `avatars/<profile-id>/avatar` con `upsert`; después actu
 
 El cliente obtiene URLs firmadas de 60 segundos para detalle y miniaturas, refrescando cada 45 segundos. La metadata aún almacena `getPublicUrl`, pero no se usa directamente para mostrar el archivo; persiste la diferencia representacional D-02. El path nuevo `<taskId>/<UUID>.<ext>` y borrado comprobado alinean nuevas cargas; la policy también resuelve paths planos legacy vía metadata. La migración marca `task-attachments` privado. El cambio del nombre visible invalida la lista de adjuntos y las miniaturas, sin modificar el objeto. El contenido ya descargado o enlaces firmados ya emitidos no pueden revocarse retroactivamente.
 
-MCP fase 2 no concede acceso Storage al rol OAuth: Edge firma con credencial solo
-servidor después de la RPC autorizada. Su validador requiere origen Supabase exacto,
-bucket esperado y path de dos segmentos `<task-id>/<archivo>`; no firma paths legacy,
-de otras tareas, hosts ni buckets. Esos adjuntos se listan con `download_error`.
-Fuentes: `supabase/functions/mcp/index.ts:72-84`, `supabase/functions/mcp/task.ts:49-92`.
+MCP no concede acceso Storage directo al rol OAuth: Edge firma con credencial solo
+servidor después de RPC autorizada. El validador requiere origen Supabase exacto,
+bucket esperado y path de dos segmentos `<task-id>/<archivo>`; no firma rutas legacy,
+de otras tareas, hosts ni buckets. En `read_task_attachment`, servidor descarga un
+máximo de 5 MiB, sin redirects, con timeout de 15 s; soporta texto UTF-8 e imágenes
+PNG/JPEG/GIF/WebP. Otros formatos reciben un enlace de 60 s y advertencia, no se
+declaran interpretados. Fuentes: `supabase/functions/mcp/workflow.ts:28-103`,
+`supabase/functions/mcp/task.ts:49-92`.
 
 ## Vistas
 
