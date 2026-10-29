@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "dashboardFurthurr": {
+      "type": "http",
+      "url": "https://uujxatuuktccwkvavksr.supabase.co/functions/v1/mcp"
+    }
+  }
+}

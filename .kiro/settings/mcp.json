@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "dashboardFurthurr": {
+      "url": "https://uujxatuuktccwkvavksr.supabase.co/functions/v1/mcp",
+      "oauthScopes": ["email", "profile"],
+      "disabled": false,
+      "disabledTools": []
+    }
+  }
+}

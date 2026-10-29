@@ -98,14 +98,11 @@ Se comprobaron las rutas públicas, metadatos MCP/Auth, desafío 401 y retorno 3
 con un ID opaco de 32 caracteres. El probe `mcp_identity.sql` pasó en Supabase real
 y revirtió sus fixtures. Los conteos de perfiles, tareas y tableros no cambiaron.
 
-OpenCode CLI 1.18.34 completó discovery y DCR como cliente público sin secreto.
-El intento interactivo de `opencode mcp auth furthurr` abrió el flujo, pero terminó
-por timeout sin completar el login. **No se ha validado todavía `whoami` con una
-sesión OAuth real, ni renovación/revocación end-to-end ni OpenCode Desktop.**
-El archivo `opencode.json` del proyecto configura la URL sin credenciales. Reinicia
-OpenCode Desktop para cargarlo y autoriza la conexión desde su interfaz; como
-alternativa ejecuta `opencode mcp auth furthurr` en tu terminal y completa el login
-en el navegador. No copies contraseñas ni tokens al chat.
+OpenCode Desktop ejecutó correctamente la herramienta `furthurr_whoami` y el usuario
+confirmó que recibió su identidad. Después el alias de cliente cambió a
+`dashboardFurthurr`; el `opencode.json` local usa ese nombre. CLI OAuth, renovación
+y revocación end-to-end siguen pendientes de validación. No copies contraseñas ni
+tokens al chat.
 
 ## Clientes
 
@@ -115,14 +112,14 @@ instalan configuraciones automáticamente en el equipo del usuario.
 
 | Cliente | Configuración orientativa | Estado |
 | --- | --- | --- |
-| OpenCode Desktop/CLI | `mcp.furthurr = {"type":"remote","url":"https://PROJECT_REF.supabase.co/functions/v1/mcp"}` | HTTP/OAuth documentados; sin prueba real por variante. |
-| Kiro IDE/CLI | `mcpServers.furthurr = {"url":"https://PROJECT_REF.supabase.co/functions/v1/mcp","oauthScopes":["email","profile"]}` | HTTP/OAuth documentados en ambas superficies; sin prueba real. Los scopes explícitos minimizan la solicitud de identidad. |
-| Copilot en VS Code | `servers.furthurr = {"type":"http","url":"https://PROJECT_REF.supabase.co/functions/v1/mcp"}` en formato VS Code | Transporte documentado; OAuth/end-to-end pendientes para versión instalada. |
-| Copilot CLI | `mcpServers.furthurr = {"type":"http","url":"https://PROJECT_REF.supabase.co/functions/v1/mcp","tools":["whoami"]}` | HTTP documentado; OAuth/end-to-end pendientes. No lee el formato `servers` de VS Code. |
-| Antigravity App/IDE/CLI | `mcpServers.furthurr = {"serverUrl":"https://PROJECT_REF.supabase.co/functions/v1/mcp"}` | HTTP/OAuth documentados; sin prueba real por variante. |
+| OpenCode Desktop/CLI | `mcp.dashboardFurthurr = {"type":"remote","url":"https://PROJECT_REF.supabase.co/functions/v1/mcp"}` | Desktop invocó `whoami` con el alias anterior `furthurr`; el alias actualizado puede requerir reautorización. CLI/end-to-end pendiente. |
+| Kiro IDE/CLI | `mcpServers.dashboardFurthurr = {"url":"https://PROJECT_REF.supabase.co/functions/v1/mcp","oauthScopes":["email","profile"]}` | HTTP/OAuth documentados; config de proyecto en `.kiro/settings/mcp.json`, sin prueba real. |
+| Copilot en VS Code | `servers.dashboardFurthurr = {"type":"http","url":"https://PROJECT_REF.supabase.co/functions/v1/mcp"}` | Config de proyecto en `.vscode/mcp.json`; OAuth/end-to-end depende del harness/versión y queda sin probar. |
+| Copilot CLI | `mcpServers.dashboardFurthurr = {"type":"http","url":"https://PROJECT_REF.supabase.co/functions/v1/mcp"}` | Config de proyecto en `.mcp.json`; OAuth/end-to-end queda sin probar. No usa el formato VS Code `servers`. |
+| Antigravity App/IDE/CLI | `mcpServers.dashboardFurthurr = {"serverUrl":"https://PROJECT_REF.supabase.co/functions/v1/mcp","enabledTools":["whoami"]}` | Config de proyecto en `.agents/mcp_config.json`; HTTP/OAuth documentados, sin prueba real. |
 | Claude Desktop | Conector personalizado remoto desde Configuración → Conectores. Elegir registro automático o cliente previamente registrado. | Documentado; requiere URL pública accesible desde la nube de Anthropic. Sin prueba real. |
-| Claude Code CLI | `claude mcp add --transport http furthurr https://PROJECT_REF.supabase.co/functions/v1/mcp`, luego `/mcp` | HTTP/OAuth documentados; sin prueba real. |
-| Pi | Pendiente identificar versión/extensión MCP concreta. | No se afirma soporte nativo ni edición Desktop. No se instala un adaptador no verificado. |
+| Claude Code CLI | `claude mcp add --transport http dashboardFurthurr https://PROJECT_REF.supabase.co/functions/v1/mcp`, luego `/mcp` | Config de proyecto compartida `.mcp.json`; OAuth documentado, sin prueba real. |
+| Pi coding agent CLI | `pi mcp login dashboardFurthurr` | Pi 0.99.2 documenta HTTP Streamable y OAuth/DCR; config de proyecto `.pi/mcp.json`, sin prueba real. Pi no es una aplicación Desktop. |
 
 Estos fragmentos se integran en el objeto de configuración del cliente, no son
 archivos completos intercambiables. Las políticas de organización/versiones pueden

@@ -97,7 +97,7 @@ export function createHandler(config: Config, dependencies?: {
       if (error instanceof AccessError && error.status === 401) return unauthorized()
       return reply(error instanceof AccessError ? error.status : 503, { error: 'No se pudo verificar el acceso a Furthurr.' })
     }
-    const server = new McpServer({ name: 'furthurr', version: '0.1.0' })
+    const server = new McpServer({ name: 'dashboardFurthurr', version: '0.1.0' })
     server.registerTool('whoami', {
       title: 'Mi identidad en Furthurr',
       description: 'Identifica tu cuenta activa de Dashboard Furthurr. No consulta ni modifica tableros o tareas.',

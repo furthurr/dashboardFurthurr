@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dashboardFurthurr": {
+      "type": "http",
+      "url": "https://uujxatuuktccwkvavksr.supabase.co/functions/v1/mcp",
+      "exposure": "direct",
+      "description": "Identifica la cuenta activa de Dashboard Furthurr con whoami.",
+      "timeout": 30
+    }
+  }
+}

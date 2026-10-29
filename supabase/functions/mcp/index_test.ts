@@ -64,6 +64,8 @@ Deno.test('MCP initialize, tools/list and whoami expose identity only, with no c
   const handle = createHandler(config, { verify: verifier, identify: async () => { calls++; return identity } })
   const initialize = await handle(request('POST', rpc('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'fixture', version: '1' } }), token))
   assert(initialize.status === 200)
+  const initialized = await initialize.json()
+  assert(initialized.result.serverInfo.name === 'dashboardFurthurr')
   const tools = await (await handle(request('POST', rpc('tools/list'), token))).json()
   assert(tools.result.tools.length === 1 && tools.result.tools[0].name === 'whoami')
   const result = await (await handle(request('POST', rpc('tools/call', { name: 'whoami', arguments: {} }), token))).json()
