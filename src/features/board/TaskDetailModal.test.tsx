@@ -45,6 +45,26 @@ describe('Traslado de tareas entre tableros', () => {
   })
 })
 const base = { task, comments: [], attachments: [], isOpen: true, onClose: vi.fn() }
+
+describe('ID de tarea en el detalle', () => {
+  it('muestra el UUID y permite copiarlo desde cualquier pestaña sin permiso de edición', async () => {
+    const user = userEvent.setup()
+    const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+    const close = vi.fn()
+    render(<TaskDetailModal {...base} onClose={close} />)
+
+    for (const tab of ['Detalles', 'Comentarios (0)', 'Adjuntos (0)']) {
+      await user.click(screen.getByRole('tab', { name: tab }))
+      expect(screen.getByText(task.id)).toBeVisible()
+      await user.click(screen.getByRole('button', { name: `Copiar ID de ${task.title}` }))
+      expect(write).toHaveBeenLastCalledWith(task.id)
+    }
+    expect(write).toHaveBeenCalledTimes(3)
+    expect(close).not.toHaveBeenCalled()
+    write.mockRestore()
+  })
+})
+
 const attachment: TaskAttachment = {
   id: 'attachment-1', task_id: task.id, uploaded_by: 'uploader-1', file_name: 'contrato.pdf',
   file_url: 'https://project.example/task-attachments/task-1/uuid.pdf', signed_url: 'https://signed.example/contrato',

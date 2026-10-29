@@ -8,6 +8,7 @@ import { CommentsList } from './CommentsList'
 import { AttachmentsList } from './AttachmentsList'
 import { AssigneePicker, type AssigneeOptions } from './AssigneePicker'
 import { getClipboardImages } from './clipboardImages'
+import { CopyTaskId } from './CopyTaskId'
 
 type Operation = void | Promise<unknown>
 interface TaskDetailModalProps {
@@ -164,6 +165,9 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
   return (
     <Dialog title="Detalle de tarea" onClose={onClose} busy={busy} onPaste={handlePaste}>
       <Toast notice={notice} onClose={dismissNotice} />
+      <div className="px-6 py-3">
+        <CopyTaskId taskId={task.id} taskTitle={task.title} showId />
+      </div>
       <div role="tablist" aria-label="Contenido de la tarea" className="task-tabs">
         {tabs.map((tab, index) => (
           <button key={tab} type="button" role="tab" id={`${id}-${tab}-tab`}

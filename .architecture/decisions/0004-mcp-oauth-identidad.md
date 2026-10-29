@@ -1,6 +1,6 @@
 # ADR 0004: MCP remoto OAuth limitado a identidad
 
-- Estado: Aceptada
+- Estado: Aceptada para fase 1; ampliada localmente por [ADR 0005](0005-mcp-lectura-tareas.md). Se conserva como registro histórico, no como catálogo actual de herramientas.
 - Fecha: 2026-10-28
 
 ## Contexto

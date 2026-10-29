@@ -36,8 +36,9 @@ No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge
 ## MCP remoto — servidor `dashboardFurthurr`
 
 Endpoint del recurso: `https://<project-ref>.supabase.co/functions/v1/mcp`.
-El transporte es Streamable HTTP stateless; el servidor anuncia una sola
-herramienta, `whoami`, sin recursos MCP ni herramientas de negocio.
+El transporte es Streamable HTTP stateless. La fase 2 local anuncia `whoami` y
+`get_task` con `serverInfo.version=0.2.0`; no registra recursos MCP ni herramientas
+de escritura. No se ha verificado su despliegue remoto. [Guía de prueba](../docs/prueba-mcp.md).
 
 ### Protected Resource Metadata — `GET {resource}/oauth-protected-resource`
 
@@ -67,8 +68,8 @@ herramienta, `whoami`, sin recursos MCP ni herramientas de negocio.
 ### Herramienta de identidad — `tools/call` `whoami`
 
 - Propósito: identificar al perfil activo asociado al token MCP y al cliente OAuth.
-- Request JSON-RPC: `tools/call` con `name: "whoami"` y argumentos vacíos. No hay
-  operaciones que acepten IDs de tableros/tareas u otros datos de usuario.
+- Request JSON-RPC: `tools/call` con `name: "whoami"` y argumentos vacíos. La consulta
+  de tarea se realiza mediante la herramienta separada `get_task`.
 - Response: objeto estructurado `id`, `email`, `full_name`, `role`, `client_id`;
   contrato JSON Schema en [`contracts/mcp-whoami.schema.json`](contracts/mcp-whoami.schema.json).
   Email, nombre e identificadores son PII y pasan al contexto del agente.
@@ -78,9 +79,52 @@ herramienta, `whoami`, sin recursos MCP ni herramientas de negocio.
   `search_path = ''` y valida estado activo, audience, client y sesión en cada call.
 - Respuestas de denegación: token ausente/inválido/revocado → 401; perfil inactivo
   o autorización insuficiente → 403; error de persistencia inesperado → 503. El
-  server no reenvía el bearer a otro servicio ni usa `service_role`.
-- Fuente: `supabase/functions/mcp/index.ts:23-35,47-58,90-115`,
+  flujo de identidad no usa privilegios `service_role`; la firma de adjuntos de
+  `get_task` es una operación exclusivamente servidor separada.
+- Fuente: `supabase/functions/mcp/index.ts:24-61,114-130`,
   `supabase/migrations/202610280002_mcp_identity.sql:47-74`.
+
+### Consultar tarea — `tools/call` `get_task`
+
+Implementación local en `supabase/functions/mcp/index.ts:131-154` y
+`supabase/functions/mcp/task.ts:13-32,49-92`.
+
+| Argumento | Tipo / valor por defecto | Validación |
+| --- | --- | --- |
+| `task_id` | UUID string, obligatorio | Formato GUID; se normaliza a minúsculas |
+| `comments_offset` | integer, `0` | 0–2147483547 |
+| `attachments_offset` | integer, `0` | 0–2147483547 |
+| `page_size` | integer, `50` | 1–100, compartido por ambas páginas |
+
+El objeto es estricto: no acepta campos extra, paths ni URLs proporcionadas por
+el cliente. Los esquemas de entrada/salida se anuncian en `tools/list`.
+
+- **Auth:** bearer OAuth validado y `mcp_whoami()` previo. La RPC `mcp_get_task`
+  revalida identidad y exige permiso en `mcp_task_read_permissions` para esa
+  sesión/usuario/cliente. No admin necesita membresía en tablero activo; admin
+  activo puede leer también tableros inactivos. Asignación sola no basta.
+- **Respuesta:** `task`, `board`, `assignees`, `comments`, `attachments`. Se devuelve
+  como `structuredContent` y JSON en `content[type=text]`. Ver [modelos](02-models.md).
+- **Paginación:** comentarios y adjuntos tienen `total`, `offset`, `next_offset`
+  (integer o `null`) e `items`. Se ordenan por `created_at, id`. El cliente debe
+  recorrer ambas continuaciones; no hay bucle automático del servidor ni snapshot
+  entre peticiones. Una colección vacía es `[]`, no `null`.
+- **Archivos:** metadatos más `download_url`, `expires_at`, `download_error`.
+  Solo se firman rutas de esa tarea bajo el origen/bucket esperado, por 60 s;
+  se elimina `file_url` de la salida. Error individual deja URL/expiración nulas y
+  metadata visible. Legacy, fallo de Storage o límite de tiempo no provocan una
+  firma privilegiada de una ruta arbitraria. No se interpreta contenido binario.
+- **Errores de herramienta:** `isError: true` y texto seguro, sin `structuredContent`.
+  `PT403` pide autorizar lectura; `PT404` → «Tarea no disponible o sin acceso» para
+  ausencia o falta de permisos; `22023` → consulta inválida; `28000` → sesión
+  revocada/caducada; `42501` → acceso no activo. Otros errores son genéricos.
+  Un UUID/paginación inválido puede ser rechazado antes por el SDK MCP. Los HTTP
+  401/403/503 del control de identidad son distintos de `isError` de la herramienta.
+- **Privilegios:** lectura SQL con bearer del usuario en RPC propia; firma
+  exclusivamente servidor con `SUPABASE_SERVICE_ROLE_KEY` tras validar el path.
+  Rol OAuth sin SELECT de tablas/Storage ni RPCs de escritura. Respuestas
+  `Cache-Control: no-store`. Los textos retornados son datos no confiables.
+- **Fuente SQL:** `supabase/migrations/202610280003_mcp_task_read.sql:63-116`.
 
 ### Consentimiento y concesiones OAuth
 
@@ -90,10 +134,20 @@ herramienta, `whoami`, sin recursos MCP ni herramientas de negocio.
   permite HTTPS o loopback HTTP del cliente público.
 - Gestión: `/profile/connections` lista grants y permite `revokeGrant(clientId)`;
   Auth elimina sesiones del cliente y `mcp_whoami()` vuelve a comprobar la sesión.
+- Lectura adicional: el portal confirma `mcp_set_task_read_access(p_client_id,
+  p_enabled)` con su sesión `authenticated` ordinaria. `true` autoriza todas las
+  sesiones OAuth vivas actuales del mismo usuario/cliente; `false` retira sus
+  permisos sin revocar identidad. Nuevas sesiones no heredan el permiso.
+- `mcp_list_task_read_access()` devuelve `{ client_id, enabled,
+  needs_authorization }[]`: `enabled` significa que **alguna** sesión viva tiene
+  lectura y `needs_authorization` que **alguna** no la tiene. Pueden ser ambos
+  `true`; la UI permite retirar todas o confirmar autorización de sesiones nuevas.
+  Ninguna RPC de gestión se concede a `mcp_identity`, ni expone IDs de sesión.
 - Scopes `email`/`profile` determinan claims de identidad; **no son permisos de base
   de datos**. El aislamiento real está en el rol SQL dedicado y grants/policies.
 - Fuente: `src/App.tsx:11-16,39-42`, `src/features/auth/OAuthConsentPage.tsx:18-78`,
-  `src/features/auth/OAuthConnectionsPage.tsx:15-41`, `supabase/migrations/202610280002_mcp_identity.sql:23-74`.
+  `src/features/auth/OAuthConnectionsPage.tsx:14-108`, `src/features/auth/mcpTaskAccess.ts:3-17`,
+  `supabase/migrations/202610280003_mcp_task_read.sql:4-61`.
 
 ## PostgreSQL vía Supabase
 
@@ -101,9 +155,9 @@ herramienta, `whoami`, sin recursos MCP ni herramientas de negocio.
 
 - Propósito: obtener el catálogo de tableros visibles con el número de tareas pendientes. Sustituye a la lectura directa `boards.select`.
 - Request: sin parámetros; se invoca como `supabase.rpc('list_boards_with_pending_counts')`.
-- Response: una fila por tablero visible con `id`, `name`, `is_active`, `created_at` y `pending_count` (`bigint`). El cliente normaliza `pending_count` con `Number(...)` y convierte `is_active` con `Boolean(...)` (`src/features/boards/api.ts:5-18`).
+- Response local: `id`, `name`, `is_active`, `created_at`, `pending_count`, `my_pending_count` y `people` (proyección de ID/nombre/avatar); la ampliación de asignaciones está en `supabase/migrations/202610280001_board_assignment_access.sql:44-83`.
 - `pending_count` suma las tareas del tablero en estado `backlog`, `por_hacer` o `haciendo`; excluye `en_revision` y `finalizadas` (`supabase/migrations/202610220002_board_lifecycle.sql:71-85`).
-- Autorización: la RPC es `SECURITY DEFINER` con `search_path = ''` y aplica la misma visibilidad que RLS: admin activo ve todos los tableros (activos y desactivados); el resto de cuentas activas solo los tableros activos en los que es miembro. No expone membresías ni conteos de otros tableros.
+- Autorización del portal local: `SECURITY DEFINER`, path vacío; admin activo ve todos y el resto tableros activos por membresía **o asignación** (`supabase/migrations/202610280001_board_assignment_access.sql:73-83`). No crea membresías. `get_task` no usa esta ampliación: no admin requiere membresía explícita.
 - Errores: el error de Supabase se propaga; la pantalla distingue carga, error con reintento y catálogo vacío (`src/features/boards/BoardsPage.tsx:28-30`).
 - Fuente: `src/features/boards/api.ts:7-22`, `supabase/migrations/202610220002_board_lifecycle.sql:71-90`.
 

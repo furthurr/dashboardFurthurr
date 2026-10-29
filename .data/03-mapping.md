@@ -70,12 +70,33 @@ McpIdentity { id, email, full_name, role, client_id }
   `mcp_oauth_configuration.resource_url`.
 - El JWT `role=mcp_identity` es un rol de conexión Postgres aislado y distinto de
   `profiles.role`, que aparece en la respuesta como rol de producto.
-- La Edge Function no transforma ni reenvía el token a APIs de negocio; lo usa
-  únicamente para la RPC `mcp_whoami()`, que valida la sesión y proyecta campos de
-  perfil activo. La validación JWT en Deno y la comprobación de sesión en SQL son
-  controles complementarios.
+- La Edge Function usa el bearer solo en las RPCs del mismo recurso:
+  `mcp_whoami()` y, en fase 2, `mcp_get_task()`. No lo convierte en sesión del portal
+  ni lo reenvía a APIs ajenas. Firma JWT y sesión SQL son controles complementarios.
 - `McpIdentity` es PII (email/nombre/IDs) que el agente recibe en contexto. El
   contrato JSON Schema es [`contracts/mcp-whoami.schema.json`](contracts/mcp-whoami.schema.json).
 
 Fuente: `supabase/functions/mcp/index.ts:23-58,90-105`,
 `supabase/migrations/202610280002_mcp_identity.sql:23-74`.
+
+## UUID de tarjeta → MCP `get_task` (fase 2 local)
+
+1. `CopyTaskId` copia `Task.id` completo, sin prefijos, desde tarjeta o detalle.
+2. `taskInput` valida UUID/offsets/page size, rechaza campos extra y normaliza el
+   UUID a minúsculas. Edge compara además el ID retornado con el solicitado.
+3. RPC `mcp_get_task` revalida sesión, permiso de lectura y tablero; proyecta tarea,
+   tablero, nombres/IDs de asignados y autores, y páginas de comentarios/adjuntos.
+4. `rawTaskSchema.parse` valida el JSON de la RPC. `addDownloads` toma `file_url`
+   solo como metadata interna, valida origen/bucket/path de la tarea y pide firma
+   al cliente privilegiado exclusivamente servidor. No acepta URLs/paths del caller.
+5. El DTO final elimina `file_url`, agrega enlace/expiración o error por adjunto,
+   valida `taskOutput` y se devuelve como JSON de texto y `structuredContent`.
+
+La proyección pública no añade correos de terceros, ni transporta el bearer, ni
+interpreta archivos. No se mezclan estos DTOs con las queries/caché de TanStack.
+Los textos son datos de usuario; no instrucciones para el agente.
+
+Fuentes: `src/features/board/CopyTaskId.tsx:9-51`,
+`supabase/functions/mcp/index.ts:63-84,131-154`,
+`supabase/functions/mcp/task.ts:13-92`,
+`supabase/migrations/202610280003_mcp_task_read.sql:63-116`.

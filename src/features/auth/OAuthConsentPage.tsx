@@ -69,7 +69,7 @@ export function OAuthConsentPage() {
             <p className="text-sm">Dirección de retorno: {details.redirect_uri}</p>
             <p className="text-sm">Scopes solicitados: {details.scope || 'Predeterminados'}</p>
           </div>
-          <p>Esta fase permite consultar tu identidad (nombre, correo, identificador y rol). No permite consultar ni modificar tableros, tareas, comentarios, archivos o usuarios.</p>
+          <p>Esta conexión permite consultar tu identidad (nombre, correo, identificador y rol). No permite consultar tareas, comentarios o archivos sin una autorización adicional. Para habilitar get_task, autoriza expresamente la lectura de tareas en «Gestionar conexiones» después de conectar el cliente. No permite modificar datos.</p>
           <p className="text-sm text-[var(--color-text-muted)]">El nombre lo declara la aplicación; no acredita que sea de confianza. Revisa la dirección de retorno. Tu contraseña no se comparte con ella.</p>
           <div className="flex flex-wrap gap-3"><button className="ui-button ui-button--primary" disabled={busy} onClick={() => void decide(true)}>Autorizar conexión</button><button className="ui-button" disabled={busy} onClick={() => void decide(false)}>Denegar</button></div>
           <span role="status">{busy ? 'Completando autorización…' : ''}</span>

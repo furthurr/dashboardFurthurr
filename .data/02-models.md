@@ -1,6 +1,6 @@
 # Modelos y tipos
 
-Los tipos de aplicación viven en `src/types/index.ts`; el esquema SQL es `supabase-schema.sql`. Los tipos TypeScript se usan como declaraciones estáticas: no se encontró validación runtime de respuesta ni JSON Schema consumido por el cliente. Los casts de queries no validan ni completan campos.
+Los tipos del portal viven en `src/types/index.ts`; los casts de queries no validan ni completan campos. La excepción MCP fase 2 valida entrada/salida con Zod en `supabase/functions/mcp/task.ts:4-32`; la gestión de permisos del portal valida la proyección de la RPC en `src/features/auth/mcpTaskAccess.ts:3-17`. El esquema SQL es `supabase-schema.sql`.
 
 ## Enumeraciones
 
@@ -12,7 +12,10 @@ Los tipos de aplicación viven en `src/types/index.ts`; el esquema SQL es `supab
 
 ## `Board` y `board_members`
 
-- `Board`: `{ id: string, name: string, is_active: boolean, pending_count: number, created_at: string }`, corresponde a `public.boards` más el conteo derivado que añade la RPC de listado (`src/types/index.ts:33-39`).
+- `Board` local incluye `id`, `name`, `is_active`, `created_at`, `pending_count`,
+  `my_pending_count` y `people: BoardPerson[]` (ID, nombre, avatar). Los contadores y
+  personas son proyecciones de RPC, no columnas de `boards`
+  (`src/types/index.ts:33-43`, `supabase/migrations/202610280001_board_assignment_access.sql:44-83`).
 - `public.boards.name` es único sin distinguir mayúsculas (`boards_unique_name` sobre `lower(name)`), y valida nombre recortado de 1–120 caracteres (`supabase-schema.sql:576,580`).
 - `public.boards.is_active` es `boolean not null default true`; modela el ciclo de vida activo/desactivado sin borrar contenido al desactivar. Un admin puede borrar permanentemente un tablero solo después de desactivarlo, mediante `delete_inactive_board`; esta operación elimina sus tareas y datos relacionales (`supabase-schema.sql:577,727-739`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-21`).
 - `pending_count` **no es una columna**: es un valor calculado por la RPC `list_boards_with_pending_counts` y devuelto como `bigint`; el cliente lo normaliza a `number` (`src/features/boards/api.ts:5,15`).
@@ -52,6 +55,31 @@ cliente OAuth. No es el JWT ni una sesión completa y no se persiste como tabla.
 
 El JSON Schema completo está en [`contracts/mcp-whoami.schema.json`](contracts/mcp-whoami.schema.json). No incluye access/refresh token, `session_id`, tablas de negocio ni referencias a tableros.
 Fuente: `supabase/functions/mcp/index.ts:12-18,100-105`, `supabase/migrations/202610280002_mcp_identity.sql:65-71`.
+
+## `TaskInput`, `RawTask` y `TaskResult` — `get_task`
+
+Fuente ejecutable: `supabase/functions/mcp/task.ts:4-35`. Son DTOs propios del MCP,
+no casts a `TaskWithAssignees`. El catálogo detalla [argumentos y errores](01-endpoints.md).
+
+| Campo de salida | Forma observada |
+| --- | --- |
+| `task` | `id`, `title`, `description`, `status`, `priority`, `special_notes`, `created_at`, `updated_at`; descripción/notas/fechas admiten `null`. No incluye `created_by`, `board_id` ni `position` |
+| `board` | `{ id, name }` |
+| `assignees` | `{ id, full_name }[]`; schema admite personas con propiedades nulas; SQL usa perfiles existentes. No incluye email/rol/avatar |
+| `comments` | Página de `{ id, body, author: { id, full_name }, created_at, updated_at }`; author conserva objeto con campos nulos si falta perfil |
+| `attachments` | Página de `{ id, file_name, mime_type, file_size, created_at, download_url, expires_at, download_error }`; URL/expiración/error son nullable |
+| Página | `{ total, offset, next_offset, items }`; contadores/offsets enteros no negativos, `next_offset` nullable y `items` siempre array |
+
+`RawTask` es la respuesta SQL interna y lleva `file_url` por adjunto. `TaskResult`
+lo elimina y agrega los campos de descarga; el contrato no devuelve credenciales
+ni IDs de sesión. Un fallo de firma preserva la metadata y devuelve URL/expiración
+nulas con `download_error`. Los enlaces no son persistencia y caducan a los 60 s.
+Los esquemas se anuncian al cliente MCP; no hay un segundo JSON Schema generado
+en esta entrega documental.
+
+`TaskReadAccess`, usado solo por el portal: `{ client_id: string, enabled: boolean,
+needs_authorization: boolean }`; ambos booleanos pueden ser `true` en un conjunto
+mixto de sesiones. Fuente: `src/features/auth/mcpTaskAccess.ts:3-17`.
 
 ## `Task` y `TaskWithAssignees`
 

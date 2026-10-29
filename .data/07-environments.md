@@ -12,18 +12,22 @@ Solo servidor Edge, nunca en el build Vite:
 | Variable | Uso | Configuración |
 | --- | --- | --- |
 | `SUPABASE_URL` | Proyecto que usa `admin-users` | Entorno de funciones Supabase; `<project-url>` |
-| `SUPABASE_SERVICE_ROLE_KEY` | API administrativa/Auth y perfiles | Secreto del entorno servidor; `<server-secret>`, nunca `VITE_*` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Administración; MCP fase 2 la usa solo para firmar adjuntos autorizados/validados | Secreto del entorno servidor; `<server-secret>`, nunca `VITE_*`, cliente MCP ni documentación de valores |
 
 Fuente: `supabase/functions/admin-users/index.ts:20-23`. Los placeholders no representan valores desplegados.
 
-El MCP no usa `service_role`. La Edge Function necesita la clave publishable del
-proyecto como `SUPABASE_ANON_KEY` y el access token OAuth individual en el header
-de cada request; la consulta se ejecuta con `role=mcp_identity`.
+MCP consulta identidad/tareas con `SUPABASE_ANON_KEY` y bearer OAuth individual,
+con `role=mcp_identity`. Fase 2 agrega un cliente separado de firma que lee
+`SUPABASE_SERVICE_ROLE_KEY` exclusivamente en runtime Edge, después de autorizar
+la tarea y validar el path. Si no está disponible o falla Storage, la metadata
+se conserva con `download_error`; no se concede privilegio al rol OAuth.
+Fuente: `supabase/functions/mcp/index.ts:50-84`.
 
 | Variable/ajuste | Uso | Restricción |
 | --- | --- | --- |
 | `SUPABASE_URL` | URL de Auth/PostgREST/JWKS, inyectada en el runtime Edge | Mantener el issuer estándar del mismo proyecto |
 | `SUPABASE_ANON_KEY` | Clave publishable del proyecto para crear el cliente de la RPC | Sólo runtime Edge; no es privilegio ni reemplazo del bearer del usuario |
+| `SUPABASE_SERVICE_ROLE_KEY` | Firma de adjuntos por 60 s, exclusivamente servidor | No se lee/copia su valor para preparar el test; validar su disponibilidad mediante una descarga controlada en el entorno de prueba |
 | `MCP_RESOURCE_URL` | Audiencia canónica validada por el handler y `mcp_whoami()` | Debe coincidir exactamente con `mcp_oauth_configuration.resource_url`; HTTPS y la ruta `/functions/v1/mcp` |
 | `MCP_ALLOWED_ORIGINS` | Allowlist CORS de orígenes web si se requiere | Lista separada por comas; vacío no añade Origins de navegador |
 | Auth Site URL / Authorization Path | URL raíz de la SPA y path de consentimiento GoTrue | La SPA actual es Pages con HashRouter: Site URL al root publicado y Authorization Path `/`; GoTrue añade `authorization_id` como query |
@@ -35,6 +39,10 @@ sin un plan aparte de rotación de claves. DCR está activado para los clientes 
 
 ## Build/deploy observado
 
+- Fase 2 local requiere la migración `202610280003`, deploy de `mcp` y publicación
+  del portal de consentimiento; ninguno se ejecutó en esta sincronización. Ver
+  [guía de prueba](../docs/prueba-mcp.md). Los registros remotos siguientes son
+  evidencia histórica de fase 1, no una comprobación actual de `get_task`.
 - Instalación reproducible por `npm ci` y build mediante `npm run build` (`.github/workflows/deploy.yml:24-37`).
 - El build sube `dist` como artefacto de GitHub Pages (`.github/workflows/deploy.yml:39-53`).
 - El prefijo de hosting está fijado en `vite.config.ts:6-13`.

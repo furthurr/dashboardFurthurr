@@ -4,6 +4,7 @@ import { Dialog } from '@/shared/ui/Dialog'
 import { ProfileAvatar } from '@/shared/ui/ProfileAvatar'
 import { type TaskImagePreview } from './attachmentsApi'
 import { PRIORITY_COLORS } from './constants'
+import { CopyTaskId } from './CopyTaskId'
 
 interface TaskCardProps {
   task: TaskWithAssignees
@@ -98,8 +99,7 @@ export function TaskCard({
           </div>
         )}
 
-        {(task.assignees.length > 0 || onCommentClick) && (
-          <div className="mt-3 flex min-h-8 items-center justify-between gap-2">
+          <div className="mt-3 flex min-h-8 flex-wrap items-center justify-between gap-2">
             <div className="flex -space-x-2">
               {task.assignees.slice(0, 3).map((assignee, index) => (
                 <ProfileAvatar
@@ -117,6 +117,8 @@ export function TaskCard({
                 </div>
               )}
             </div>
+            <div className="ml-auto flex min-w-0 items-start gap-2">
+              <CopyTaskId taskId={task.id} taskTitle={task.title} />
             {onCommentClick && (
               <button
                 type="button"
@@ -126,9 +128,9 @@ export function TaskCard({
                 }}
                 aria-label={`Ver comentarios de ${task.title}${task.comment_count === undefined ? '' : ` (${task.comment_count} ${task.comment_count === 1 ? 'comentario' : 'comentarios'})`}`}
                 title={task.comment_count === undefined ? 'Ver comentarios' : `${task.comment_count} ${task.comment_count === 1 ? 'comentario' : 'comentarios'}`}
-                className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]"
+                className="ui-button ui-button--sm relative shrink-0"
               >
-                <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+                <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-9.5A7.5 7.5 0 0 1 10.5 4h2A7.5 7.5 0 0 1 20 11.5Z" />
                 </svg>
                 {task.comment_count !== undefined && task.comment_count > 0 && (
@@ -138,8 +140,8 @@ export function TaskCard({
                 )}
               </button>
             )}
+            </div>
           </div>
-        )}
 
         {task.special_notes && (
           <div className="mt-2 flex items-start gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-2 py-1.5 text-xs text-[var(--color-warning)] [overflow-wrap:anywhere]">

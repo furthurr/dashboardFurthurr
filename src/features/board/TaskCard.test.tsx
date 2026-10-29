@@ -34,6 +34,22 @@ beforeEach(() => vi.clearAllMocks())
 afterEach(cleanup)
 
 describe('TaskCard: apertura y movimiento independientes', () => {
+  it('copia el UUID desde una tarjeta sin asignados ni comentarios sin abrirla ni iniciar drag', async () => {
+    const user = userEvent.setup()
+    const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+    const onClick = vi.fn()
+    const uuid = '123e4567-e89b-42d3-a456-426614174000'
+    render(<SortableTaskCard task={{ ...task, id: uuid }} onClick={onClick} />)
+
+    await user.click(screen.getByRole('button', { name: `Copiar ID de ${task.title}` }))
+    expect(write).toHaveBeenCalledExactlyOnceWith(uuid)
+    expect(screen.getByRole('status')).toHaveTextContent('ID de tarea copiado')
+    expect(onClick).not.toHaveBeenCalled()
+    expect(sortable.onKeyDown).not.toHaveBeenCalled()
+    expect(sortable.onPointerDown).not.toHaveBeenCalled()
+    write.mockRestore()
+  })
+
   it('abre con Enter y Espacio desde el título sin activar los listeners de drag', async () => {
     const user = userEvent.setup()
     const onClick = vi.fn()
@@ -126,7 +142,11 @@ describe('TaskCard: apertura y movimiento independientes', () => {
 
     const assigneeAvatar = screen.getByTitle('Ana López')
     const commentIndicator = screen.getByRole('button', { name: 'Ver comentarios de Revisar propuesta (12 comentarios)' })
-    expect(assigneeAvatar.parentElement?.parentElement).toBe(commentIndicator.parentElement)
+    const actions = commentIndicator.parentElement!
+    expect(assigneeAvatar.parentElement?.parentElement).toBe(actions.parentElement)
+    expect(actions).toHaveClass('ml-auto', 'flex', 'gap-2')
+    expect(within(actions).getByRole('button', { name: `Copiar ID de ${task.title}` })).toBeVisible()
+    expect(commentIndicator).toHaveClass('ui-button', 'ui-button--sm')
     expect(commentIndicator).toHaveAttribute('title', '12 comentarios')
     expect(screen.getByText('12', { selector: 'span[aria-hidden="true"]' })).toBeTruthy()
   })

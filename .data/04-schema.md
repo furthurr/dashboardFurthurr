@@ -1,8 +1,8 @@
 # Schema de persistencia Supabase
 
-La persistencia es PostgreSQL gestionado fuera de la SPA. `supabase-schema.sql` es el bootstrap completo; `supabase/migrations/` contiene cambios incrementales para instalaciones existentes. El bootstrap y `202610280002_mcp_identity.sql` incluyen el nuevo rol/recurso MCP; las tablas de sesión y clientes OAuth pertenecen al schema administrado `auth`, no son tablas de negocio del producto.
+La persistencia es PostgreSQL gestionado fuera de la SPA. `supabase-schema.sql` es el bootstrap completo; `supabase/migrations/` contiene cambios incrementales. Fase 2 local agrega `202610280003_mcp_task_read.sql` y sus objetos al bootstrap; no se ha verificado su aplicación remota. Sesiones y clientes OAuth pertenecen al schema administrado `auth`; la nueva tabla de permisos es del producto.
 
-Verificación remota actual (2026-10-28): la migración `202610280002` se ejecutó transaccionalmente y el probe `tests/mcp_identity.sql` pasó con `ROLLBACK`. La tabla de control de migraciones enumera `202610190001`, `202610200001`, `202610200002`, `202610210001`, `202610220001` y `202610280002`, mientras que el schema observado incluye cambios de `202610220002`, `202610280001` y algunas policies de `202610260003`. La policy de renombrado `202610260001` y la RPC `202610260002` no se encontraron. Este desajuste se explica en `supabase/README.md`; no inferir migraciones aplicadas por presencia/ausencia de objetos ni ejecutar `db push` a ciegas.
+Última evidencia remota registrada de fase 1 (2026-10-28, no repetida aquí): `202610280002` se ejecutó transaccionalmente y `tests/mcp_identity.sql` pasó con `ROLLBACK`. El ledger enumeraba `202610190001`, `202610200001`, `202610200002`, `202610210001`, `202610220001` y `202610280002`, pero el schema incluía cambios de `202610220002`, `202610280001` y algunas policies de `202610260003`. No se encontraron la policy de renombrado `202610260001` ni la RPC `202610260002`. No inferir migraciones aplicadas por objetos ni ejecutar `db push` a ciegas. [Preparación de fase 2](../docs/prueba-mcp.md); `supabase/README.md` conserva una guía anterior, no sustituye esta discrepancia.
 
 ## Modelo relacional
 
@@ -100,7 +100,12 @@ Fuente: `supabase-schema.sql` y `supabase/migrations/202610210001_boards.sql:4-2
 
 ## Políticas RLS declaradas
 
-RLS está habilitado para las tablas de aplicación. La siguiente tabla resume las condiciones del bootstrap junto con las restricciones de `202610210001_boards.sql`; no certifica configuración remota.
+RLS está habilitado para las tablas de aplicación. La tabla resume el contrato
+histórico de membresía hasta `202610220002`. **Prevalece en el portal local** la
+ampliación `202610280001_board_assignment_access.sql:4-42`: admin activo o tablero
+activo con membresía **o asignación**. El catálogo agrega `my_pending_count` y
+`people` (`:44-83`). Esto no crea membresía; tampoco amplía la RPC MCP, que exige
+membresía explícita para no admin. No certifica configuración remota.
 
 | Recurso | Operación | Condición resumida | Fuente |
 | --- | --- | --- | --- |
@@ -184,22 +189,32 @@ La API cliente enumera metadata/paths y elimina objetos de Storage antes de invo
 
 ## Role, hook y persistencia auxiliar del MCP
 
-El MCP no agrega columnas de negocio a `profiles` ni una tabla por usuario. Sí
-declara una tabla de configuración de recurso y usa la tabla administrada
-`auth.sessions` para comprobar revocación/expiración:
+El MCP no agrega columnas de negocio a `profiles`. Declara configuración de recurso
+y, en fase 2, una tabla de consentimiento por sesión. Usa `auth.sessions` para
+comprobar revocación/expiración:
 
 | Objeto | Propósito y permisos | Fuente |
 | --- | --- | --- |
-| Rol SQL `mcp_identity` | `NOLOGIN NOINHERIT`, miembro habilitado para `authenticator`; no hereda `authenticated`/`service_role` ni tiene grants de tablas/vistas o RPCs de negocio. Sólo ejecuta `mcp_whoami()` | `supabase/migrations/202610280002_mcp_identity.sql:4-10,73-109` |
+| Rol SQL `mcp_identity` | `NOLOGIN NOINHERIT`; no hereda roles privilegiados ni tiene grants de tablas/vistas/Storage. Fase 2 permite `mcp_whoami()` y `mcp_get_task(...)`, no RPCs de escritura ni de autoautorización | `supabase/migrations/202610280002_mcp_identity.sql:4-10,73-109`, `202610280003_mcp_task_read.sql:39-40,60-61,115-116` |
 | `public.mcp_oauth_configuration` | Singleton `{ singleton: true, resource_url: text }`; RLS activado y sin grants cliente/MCP. La URL debe coincidir byte a byte con JWT `aud` | `supabase/migrations/202610280002_mcp_identity.sql:12-21` |
 | `public.mcp_access_token_hook(event jsonb)` | Auth la ejecuta como `supabase_auth_admin`. Tokens ordinarios salen inalterados; OAuth requiere un perfil activo y recibe `client_id`, `role=mcp_identity`, `aud=resource_url` | `supabase/migrations/202610280002_mcp_identity.sql:23-45` |
 | `public.mcp_whoami()` | `SECURITY DEFINER`, path vacío; requiere rol, cliente y audiencia MCP, sesión vigente en `auth.sessions` con el mismo usuario/cliente y perfil `is_active`. Devuelve identidad, no acceso general a datos | `supabase/migrations/202610280002_mcp_identity.sql:47-74` |
-| Policies «OAuth identity isolation» | Policies restrictivas sobre tablas de negocio/Storage niegan tokens OAuth identificados por `client_id`; el rol sin grants evita que pueda invocar RPCs de negocio `SECURITY DEFINER` | `supabase/migrations/202610280002_mcp_identity.sql:76-109` |
+| Policies «OAuth identity isolation» | Se conservan las restricciones sobre tablas/Storage; la lectura MCP se hace con autorización explícita dentro de su propia RPC `SECURITY DEFINER`, no relajando policies del portal | `supabase/migrations/202610280002_mcp_identity.sql:76-109`, `202610280003_mcp_task_read.sql:63-116` |
+| `mcp_task_read_permissions` | `session_id uuid` PK/FK `auth.sessions(id)` con `ON DELETE CASCADE`; `profile_id uuid` FK `profiles(id)` con cascada; `client_id uuid not null`; `granted_at timestamptz not null default now()`. RLS, sin grants cliente/MCP; índice `(profile_id, client_id)` | `supabase/migrations/202610280003_mcp_task_read.sql:4-12` |
+| `mcp_set_task_read_access(uuid, boolean)` | Solo portal `authenticated` sin `client_id`, perfil activo. Autoriza sesiones vivas propias del cliente indicado o elimina sus permisos. No autoriza sesiones futuras | `supabase/migrations/202610280003_mcp_task_read.sql:16-40` |
+| `mcp_list_task_read_access()` | Solo portal activo; agrupa sesiones propias vivas por cliente. `enabled=bool_or(permiso)` y `needs_authorization=bool_or(sin permiso)`; no expone IDs de sesión | `supabase/migrations/202610280003_mcp_task_read.sql:42-61` |
+| `mcp_get_task(uuid, integer, integer, integer)` | Solo rol MCP; identidad/sesión, consentimiento y acceso por membresía/admin explícitos. SQL estable, `SECURITY DEFINER`, path vacío. Proyecciones y páginas, sin escrituras | `supabase/migrations/202610280003_mcp_task_read.sql:63-116` |
 
 `mcp_identity` es un rol de conexión Postgres, **no** un valor adicional de
 `profiles.role`. El hook opera sobre cualquier cliente OAuth del proyecto, no sólo
 MCP; no sustituir un hook anterior ni habilitar el patrón en proyectos con otros
 clientes OAuth sin revisar el efecto global.
+
+La nueva migración presupone la fase 1, tablas/relaciones de tareas y tableros,
+`boards.is_active` y el esquema OAuth de Supabase. El bootstrap incluye fase 1 y
+fase 2 para instalaciones nuevas; no se reejecuta sobre una base existente. Los
+probes locales revierten fixtures, pero **la migración sí crea objetos persistentes**
+al aplicarla. No ejecutar el harness simulado contra un proyecto Supabase.
 
 ## Storage
 
@@ -213,6 +228,12 @@ A esas policies se añaden restricciones de cuenta activa para los buckets gesti
 La carga de avatar usa `avatars/<profile-id>/avatar` con `upsert`; después actualiza `profiles.avatar_url` a la URL pública. La validación cliente y el bucket admiten JPEG, PNG o WebP hasta 2 MiB. La actualización de Storage y la fila de perfil son operaciones separadas (`src/features/users/avatarApi.ts:3-35`).
 
 El cliente obtiene URLs firmadas de 60 segundos para detalle y miniaturas, refrescando cada 45 segundos. La metadata aún almacena `getPublicUrl`, pero no se usa directamente para mostrar el archivo; persiste la diferencia representacional D-02. El path nuevo `<taskId>/<UUID>.<ext>` y borrado comprobado alinean nuevas cargas; la policy también resuelve paths planos legacy vía metadata. La migración marca `task-attachments` privado. El cambio del nombre visible invalida la lista de adjuntos y las miniaturas, sin modificar el objeto. El contenido ya descargado o enlaces firmados ya emitidos no pueden revocarse retroactivamente.
+
+MCP fase 2 no concede acceso Storage al rol OAuth: Edge firma con credencial solo
+servidor después de la RPC autorizada. Su validador requiere origen Supabase exacto,
+bucket esperado y path de dos segmentos `<task-id>/<archivo>`; no firma paths legacy,
+de otras tareas, hosts ni buckets. Esos adjuntos se listan con `download_error`.
+Fuentes: `supabase/functions/mcp/index.ts:72-84`, `supabase/functions/mcp/task.ts:49-92`.
 
 ## Vistas
 

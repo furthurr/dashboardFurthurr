@@ -2,7 +2,19 @@
 
 Hallazgos visuales/documentales detectados en los componentes y estilos revisados. Esta revisión es documental: no se modificó UI ni se ejecutó una auditoría automatizada de accesibilidad.
 
-## Revisión focalizada — OAuth MCP (2026-10-28)
+## Revisión focalizada — copia de UUID y lectura MCP (2026-10-28)
+
+`CopyTaskId` y comentarios comparten botón `ui-button--sm`, iconos decorativos de
+16 px y nombres accesibles; la copia comunica éxito/error y ofrece fallback
+seleccionable. Conexiones reutiliza `Dialog` para aprobación adicional y permite
+gestionar permisos mixtos. No se añade un finding visual confirmado por esta
+lectura: siguen pendientes portapapeles real, revisión responsive del grupo de
+acciones/feedback, teclado y lector de pantalla en navegador. Las pruebas DOM de
+implementación no certifican contraste ni WCAG. Fuentes:
+`src/features/board/CopyTaskId.tsx:33-50`, `src/features/board/TaskCard.tsx:102-144`,
+`src/features/auth/OAuthConnectionsPage.tsx:70-108`.
+
+## Registro histórico — OAuth MCP fase 1 (2026-10-28)
 
 `OAuthConsentPage` reutiliza `auth-shell`, `auth-panel`, `ui-feedback`, `ui-button`
 y regiones `status` existentes; `OAuthConnectionsPage` reutiliza

@@ -12,17 +12,27 @@
   Postgres. La autorización de datos se impone mediante `role=mcp_identity`, la
   audiencia exacta del recurso y `mcp_whoami()` (`supabase/functions/mcp/index.ts:43-45,84-91`,
   `supabase/migrations/202610280002_mcp_identity.sql:23-74`).
-- `mcp_identity` no hereda `authenticated`/`service_role`, no recibe grants de
-  tablas/vistas/RPC de negocio y solo ejecuta `mcp_whoami()`. Las cuentas inactivas,
+- `mcp_identity` no hereda `authenticated`/`service_role`, no recibe grants directos
+  de tablas/vistas/Storage y ejecuta únicamente `mcp_whoami()` y `mcp_get_task(...)`
+  en fase 2 local. No puede invocar RPCs de escritura ni concederse lectura. Las cuentas inactivas,
   sesiones revocadas y clientes/audiencias no coincidentes se rechazan. `admin-users`
   también rechaza los claims OAuth después de verificar la firma del token.
 - OAuth Server/DCR de Supabase está en beta; el cliente DCR declara su propio nombre
   y callback, lo que no prueba que sea confiable. La UI muestra esos valores y exige
   consentimiento; no se activa `autoApprove` en los presets. El usuario puede
   revocar grants desde el portal.
-- El acceso sólo expone `whoami`, no endpoints/RPCs de negocio. El resultado
-  `{id,email,full_name,role,client_id}` contiene PII y se transfiere al contexto del
-  agente. Trátalo como dato de usuario y no lo registres/publices.
+- `whoami` devuelve PII de identidad. `get_task` añade textos privados, nombres/IDs
+  de personas y enlaces temporales; requiere consentimiento por sesión y membresía
+  en tablero activo para no admin. La lectura por asignación del portal no basta.
+  El contenido es dato no confiable, no instrucciones; no registrarlo ni publicarlo.
+- El consentimiento de lectura se gestiona por RPC con la sesión ordinaria del
+  portal; no es un nuevo scope OAuth. Nuevas sesiones requieren otra aprobación,
+  las antiguas no se amplían automáticamente y la FK elimina el permiso al borrar
+  la sesión. Retirar lectura no revoca `whoami`.
+- La firma de adjuntos usa credencial servidor solo tras consulta autorizada y
+  validación de origen/bucket/path. No es acceso privilegiado del cliente MCP ni se
+  usa para leer tareas. Fuentes: `supabase/functions/mcp/index.ts:63-84,131-154`,
+  `supabase/migrations/202610280003_mcp_task_read.sql:4-116`.
 - En Supabase, aplicar únicamente migraciones pendientes verificadas. El proyecto
   remoto consultado tenía un ledger incompleto respecto a objetos observados; la
   reconciliación se documenta en `supabase/README.md` antes de cualquier `db push`.
@@ -32,7 +42,11 @@
 - Las altas usan Edge Function con `auth.admin.createUser`, correo confirmado y rol `usuario` forzado; el registro público se deshabilita por configuración. `verify_jwt = false` del gateway se compensa con `auth.getUser` y comprobación de admin activo dentro de la función (`supabase/functions/admin-users/index.ts:17-50`, `supabase/config.toml`).
 - `promote-admin` es una acción específica de `admin-users`: exige admin activo, fija el rol del perfil objetivo a `admin` y no cambia su estado `is_active`; admite cuentas `usuario` o `invitado`, activas o inactivas. La autorización se verifica en servidor, no por la visibilidad del botón (`supabase/functions/admin-users/index.ts:24-28,68-72`, `src/features/users/UsersPage.tsx:47-48,113`).
 - RLS/grants protegen operaciones directas; Edge/RPC verifican además permisos antes de usar privilegios servidor. Ocultar controles no sustituye esas reglas. Un invitado activo puede gestionar asignaciones, editar y mover cualquier tarea dentro de un tablero accesible, pero no crear tareas. La edición compartida se aplica por permisos de columna, mientras `created_by` permanece fuera del alcance de escritura del cliente (`supabase/migrations/202610200001_task_assignments.sql:7-76`, `supabase/migrations/202610200002_shared_task_editing.sql:1-19`, `supabase/migrations/202610210001_boards.sql:51-59`).
-- El catálogo de tableros lo filtra RLS: admin activo ve todos (activos y desactivados); usuario/invitado solo los tableros **activos** de los que es miembro. Las asignaciones a tareas no conceden pertenencia al tablero. Crear tableros, renombrarlos, activarlos/desactivarlos y sustituir miembros se reserva a admin; las mutaciones de tarea validan membresía en el servidor (`supabase/migrations/202610210001_boards.sql:24-80`, `supabase/migrations/202610220002_board_lifecycle.sql:40-66`).
+- El catálogo del portal local permite admin activo o tablero activo con membresía
+  **o asignación** (`supabase/migrations/202610280001_board_assignment_access.sql:4-42,73-83`).
+  Asignar no crea una membresía, pero sí puede conceder acceso en el portal.
+  Las RPCs de tareas validan acceso en servidor; la consulta MCP conserva su regla
+  más estricta de membresía. Administrar tableros y miembros sigue reservado a admin.
 - El apagado de un tablero no es una revocación de identidad: solo retira el acceso de sus miembros. El admin activo conserva el acceso, las membresías no se borran y los JWT no se invalidan (`supabase/migrations/202610220002_board_lifecycle.sql:5,27-36`).
 - El borrado permanente es otra operación: solo acepta tableros ya desactivados y elimina primero los objetos de Storage desde cliente; la RPC repite la comprobación de admin/estado y borra las filas relacionales en PostgreSQL. Las dos fases no son atómicas (`src/features/boards/api.ts:101-131`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-21`).
 - Avatares: una cuenta puede cambiar el propio y la UI admin permite cambiar otros; el servidor Storage permite escribir solo al propietario o admin activo. La lectura es pública; el bucket local limita MIME a JPEG/PNG/WebP y tamaño a 2 MiB (`src/features/users/avatarApi.ts:3-35`, `supabase/migrations/202610260003_profile_avatars.sql:5-50`).
@@ -74,7 +88,14 @@
 | Cualquier otro | Mensaje genérico que añade el código del error |
 
 - `retry: 1` aplica al comportamiento de queries de TanStack Query; no se encontró timeout explícito ni retry propio del cliente Supabase (`src/App.tsx:10-17`, `src/lib/supabase.ts:1-10`).
-- No se encontró paginación en las lecturas de tareas, comentarios o adjuntos revisadas.
+- Las lecturas del portal de tareas/comentarios/adjuntos no tienen paginación general.
+  `get_task` sí pagina comentarios y adjuntos por separado: 50 por defecto, 1–100,
+  `offset` y `next_offset` por colección; orden `created_at,id`. No hay snapshot entre
+  peticiones: cambios concurrentes pueden desplazar resultados. [Contrato](01-endpoints.md).
+- MCP usa `Cache-Control: no-store`, timeout de 10 s por fetch y sin retry propio.
+  La firma se procesa en lotes de hasta cinco; tras 15 s no inicia nuevas firmas
+  (no cancela las ya iniciadas). Un fallo individual devuelve metadata con error,
+  no una URL permanente. Fuente: `supabase/functions/mcp/task.ts:41-92`.
 - Administración pagina de 50 en 50; usuarios asignables se recuperan en lotes de 500 y se filtran por nombre/correo en cliente (`supabase/functions/admin-users/index.ts:34-41`, `src/features/board/assigneesApi.ts:5-15`).
 - Las respuestas de Edge usan `{ error: string }`; el cliente extrae JSON del error HTTP o muestra fallback de conexión. No devuelve contraseñas ni errores internos en crudo. Las RPC propagan el error del SDK y la UI conserva borrador con mensaje seguro (`src/features/users/api.ts:11-24`, `supabase/functions/admin-users/index.ts:73-75`).
 - El upload de adjuntos en UI rechaza archivos mayores a 5 MiB; el bucket `task-attachments` no declara `file_size_limit` en el bootstrap, así que no asumir enforcement servidor de ese máximo (`src/features/board/CreateTaskModal.tsx`, `src/features/board/TaskDetailModal.tsx`, `supabase-schema.sql:354-357`). Los avatares son distintos: el bucket `avatars` declara máximo 2 MiB y MIME permitidos en el bootstrap/migración (`supabase-schema.sql:348-352`, `supabase/migrations/202610260003_profile_avatars.sql:5-10`).
@@ -82,7 +103,9 @@
 ## Nombres, versiones y serialización
 
 - Estados, prioridades y roles se representan como uniones TypeScript y enums Postgres; deben mantenerse alineados (`src/types/index.ts:1-5`, `supabase-schema.sql:10-14`).
-- No se documenta una estrategia de versionado de API ni un mapeo/validación runtime general.
+- No hay una estrategia de versionado/validación runtime general del portal. MCP
+  fase 2 anuncia `serverInfo.version=0.2.0` y valida su DTO con Zod; no confundir esa
+  versión de aplicación con la versión numérica del despliegue Edge.
 - Los adjuntos nuevos generan path `<taskId>/<UUID>.<extensión segura>` y almacenan metadata; el trigger verifica que el objeto pertenezca a la tarea y el borrado comprueba error. La lectura resuelve también referencias flat-path preexistentes. D-02 conserva una discrepancia entre URL almacenada y bucket privado (`src/features/board/attachmentsApi.ts`, `supabase/migrations/202610210001_boards.sql:133-172`).
 - Avatares usan el path fijo `<profile-id>/avatar` con reemplazo (`upsert`) y la URL pública queda en `profiles.avatar_url`; el archivo se limita a JPEG/PNG/WebP de hasta 2 MiB (`src/features/users/avatarApi.ts:3-35`).
 - Nombre administrativo 1–120 caracteres tras `trim`; contraseña 8–128 más política de Auth; email normalizado a minúsculas en alta. `rename` no modifica metadata de Auth. Los responsables se envían como UUIDs deduplicados; conjunto vacío significa retirar todos y no un error (`supabase/functions/admin-users/validation.ts:16-31`, `src/features/board/api.ts:94-112`).

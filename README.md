@@ -65,6 +65,7 @@ La app usa `HashRouter` porque GitHub Pages no reescribe rutas SPA. La ruta raí
 - `/dashboardFurthurr/#/board/:boardId` (tablero Kanban; requiere sesión y acceso al tablero)
 - `/dashboardFurthurr/#/users` (requiere administrador activo)
 - `/dashboardFurthurr/#/profile` (perfil propio, requiere cuenta activa)
+- `/dashboardFurthurr/#/profile/connections` (grants OAuth y autorización adicional de lectura MCP en fase 2 local)
 - `/dashboardFurthurr/#/register` (compatibilidad: redirige a `/users`)
 - `/dashboardFurthurr/#/auth/callback`
 - `/dashboardFurthurr/#/board` (compatibilidad: redirige a `/boards`)
@@ -100,10 +101,28 @@ Antes de implementar funcionalidad, actualiza o crea la especificación correspo
 - [Datos y API](.data/README.md) — operaciones de Supabase, modelos, schema y datos sensibles.
 - [Sistema de diseño](.design/README.md) — fundamentos visuales, componentes y deuda de UI.
 - [Mapa de navegación](.navigator/ai-context.md) — contexto breve; [mapa de módulos](.navigator/module-map.json).
+- [MCP para clientes de desarrollo](mcp/README.md) — selector e instalación OAuth por plataforma; conserva información de fase 1.
+- [Preparar y probar MCP de tareas](docs/prueba-mcp.md) — fase 2 local: `get_task`, permiso explícito por sesión, paginación y adjuntos. Incluye pasos de activación pendientes y resultados que deben verificarse; no acredita despliegue remoto.
 - [Especificaciones](specs/README.md) — requisitos, modelo de datos, permisos, UI/UX y flujo Kanban.
 - [Operación Supabase](supabase/README.md) — orden de migraciones, pruebas SQL y publicación de Edge Functions.
 
 La documentación canónica describe y referencia las fuentes de implementación; `specs/` conserva la intención funcional, el SQL define el schema fuente y el código describe el comportamiento actualmente implementado.
+
+### MCP de tareas: estado de preparación
+
+El árbol local añade `get_task` junto a `whoami`. El ID completo se copia desde
+el icono junto a comentarios o desde el detalle; copiarlo no concede acceso.
+La consulta devuelve título, descripción, estado, prioridad, tablero, responsables,
+comentarios y metadata/enlaces temporales de adjuntos. Primero se requiere
+«Autorizar lectura de tareas» en Conexiones; las sesiones nuevas no heredan ese
+permiso. No permite escritura ni interpreta archivos.
+
+Antes de probar desde el cliente MCP remoto, revisar el estado real de Supabase,
+aplicar únicamente la migración pendiente `202610280003_mcp_task_read.sql`, desplegar
+la función y publicar el portal compatible según [la guía](docs/prueba-mcp.md).
+No se ejecutaron esos pasos en la sincronización documental. No admin requiere
+membresía explícita en tablero activo, aunque el portal admita acceso por asignación.
+Rutas legacy no firmables mantienen metadata con error, no enlace de descarga.
 
 ## Autor
 
