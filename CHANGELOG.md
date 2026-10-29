@@ -1,5 +1,27 @@
 # Changelog
 
+## [v0.12.1] - 2026-10-29
+
+### Correcciones
+
+- Actualizar React Router DOM a 7.18.5, Zod a 4.6.7 y Vite a 8.3.5, junto con las dependencias transitivas afectadas del lock npm, sin aplicar `npm audit fix` global.
+- Fijar Zod 4.6.7 también en MCP; conservar SDK MCP 1.32.2 y Supabase JS 2.105.1. Las auditorías npm completa/de producción y Deno no reportan vulnerabilidades conocidas en las dependencias locales comprobadas.
+- Ampliar las pruebas SQL con lectura de invitados miembros, independencia de offsets y resultados explícitos visibles desde la CLI.
+
+### Activación y verificación operativa
+
+- Aplicar únicamente `202610280003_mcp_task_read.sql` en el proyecto Supabase de Dashboard Furthurr mediante un directorio temporal con el historial remoto descargado y dry-run previo. Comprobar su registro, RLS, definiciones y grants; no reconciliar ni reaplicar migraciones históricas ausentes del ledger.
+- Desplegar `mcp` como Edge v3 ACTIVE con `verify_jwt=false`; el código descargado coincide con `index.ts`, `task.ts` y `deno.json` locales. La versión de aplicación MCP sigue siendo 0.2.0.
+- Ejecutar las suites remotas `mcp_task_read.sql` y `mcp_identity.sql`: PASS, con fixtures revertidos y ausencia de cuentas, clientes y tableros de prueba residuales. Validan SQL y roles, no OAuth E2E ni Storage real.
+- Verificar 200 pruebas Vitest, 11 Deno MCP, 12 Deno de administración, lint/build y cuatro suites SQL locales en bootstrap e incremental; respuesta HTTP del frontend Vite y de Pages. Una llamada MCP real a `whoami` funciona después del despliegue.
+
+### Límites y pendientes
+
+- No se acredita todavía el catálogo autenticado renovado con ambas herramientas, el consentimiento OAuth desde navegador, una consulta MCP satisfactoria de tarea ni la descarga real/caducidad/renovación de un adjunto nuevo.
+- OpenCode CLI 1.18.34 informa conexión OAuth activa, pero la ejecución mediante su modelo falla con HTTP 401 del proveedor; la API local también exige autenticación. No se extraen credenciales ni se desactivan controles. El controlador de navegador `orca` no está disponible.
+- El origen de Pages supera el preflight MCP; localhost no está en la allowlist de Edge. El portal gestiona consentimiento mediante RPC Supabase, no mediante llamadas de navegador a Edge; el cliente MCP nativo no necesita Origin. No ampliar CORS como sustituto de una prueba E2E.
+- Se conservan los avisos de bundle >500 kB y `__dirname` ante el futuro config loader nativo de Vite. No se certifica compatibilidad universal de clientes ni se declara el MCP completamente verificado.
+
 ## [v0.12.0] - 2026-10-28
 
 ### Funcionalidades
