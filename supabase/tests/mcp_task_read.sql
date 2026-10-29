@@ -64,7 +64,7 @@ end $$;
 reset role;
 select set_config('request.jwt.claims', current_setting('test.claims'), true);
 set local role mcp_identity;
-do $$ declare result jsonb; first_comment text; resource text; operation text; begin
+do $$ declare result jsonb; first_comment text; first_attachment text; resource text; operation text; begin
   result := public.mcp_get_task(current_setting('test.task')::uuid, 0, 0, 1);
   if result -> 'task' ->> 'title' <> 'Task fixture' or result -> 'task' ->> 'status' <> 'haciendo'
     or result -> 'task' ->> 'description' <> 'Description' or result -> 'task' ->> 'special_notes' <> 'Notes'
@@ -74,6 +74,14 @@ do $$ declare result jsonb; first_comment text; resource text; operation text; b
     or result -> 'attachments' ->> 'total' <> '2' or result -> 'attachments' ->> 'next_offset' <> '1' then raise exception 'Bad pagination'; end if;
   if result::text like '%email%' then raise exception 'Unnecessary email exposure'; end if;
   first_comment := result -> 'comments' -> 'items' -> 0 ->> 'id';
+  first_attachment := result -> 'attachments' -> 'items' -> 0 ->> 'id';
+  result := public.mcp_get_task(current_setting('test.task')::uuid, 0, 1, 1);
+  if result -> 'comments' -> 'items' -> 0 ->> 'id' <> first_comment
+    or result -> 'attachments' -> 'items' -> 0 ->> 'id' = first_attachment
+    or result -> 'comments' ->> 'offset' <> '0' or result -> 'attachments' ->> 'offset' <> '1' then raise exception 'Attachment offset changed comments'; end if;
+  result := public.mcp_get_task(current_setting('test.task')::uuid, 1, 0, 1);
+  if result -> 'comments' -> 'items' -> 0 ->> 'id' = first_comment
+    or result -> 'attachments' -> 'items' -> 0 ->> 'id' <> first_attachment then raise exception 'Comment offset changed attachments'; end if;
   result := public.mcp_get_task(current_setting('test.task')::uuid, 1, 1, 1);
   if result -> 'comments' -> 'items' -> 0 ->> 'id' = first_comment
     or result -> 'comments' -> 'next_offset' <> 'null'::jsonb or result -> 'attachments' -> 'next_offset' <> 'null'::jsonb then raise exception 'Bad continuation'; end if;
@@ -91,6 +99,16 @@ do $$ declare result jsonb; first_comment text; resource text; operation text; b
   begin perform public.move_task_to_board(current_setting('test.task')::uuid, current_setting('test.hidden_board')::uuid); raise exception 'MCP can modify task'; exception when insufficient_privilege then null; end;
 end $$;
 reset role;
+
+-- Active guests with explicit membership follow the same read-only boundary.
+update public.profiles set role = 'invitado' where id = current_setting('test.user')::uuid;
+set local role mcp_identity;
+do $$ begin
+  if public.mcp_get_task(current_setting('test.task')::uuid) is null then raise exception 'Guest member cannot read task'; end if;
+  begin perform public.mcp_get_task(current_setting('test.hidden_task')::uuid); raise exception 'Guest assignment leaked hidden board'; exception when sqlstate 'PT404' then null; end;
+end $$;
+reset role;
+update public.profiles set role = 'usuario' where id = current_setting('test.user')::uuid;
 
 -- Deactivation, membership removal and role checks apply immediately.
 update public.boards set is_active = false where id = current_setting('test.board')::uuid;
@@ -184,4 +202,5 @@ do $$ begin
 end $$;
 reset role;
 do $$ begin raise notice 'PASS: MCP task data, pagination, explicit consent, isolation, membership, inactive board/account and session revocation'; end $$;
+select 'PASS: MCP task data, pagination, consent, user/guest/admin permissions and revocation; rolling back fixtures' as verification;
 rollback;

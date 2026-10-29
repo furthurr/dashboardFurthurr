@@ -120,4 +120,5 @@ do $$ begin
 end $$;
 reset role;
 do $$ begin raise notice 'PASS: MCP claims, identity, grants, isolation, inactive account, revocation and portal regression'; end $$;
+select 'PASS: MCP identity, claims, isolation and portal regression; rolling back fixtures' as verification;
 rollback;
