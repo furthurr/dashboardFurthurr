@@ -1,5 +1,32 @@
 # Changelog
 
+## [v0.13.0] - 2026-10-29
+
+### Funcionalidades
+
+- Autorizar identidad y cinco permisos MCP en una sola aceptación al conectar; mostrar y permitir retirar permisos individualmente, todos los de tareas o la conexión completa desde Perfil.
+- Exigir asignación en la tarea para todos los roles, incluido admin, y limitar la lectura a Backlog, Por hacer y Haciendo, conservando las comprobaciones de acceso al tablero.
+- Añadir `read_task_attachment` para estudiar texto/código UTF-8 por fragmentos e imágenes PNG/JPEG/GIF/WebP como contenido MCP, con límite de 5 MiB. Otros formatos conservan un enlace temporal y una advertencia de que no se extrajeron.
+- Incorporar `start_task`, `record_task_result` y `submit_task_for_review`: iniciar en Haciendo, comentar el trabajo/las aclaraciones/validaciones y enviar a En revisión tras aceptación declarada del usuario. Finalizadas, asignación y reapertura permanecen manuales.
+- Evitar comentarios duplicados al reintentar solicitudes y rechazar mutaciones con una versión de tarea obsoleta. Conexiones antiguas no reciben escritura silenciosamente.
+
+### Activación y verificación del backend
+
+- Aplicar exclusivamente `202610290001_mcp_workflow.sql` en Supabase, con preflight, historial remoto aislado y dry-run que seleccionó solo esa migración; no alterar Vault, roles, seeds ni el ledger histórico.
+- Desplegar `mcp` como Edge v4 ACTIVE con `verify_jwt=false`; aplicación MCP `0.3.0`. Los hashes de los cuatro archivos descargados (`index.ts`, `task.ts`, `workflow.ts`, `deno.json`) coinciden con el código local.
+- Aprobar las pruebas SQL remotas de identidad, lectura y workflow con fixtures revertidos; comprobar grants/RLS, ausencia de datos de prueba residuales y preservación de datos del producto. `whoami` real funciona y la solicitud anónima conserva HTTP 401 con desafío OAuth.
+
+### Documentación y verificaciones locales
+
+- Actualizar contratos MCP en `.data/`, consentimiento/conexiones en `.design/` y guías de clientes/prueba/operación. Las marcas de «local sin deploy» son previas a esta activación; este changelog registra la evidencia operativa nueva, sin sincronizar automáticamente esos índices.
+- Repetir en un worktree aislado `npm ci`, 203 pruebas Vitest, lint y build; npm no reportó vulnerabilidades conocidas. Aprobar 19 Deno MCP, 12 Deno de administración y seis suites SQL locales en incremental/bootstrap, además de concurrencia e idempotencia.
+
+### Límites y pendientes
+
+- Publicar Git/Pages no sustituye el E2E de consentimiento/revocación en navegador, el catálogo autenticado renovado ni el estudio de tareas y adjuntos reales desde el cliente LLM; estas comprobaciones continúan pendientes.
+- Los flags `user_approved` y `user_validated` son declaraciones del cliente; el servidor no puede acreditar el contenido de la conversación ni que el LLM haya entendido los archivos. Una URL no equivale a archivo estudiado.
+- Enlaces emitidos y archivos ya descargados no se revocan retroactivamente. El recibo idempotente conserva payload/resultado; su retención sigue pendiente de definición. Persisten avisos de bundle >500 kB y `__dirname` de Vite.
+
 ## [v0.12.1] - 2026-10-29
 
 ### Correcciones
