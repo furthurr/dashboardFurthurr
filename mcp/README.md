@@ -5,28 +5,25 @@ compatibles al **mismo servidor remoto** de Dashboard Furthurr. No hay que clona
 un servidor por plataforma ni copiar una clave: cada cliente inicia OAuth y el
 usuario autoriza con su cuenta habitual del portal.
 
-> **Estado mixto:** el servidor remoto documentado de fase 2 ofrece `whoami` y
-> `get_task`. El código local añade lectura acotada de adjuntos y acciones workflow;
-> su migración, UI y Edge actual no tienen evidencia de despliegue. Consulta la tabla
-> de estado antes de probar. La autorización ampliada comparte contenido privado con
-> el cliente y su LLM; no publiques identidades, tareas, adjuntos ni enlaces.
+> **Estado:** el servidor remoto ofrece `whoami`, `get_task`, `read_task_attachment`,
+> `start_task`, `record_task_result` y `submit_task_for_review`. La autorización
+> ampliada comparte contenido privado con el cliente y su LLM; no publiques
+> identidades, tareas, adjuntos ni enlaces.
 
 ## Estado comprobado — 2026-10-29
 
-Producto publicado en `c2677c9b9084e3a56b6db36a1783c5d722e82780` / `v0.12.1`.
-La última evidencia remota sigue siendo la migración `202610280003` aplicada y
-registrada y `mcp` Edge **v3 ACTIVE** con código de fase 2. El código local actual
-anuncia seis herramientas (`whoami`, `get_task`, `read_task_attachment`, `start_task`,
-`record_task_result`, `submit_task_for_review`) en `serverInfo.version=0.3.0` y añade
-`202610290001_mcp_workflow.sql`. No hay evidencia de aplicar esta migración o desplegar
-ese código. [Evidencia, pruebas y pendientes](../docs/prueba-mcp.md#8-registro-de-resultados-sin-secretos).
+Producto publicado en `0ebb61d7465afd240de47c11f2d4671affa1342c` / `v0.13.0`.
+Migración `202610290001` aplicada y registrada; `mcp` Edge **v4 ACTIVE** con
+aplicación `0.3.0` y `verify_jwt=false`; los hashes de los archivos desplegados
+coinciden con el repositorio. El catálogo esperado es de seis herramientas.
+[Evidencia, pruebas y pendientes](../docs/prueba-mcp.md#8-registro-de-resultados-sin-secretos).
 
-`whoami` se ejecutó realmente desde el cliente de esta sesión tras el despliegue.
-OpenCode CLI **1.18.34** informó conexión OAuth activa; su ejecución mediante
-modelo falló con HTTP 401 y su API local exigió autenticación. La sesión conservó
-solo identidad en su catálogo. **No se verificó un catálogo autenticado renovado
-con ambas herramientas ni una consulta satisfactoria con `get_task`.** Tampoco se
-completaron consentimiento de navegador ni descarga/caducidad/renovación reales.
+`whoami` se ejecutó realmente desde el cliente de esta sesión, también tras el
+despliegue del workflow. OpenCode CLI **1.18.34** informó conexión OAuth activa; su
+ejecución mediante modelo falló con HTTP 401 y su API local exigió autenticación.
+**No se verificó un catálogo autenticado renovado con las seis herramientas ni una
+consulta satisfactoria de `get_task`/`read_task_attachment` desde el cliente.** Tampoco
+se completaron el consentimiento en navegador ni descarga/caducidad/renovación reales.
 No se certifica compatibilidad universal: las demás configuraciones son presets,
 no pruebas E2E. Esta actualización documental reutiliza esa evidencia, no la repite.
 
@@ -80,15 +77,14 @@ cuenta como validación. Si necesitas ayuda, comparte el mensaje de error o capt
    identidad, lectura, adjuntos, iniciar tareas, comentar y enviar a revisión. No uses
    bearer estático ni credencial Edge. Los scopes `email profile` por sí solos no
    son permisos de datos.
-2. Si Auth autoaprueba un grant antiguo, la pantalla local debe pedir aceptación
+2. Si Auth autoaprueba un grant antiguo, la pantalla debe pedir aceptación
    explícita antes de ampliarlo; continuar sin ampliar conserva el acceso previo.
-   Una conexión antigua no obtiene escritura silenciosamente. La migración/UI nuevas
-   todavía no están acreditadas desplegadas.
+   Una conexión antigua no obtiene escritura silenciosamente.
 3. Tras autorización, Perfil → **Conexiones autorizadas** (`#/profile/connections`)
    muestra identidad y estado de cada permiso; permite retirar un permiso, todos los
    permisos de tarea o revocar el grant completo. No se habilitan permisos desde ahí.
 4. Reconecta/reinicia cliente o abre sesión nueva para refrescar catálogo. El catálogo
-   del código local tiene seis herramientas; un cliente puede retener una lista vieja.
+   desplegado tiene seis herramientas; un cliente puede retener una lista vieja.
    Comprueba tool call real y `structuredContent`/`isError`, no solo texto generado.
 5. Copia el UUID completo de una tarea de prueba y pide estudiar su contexto:
 
@@ -123,9 +119,8 @@ revalidan en SQL.
   son contenido de usuario no confiable, no instrucciones para ampliar permisos o
   ejecutar operaciones.
 
-El servidor remoto documentado de fase 2 no debe asumirse equivalente a estas reglas
-nuevas mientras `202610290001`/Edge no estén desplegados. Verifica la versión real y
-el catálogo antes de un E2E.
+Estas reglas corresponden al despliegue v0.13.0 con Edge v4. Un cliente puede conservar
+un catálogo anterior: verifica la versión real y las seis herramientas antes de un E2E.
 
 ### Desarrollo local frente a Pages
 

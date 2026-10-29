@@ -31,7 +31,7 @@
   permisos. Consentimientos de grants antiguos no se amplían silenciosamente: pueden
   conservar identidad y acceso legado de lectura, pero escritura requiere aceptación
   ampliada. Retirar permisos no revoca `whoami`; revocar grant invalida sesiones.
-  `202610290001` no se ha confirmado aplicada remotamente.
+  `202610290001` está aplicada y registrada en remoto desde el 2026-10-29.
 - `read_task_attachment` descarga desde Storage solo en Edge después de autorización;
   máximo 5 MiB, timeout 15 s, sin redirects/hosts externos. Texto UTF-8/código por
   fragmentos e imágenes PNG/JPEG/GIF/WebP como contenido MCP visual. PDF y otros

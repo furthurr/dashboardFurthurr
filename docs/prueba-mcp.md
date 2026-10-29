@@ -2,34 +2,30 @@
 
 ## Estado y alcance
 
-Actualización documental del **2026-10-29**. El último producto publicado revisado
-es `c2677c9b9084e3a56b6db36a1783c5d722e82780` (`v0.12.1`); el consentimiento
-conjunto/workflow descrito abajo pertenece a cambios locales posteriores, sin commit
-ni evidencia de despliegue. Esta actualización reutiliza pruebas locales recientes y
-la evidencia remota anterior; no repite despliegues ni pruebas.
+Actualización documental del **2026-10-29**. Producto publicado:
+`0ebb61d7465afd240de47c11f2d4671affa1342c` (`v0.13.0`), que incluye el consentimiento
+conjunto y el workflow de tareas. El backend se activó antes de publicar: migración
+`202610290001` aplicada y registrada y `mcp` Edge **v4 ACTIVE**.
 
 | Estado | Evidencia al 2026-10-29 |
 | --- | --- |
-| **IMPLEMENTADO y publicado previamente** | `whoami`, `get_task`, OAuth y lectura legacy; release `v0.12.1` |
-| **DESPLEGADO (evidencia previa)** | Solo `202610280003` aplicada/registrada; `mcp` Edge **v3 ACTIVE**, `verify_jwt=false`; Pages `c2677c9` |
-| **IMPLEMENTADO LOCALMENTE** | `202610290001`, consentimiento workflow, lectura de adjuntos y herramientas de inicio/comentario/revisión; no desplegados ni aplicados según evidencia disponible |
-| **VERIFICADO LOCALMENTE** | 203 Vitest, 19 Deno MCP, lint/build; seis suites SQL en incremental/bootstrap y pruebas de concurrencia en PostgreSQL desechable |
-| **PENDIENTE REMOTO/E2E** | Aplicar migración tras preflight, desplegar Edge y SPA compatibles, OAuth/navegador, catálogo fresco, restricciones reales, procesamiento de adjuntos/Storage y flujo completo con usuario |
+| **IMPLEMENTADO Y PUBLICADO** | Seis herramientas MCP, consentimiento conjunto, permisos retirables; release `v0.13.0` (`0ebb61d`) |
+| **DESPLEGADO** | `202610290001` aplicada/registrada; `mcp` Edge **v4 ACTIVE**, `verify_jwt=false`, aplicación `0.3.0`; [Pages run 40963945319](https://github.com/furthurr/dashboardFurthurr/actions/runs/40963945319) en success con HTML y assets 200 |
+| **VERIFICADO** | SQL remoto (identidad, lectura y workflow) con fixtures revertidos; grants/RLS y ausencia de residuos; `whoami` real; HTTP 401 anónimo con challenge; 203 Vitest, 19 Deno MCP, 12 Deno administración, lint/build y suites SQL locales |
+| **PENDIENTE E2E** | Consentimiento/revocación en navegador, catálogo autenticado renovado con seis herramientas, lectura real de adjuntos por Storage y flujo completo con el cliente LLM |
 
-**No declarar «workflow MCP listo» ni «E2E aprobado».** El código local anuncia
-`serverInfo.version=0.3.0`; la evidencia Edge v3 anterior corresponde a la aplicación
-`0.2.0`, no a la release `0.12.1` ni a la versión numérica Edge.
-Las casillas siguientes son un checklist reutilizable de preparación/E2E, no una
-certificación ni una orden de reaplicar SQL. El registro de lo ejecutado está en
-la sección 8. En el proyecto con la evidencia remota anterior, no reejecutar
-`202610280003`; la nueva `202610290001` es otra migración local y no debe aplicarse
-hasta revisar el ledger/objetos y obtener autorización operativa.
+**No declarar «workflow MCP verificado en navegador» ni «E2E aprobado».** El código
+desplegado anuncia `serverInfo.version=0.3.0` en Edge v4; la release del producto es
+`0.13.0`. Las casillas siguientes son un checklist reutilizable de preparación/E2E,
+no una certificación. El registro de lo ejecutado está en la sección 8. **No reejecutar
+`202610280003` ni `202610290001`**: ninguna es idempotente y ambas ya están
+registradas; antes de cualquier SQL, comparar ledger y objetos reales.
 
 La persona comparte un UUID; el asistente consulta todas las páginas, estudia
 adjuntos compatibles y pregunta dudas. Solo tras aceptación puede iniciar la tarea,
 registrar un comentario de resultado y, si el usuario valida, enviarla a revisión.
-No finaliza tareas, no asigna ni reabre. Estas herramientas existen en el código
-local; el E2E completo está pendiente.
+No finaliza tareas, no asigna ni reabre. Las herramientas están desplegadas; el E2E
+completo está pendiente.
 
 Referencias autoritativas: [contrato y errores](../.data/01-endpoints.md),
 [DTOs](../.data/02-models.md), [schema y discrepancia remota](../.data/04-schema.md),
@@ -136,9 +132,9 @@ auditoría de seguridad completa.
 - [ ] Confirmar requisitos: tablas de tarea/relaciones y tablero con `is_active`,
   Auth OAuth con `oauth_clients`/`sessions`, configuración de audiencia y
   `mcp_whoami()` de `202610280002` funcional.
-- [ ] La evidencia remota previa registra `202610280003`; no volver a aplicarla.
-  Revisar el ledger y objetos del proyecto real antes de proponer el workflow local
-  [`202610290001_mcp_workflow.sql`](../supabase/migrations/202610290001_mcp_workflow.sql).
+- [ ] La evidencia remota registra `202610280003` **y** `202610290001`; no volver a
+  aplicarlas. Antes de cualquier SQL en otro entorno, revisar ledger y objetos reales
+  y comparar con [`202610290001_mcp_workflow.sql`](../supabase/migrations/202610290001_mcp_workflow.sql).
   Requiere tabla de lectura legacy, tablas de tarea/adjunto/tablero y tablas Auth
   `oauth_consents`/`oauth_authorizations`. No es idempotente para reejecución.
 
@@ -178,8 +174,8 @@ select
 Presencia no demuestra definición, grants ni aplicación registrada. Si los objetos
 nuevos ya existen, detenerse y comparar sus definiciones; no reejecutar el archivo.
 
-- [ ] Solo tras comparar SQL/objetos y aprobar la operación con la persona responsable,
-  aplicar `202610290001` si está realmente pendiente y registrar evidencia. No editar
+- [ ] Solo en otro entorno y tras comparar SQL/objetos y aprobar la operación con la
+  persona responsable, aplicar la migración pendiente y registrar evidencia. No editar
   manualmente el ledger ni ejecutar un push global como atajo. El `ROLLBACK` de tests
   no revierte la migración persistente.
 - [ ] En proyecto de pruebas, ejecutar
@@ -196,10 +192,10 @@ nuevos ya existen, detenerse y comparar sus definiciones; no reejecutar el archi
 
 ## 4. Desplegar las piezas compatibles
 
-Solo para el responsable con autorización operativa. El procedimiento siguiente
-sirve para otra instalación o un cambio futuro; la evidencia remota anterior cubre
-`202610280003` y Edge fase 2, no `202610290001` ni la versión local 0.3.0. No
-repetir la migración ya registrada; hacer preflight antes de proponer la nueva.
+Solo para el responsable con autorización operativa. El procedimiento siguiente sirve
+para otra instalación o un cambio futuro; en el entorno verificado `202610290001` y
+Edge v4 (`0.3.0`) ya están activos y publicados en `v0.13.0`. No repetir migraciones
+registradas; hacer preflight antes de proponer SQL nuevo.
 
 1. Aplicar y comprobar SQL revisado antes de ofrecer el consentimiento de workflow.
 2. Desplegar la Edge Function revisada en el proyecto seleccionado:
@@ -230,9 +226,9 @@ del cliente ya se haya realizado.
 
 ## 5. Prueba mínima de punta a punta
 
-La secuencia siguiente aplica **solo después** de aplicar en un proyecto de prueba
-la nueva migración y desplegar una Edge/SPA compatibles. Mientras eso no ocurra,
-no esperar el comportamiento local descrito en la herramienta remota.
+La secuencia siguiente es el checklist E2E pendiente. El backend y la SPA ya están
+activados en el entorno verificado; lo que falta es la prueba con navegador y cliente
+MCP reales, con datos de prueba no sensibles.
 
 ### A. Consentimiento y catálogo
 
@@ -377,22 +373,25 @@ registrar cliente/versión, resultado de cada caso y limpieza sin datos sensible
 
 ### Implementación workflow local — evidencia del 2026-10-29, sin activación remota
 
-La operación de producto posterior a la release ejecutó **203 pruebas Vitest en 22
-archivos**, **19 Deno MCP**, `npm run lint`, `npm run build` y PostgreSQL 16 desechable.
+### Activación del workflow MCP — 2026-10-29
+
+La operación de producto ejecutó **203 pruebas Vitest en 22 archivos**, **19 Deno MCP**,
+**12 Deno de administración**, `npm run lint`, `npm run build` y PostgreSQL 16 desechable.
 El harness pasó seis suites (`mcp_identity`, `mcp_task_read`, `mcp_workflow`, `boards`,
 `task_assignments`, `user_access`) tanto en bootstrap como incremental, además de
 pruebas concurrentes de versión y comentario idempotente. Fixtures con Auth/Storage
-simulados terminaron revertidos. Esto no aplica `202610290001` en Supabase ni valida
-OAuth, navegador, Storage real, cliente visual o comprensión de contenido por el LLM.
+simulados terminaron revertidos.
 
-| Elemento local | Estado conocido |
+| Elemento | Estado comprobado |
 | --- | --- |
-| Código Edge y contrato | `serverInfo.version=0.3.0`, seis herramientas; no consta deploy posterior al Edge v3 histórico |
-| Migración | `202610290001_mcp_workflow.sql` añadida al bootstrap local; **no consta aplicada en remoto** |
-| OAuth/UI | Un consentimiento inicial conjunto y gestión/retirada desde conexiones; no se verificó navegador remoto |
-| Adjuntos | Lector local de texto UTF-8 e imágenes PNG/JPEG/GIF/WebP, máximo 5 MiB; otros formatos avisan no extraídos; descarga real pendiente |
+| Migración | `202610290001` **aplicada y registrada** con preflight, historial aislado y dry-run; no reaplicable |
+| Código Edge | `mcp` **v4 ACTIVE**, `verify_jwt=false`, aplicación `0.3.0`; hashes de los cuatro archivos iguales al repositorio |
+| SQL remoto | Identidad, lectura y workflow PASS con rollback; grants/RLS comprobados; sin cuentas, clientes, tableros, concesiones ni recibos residuales; datos del producto intactos |
+| Portal | `v0.13.0` publicado (`0ebb61d`); Pages run `40963945319` en success; HTML y assets nuevos HTTP 200 |
+| Identidad | `whoami` real correcto; solicitud anónima HTTP 401 con `WWW-Authenticate` y metadata canónica |
+| Adjuntos | Lector de texto UTF-8 e imágenes PNG/JPEG/GIF/WebP, máximo 5 MiB; otros formatos avisan no extraídos; descarga real con Storage sigue pendiente |
 | Flujo de tarea | Asignación requerida para todos los roles; `backlog`/`por_hacer` → `haciendo`; comentario de resultado; tras validación → `en_revision`; nunca `finalizadas` |
-| E2E | Pendiente de preflight SQL, despliegue autorizado de migración/Edge/Pages y prueba con cuenta/cliente compatibles |
+| E2E | Pendiente: consentimiento/revocación en navegador, catálogo autenticado con seis herramientas y estudio de adjuntos por el cliente LLM |
 
 Los mensajes e instrucciones del LLM guían conversación, no certifican que el usuario
 aprobó verbalmente ni que los archivos se hayan entendido. Las flags de aprobación

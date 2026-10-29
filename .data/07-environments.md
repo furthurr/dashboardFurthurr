@@ -40,17 +40,19 @@ sin un plan aparte de rotación de claves. DCR está activado para los clientes 
 
 ## Build/deploy observado
 
-- Baseline de producto: `c2677c9b9084e3a56b6db36a1783c5d722e82780` / `v0.12.1`.
-  Actualización focalizada del 2026-10-29; reutiliza evidencia operativa anterior
-  de esta sesión, no repite pruebas, consultas Supabase ni despliegues.
+- Baseline de producto: `0ebb61d7465afd240de47c11f2d4671affa1342c` / `v0.13.0`
+  (workflow MCP). La release anterior contrastada fue `c2677c9` / `v0.12.1`.
+  Actualización del 2026-10-29 con verificación de Supabase y del despliegue.
 - Fase 2 activada en el proyecto acordado: solo `202610280003` aplicada/registrada;
   `mcp` **Edge v3 ACTIVE**, `verify_jwt=false`, código remoto coincidente con el
-  baseline anterior (`index.ts`, `task.ts`, `deno.json`). Esa Edge no acredita el
-  workflow actual: `serverInfo.version=0.3.0`, `workflow.ts` y la migración
-  `202610290001_mcp_workflow.sql` son cambios locales sin deploy verificado.
-  `initialize` autenticado fresco también sigue pendiente.
-- Pages run `40923924908` terminó en success para el baseline anterior; HTML y
-  nuevos assets JS/CSS respondieron 200. Vite también sirvió HTML/módulo principal.
+  baseline anterior (`index.ts`, `task.ts`, `deno.json`).
+- Workflow activado el 2026-10-29: `202610290001_mcp_workflow.sql` aplicada y
+  registrada; `mcp` **Edge v4 ACTIVE** (`verify_jwt=false`) con aplicación MCP
+  `0.3.0`. Los hashes de `index.ts`, `task.ts`, `workflow.ts` y `deno.json` descargados
+  coinciden con el repositorio. No confundir release `0.13.0`, aplicación MCP `0.3.0`
+  y Edge v4. `initialize` autenticado fresco sigue pendiente.
+- Pages run `40963945319` terminó en success para `0ebb61d` (v0.13.0); HTML y nuevos
+  assets JS/CSS respondieron 200. Vite también sirvió HTML/módulo principal.
   Ni disponibilidad HTTP ni compilación prueban entorno local efectivo o flujo
   autenticado: [registro y procedimiento](../docs/prueba-mcp.md).
 - React Router DOM 7.18.5, Zod 4.6.7 (SPA/Edge), Vite 8.3.5 y transitivas npm
@@ -64,7 +66,12 @@ sin un plan aparte de rotación de claves. DCR está activado para los clientes 
 - El repositorio por sí solo no acredita los valores configurados de GitHub ni qué proyecto usa cada entorno. La operación verificó el proyecto remoto mediante herramientas autenticadas; no inspeccionó secretos ni demostró login local. Antes de E2E confirmar el mismo proyecto en ambos frontends sin leer/copiar credenciales.
 - El build de Pages no despliega Edge Functions, migraciones ni ajustes de Auth. Para una instalación existente revisa la secuencia completa en `supabase/README.md` y el estado registrado en Supabase antes de aplicar cualquier migración. En el proyecto remoto consultado el 2026-10-28 el ledger y los objetos del schema no coinciden para varias migraciones previas; no aplicar la lista local en bloque ni volver a ejecutar el bootstrap.
 - `supabase/config.toml` declara `auth.enable_signup = false`, `functions.admin-users.verify_jwt = false` y `functions.mcp.verify_jwt = false`. Esta última sólo permite el discovery/challenge en gateway; la Edge Function comprueba cada bearer. OAuth Server, DCR y el custom access-token hook fueron habilitados en el proyecto actual el 2026-10-28; el `config diff` posterior no dejó cambios declarados.
-- Ledger consultado tras la activación del 2026-10-29: `202610190001`, `202610200001`, `202610200002`, `202610210001`, `202610220001`, `202610280002` y `202610280003`. Persisten discrepancias históricas de objetos frente al ledger; ver [schema](04-schema.md) y `supabase/README.md`. No reaplicar históricos ni marcar entradas como atajo. Las dos suites MCP remotas pasaron con `ROLLBACK`; no validan Storage real.
+- Ledger consultado tras la activación del workflow: `202610190001`, `202610200001`,
+  `202610200002`, `202610210001`, `202610220001`, `202610280002`, `202610280003` y
+  `202610290001`. Persisten discrepancias históricas de objetos frente al ledger; ver
+  [schema](04-schema.md) y `supabase/README.md`. No reaplicar históricos ni marcar
+  entradas como atajo. Las tres suites MCP remotas (identidad, lectura y workflow)
+  pasaron con `ROLLBACK`; no validan Storage real ni OAuth de navegador.
 - Histórico de fase 1 (2026-10-28): `mcp` v2 y `admin-users` v6 ACTIVE, Pages `267cc91` / run `40796012117`. La operación del día 29 sustituyó MCP por v3; no redesplegó administración ni cambió hooks/Auth globales.
 
 ### Local, Pages y clientes MCP: límites comprobados
@@ -75,18 +82,20 @@ sin un plan aparte de rotación de claves. DCR está activado para los clientes 
 - El portal local llama `mcp_list_workflow_access`, `mcp_revoke_workflow_permission`
   y `mcp_authorize_workflow` mediante su sesión ordinaria
   (`src/features/auth/mcpWorkflowAccess.ts:1-34`), no con fetch al MCP. Estas RPCs
-  requieren la migración local `202610290001`; no están acreditadas en remoto.
+  requieren `202610290001`, aplicada y registrada en remoto el 2026-10-29.
   El preflight Edge desde Pages fue permitido; localhost y un origen ajeno fueron
   rechazados. Los clientes nativos sin `Origin` no necesitan CORS, mientras un
   cliente web con `Origin` requiere allowlist revisada. No habilitar wildcard ni
   cambiar Auth Site URL para eludir un fallo de prueba.
-- `whoami` real funcionó después del despliegue histórico. OpenCode CLI 1.18.34 informó
-  OAuth conectado, pero ejecución mediante modelo devolvió HTTP 401; su API local
-  requirió autenticación y `orca` no estaba disponible. La sesión seguía solo con
-  identidad; falta separar definitivamente catálogo cacheado de discovery.
-- Catálogo fresco, consulta de tarea, consentimiento/retiro y sesión nueva desde
-  cliente/navegador, así como descarga/caducidad/renovación reales, siguen pendientes.
-  No interpretar SQL remoto, un enlace simulado o HTTP 200 como evidencia E2E.
+- `whoami` real funcionó después del despliegue histórico y se volvió a comprobar
+  tras Edge v4. OpenCode CLI 1.18.34 informó OAuth conectado, pero ejecución mediante
+  modelo devolvió HTTP 401; su API local requirió autenticación y `orca` no estaba
+  disponible. La sesión seguía solo con identidad; falta separar definitivamente
+  catálogo cacheado de discovery.
+- Catálogo fresco con seis herramientas, consulta de tarea, consentimiento/retiro y
+  sesión nueva desde cliente/navegador, así como descarga/caducidad/renovación reales,
+  siguen pendientes. No interpretar SQL remoto, un enlace simulado o HTTP 200 como
+  evidencia E2E.
 
 ## Higiene
 

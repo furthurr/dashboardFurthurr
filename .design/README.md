@@ -7,7 +7,7 @@ Documentación canónica de lo visual. Léela antes de añadir pantallas, compon
 - Tecnología detectada: React + TypeScript, Tailwind CSS v4 y CSS custom properties.
 - Commit base revisado: `eb25418de42c045d6be32a3091f8bb3f36b24ba0` (2026-10-21), contiene el selector y los componentes de tableros documentados aquí.
 - Baseline de producto consultado: `HEAD=c2677c9b9084e3a56b6db36a1783c5d722e82780`; los cambios locales de OAuth/workflow y la documentación actual no están en ese commit. **Baseline documental Git pendiente**; los cambios ajenos de `BoardsPage` no se incorporan.
-- Última sincronización focalizada: 2026-10-29; además de copiar UUID y consentimiento, documenta permisos MCP conjuntos, retirada individual/todos y acciones de tarea. Reutiliza `ui-*`, `auth-*` y layout existente; no añade tokens, clases CSS propias ni tema. Cambios locales sin commit; baseline documental Git pendiente. Ver [componentes](components.md).
+- Última sincronización focalizada: 2026-10-29; además de copiar UUID y consentimiento, documenta permisos MCP conjuntos, retirada individual/todos y acciones de tarea. Reutiliza `ui-*`, `auth-*` y layout existente; no añade tokens, clases CSS propias ni tema. La UI se publicó en `v0.13.0` (commit `0ebb61d`); su revisión visual en navegador sigue pendiente. Ver [componentes](components.md).
 - Los botones de copiar y comentarios usan `ui-button ui-button--sm` e iconos de 16 px; quedan agrupados a la derecha con `gap-2`, no separados por la fila de avatares (`src/features/board/TaskCard.tsx:102-144`, `src/features/board/CopyTaskId.tsx:33-50`).
 - La revisión cubre los avatares de `AccountMenu`, `UsersPage` y el componente `ProfileAvatar`; no es un inventario completo del flujo visual de `ProfilePage`.
 - Historial de despliegue: la UI de ciclo de vida de tableros se publicó con `v0.6.0` el 2026-10-22 (workflow «Deploy to GitHub Pages», run `39860177282`, `headSha=21a44df`). No usar esa evidencia histórica como publicación de los cambios locales actuales.
@@ -44,11 +44,12 @@ Documentación canónica de lo visual. Léela antes de añadir pantallas, compon
 
 ### MCP — alcance y límites de validación visual
 
-La autorización conjunta y la vista de permisos corresponden al código local; no
-hay evidencia de publicación de esta UI, `202610290001` ni Edge `0.3.0`. Se reutiliza
-evidencia local: 17 pruebas DOM OAuth dentro de 203 Vitest, Deno/SQL local, lint y
-build correctos. Esta sincronización no repitió pruebas ni hizo revisión responsive,
-contraste o lector de pantalla. No se declara conformidad WCAG ni E2E OAuth/Storage.
+La autorización conjunta y la vista de permisos se publicaron en `v0.13.0`
+(commit `0ebb61d`, Pages run `40963945319` en success) junto con `202610290001` y
+Edge `mcp` v4 (`0.3.0`). Evidencia local reutilizada: 17 pruebas DOM OAuth dentro de
+203 Vitest, Deno/SQL local, lint y build correctos. No se hizo revisión responsive,
+contraste ni lector de pantalla en navegador, y el consentimiento real en navegador
+sigue sin verificarse. No se declara conformidad WCAG ni E2E OAuth/Storage.
 [Checklist y estado](../docs/prueba-mcp.md).
 
 ### Evidencia posterior a la revisión estática

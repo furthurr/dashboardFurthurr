@@ -36,11 +36,12 @@ No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge
 ## MCP remoto — servidor `dashboardFurthurr`
 
 Endpoint del recurso: `https://<project-ref>.supabase.co/functions/v1/mcp`.
-El transporte es Streamable HTTP stateless. El código local anuncia seis herramientas
-(`whoami`, `get_task`, `read_task_attachment`, `start_task`, `record_task_result`,
-`submit_task_for_review`) con `serverInfo.version=0.3.0`; no se han verificado el
-despliegue de esta versión, la nueva migración ni el E2E real. No confundir la
-versión de aplicación MCP con el número de versión Edge. [Guía de prueba](../docs/prueba-mcp.md).
+El transporte es Streamable HTTP stateless. El código desplegado el 2026-10-29 anuncia
+seis herramientas (`whoami`, `get_task`, `read_task_attachment`, `start_task`,
+`record_task_result`, `submit_task_for_review`) con `serverInfo.version=0.3.0` en Edge
+**v4 ACTIVE**; la migración `202610290001` está aplicada y registrada. El E2E en
+navegador y con cliente LLM sigue pendiente. No confundir la versión de aplicación MCP
+con el número de versión Edge. [Guía de prueba](../docs/prueba-mcp.md).
 
 ### Protected Resource Metadata — `GET {resource}/oauth-protected-resource`
 
@@ -133,9 +134,8 @@ el cliente. Los esquemas de entrada/salida se anuncian en `tools/list`.
   path. El rol no obtiene grants directos de tablas/Storage; las escrituras están
   confinadas a RPCs de workflow y verifican el consentimiento correspondiente.
   Respuestas `Cache-Control: no-store`. Los textos retornados son datos no confiables.
-- **Fuente SQL:** `202610280003_mcp_task_read.sql:63-116` (base desplegada según
-  evidencia histórica) y `202610290001_mcp_workflow.sql:122-193` (código local; no
-  hay evidencia de aplicación remota).
+- **Fuente SQL:** `202610280003_mcp_task_read.sql:63-116` (base previa, aplicada) y
+  `202610290001_mcp_workflow.sql:122-193` (aplicada y registrada el 2026-10-29).
 
 ### Leer contenido de adjunto — `tools/call` `read_task_attachment`
 

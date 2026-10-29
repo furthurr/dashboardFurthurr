@@ -7,10 +7,10 @@ Documentación canónica de datos y contratos consumidos por la aplicación. Lé
 - Tecnología detectada: cliente TypeScript `@supabase/supabase-js`, Supabase Auth/PostgREST/PostgreSQL/Storage, Edge Functions `admin-users` y `mcp`, OAuth 2.1 y RPCs de producto.
 - Modo: `full`.
 - ¿BD interna?: No. La persistencia es PostgreSQL gestionado externamente por Supabase; el schema de referencia está en `supabase-schema.sql`.
-- Baseline de producto contrastado: `HEAD=c2677c9b9084e3a56b6db36a1783c5d722e82780` (`v0.12.1`); correcciones en `a6adb89`, implementación de fase 2 en `9ecc905`. Este hash incluye producto, no el diff documental actual sin commit: **pendiente de baseline documental Git**.
-- Últimas actualizaciones focalizadas: 2026-10-29. Esta sincronización añade el workflow MCP local en los contratos de endpoints/modelos/mapeo/schema/convenios/PII/entorno y este índice; no sincroniza el resto del producto. Los cambios documentales siguen sin commit y pendientes de baseline Git. Se preservan cambios ajenos en selector de tableros, `.sdd/` y `pnpm-lock.yaml`.
-- Evidencia operativa del 2026-10-29 reutilizada de esta sesión y de las notas de v0.12.1: solo `202610280003` aplicada y registrada, Edge `mcp` v3 ACTIVE y Pages run `40923924908` correcto en `c2677c9`. La actualización documental no repite consultas Supabase, pruebas ni despliegues. Ledger y objetos siguen divergentes para migraciones históricas; ver [operación Supabase](../supabase/README.md) y [schema](04-schema.md).
-- Evidencia remota anterior no repetida: el despliegue registrado solo contiene `whoami`/`get_task` (`serverInfo.version=0.2.0`, `mcp` Edge v3) y la migración `202610280003`. La nueva versión local anuncia seis herramientas con `serverInfo.version=0.3.0`; `202610290001_mcp_workflow.sql`, el consentimiento conjunto, los permisos de trabajo y la lectura de adjuntos no se han aplicado/verificado remotamente. No confundir estas versiones ni declarar E2E. [Registro y procedimiento](../docs/prueba-mcp.md).
+- Baseline de producto contrastado: `0ebb61d7465afd240de47c11f2d4671affa1342c` (`v0.13.0`, workflow MCP); release anterior `c2677c9` (`v0.12.1`), fase 2 en `9ecc905`. Este hash incluye el producto publicado; la corrección documental posterior queda **pendiente de baseline documental Git**.
+- Últimas actualizaciones focalizadas: 2026-10-29. Esta sincronización añade el workflow MCP en los contratos de endpoints/modelos/mapeo/schema/convenios/PII/entorno y este índice, y actualiza el estado de despliegue tras la activación; no sincroniza el resto del producto. Se preservan cambios ajenos en selector de tableros, `.sdd/` y `pnpm-lock.yaml`.
+- Evidencia operativa previa (fase 2): `202610280003` aplicada y registrada, Edge `mcp` v3 ACTIVE y Pages run `40923924908` en `c2677c9`. El ledger y los objetos siguen divergentes para migraciones históricas; ver [operación Supabase](../supabase/README.md) y [schema](04-schema.md).
+- Evidencia remota vigente del 2026-10-29: `202610290001_mcp_workflow.sql` aplicada y registrada (ledger con ocho versiones), `mcp` Edge **v4 ACTIVE** con `verify_jwt=false` y aplicación `0.3.0`; los cuatro archivos descargados coinciden por hash con el código local. El despliegue anterior solo tenía `whoami`/`get_task` (`0.2.0`, Edge v3). No confundir versiones ni declarar E2E: siguen pendientes el consentimiento/revocación en navegador, el catálogo autenticado renovado y el estudio de tareas/adjuntos reales por el cliente. [Registro y procedimiento](../docs/prueba-mcp.md).
 - Commit base de implementación y primera sincronización: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`, incluye el código, la migración y la documentación funcional inicial.
 - Registro histórico de despliegue: la secuencia de migraciones y las pruebas SQL `boards.sql`, `task_assignments.sql` y `user_access.sql` se ejecutaron correctamente en el proyecto Supabase seleccionado el 2026-10-21; el 2026-10-22 se aplicaron `202610220001` y `202610220002` y volvieron a pasar las tres suites. Ese registro está versionado en `21a44df` y no acredita el estado remoto de migraciones posteriores.
 - Estado de despliegue del ciclo de vida: `202610220001` y `202610220002` **aplicadas el 2026-10-22 en el proyecto Supabase remoto**, en ese orden. Las tres suites SQL remotas (`boards.sql`, `task_assignments.sql`, `user_access.sql`) pasan y revierten sus fixtures con `ROLLBACK`. La SPA se **publicó en GitHub Pages con `v0.6.0` el 2026-10-22** (workflow «Deploy to GitHub Pages», run `39860177282`, `headSha=21a44df`, conclusión `success`) bajo el origen de Pages del proyecto. El redeploy de la Edge Function `admin-users` y la configuración de Auth remota se verificaron ese mismo 2026-10-22 y **ya no están pendientes** (marca siguiente).
@@ -24,7 +24,7 @@ Documentación canónica de datos y contratos consumidos por la aplicación. Lé
 - **Modelos clave:** `Board` (con `is_active` y `pending_count`), `Task.board_id`, `board_members`, `AssigneeProfile`, `TaskWithAssignees.assignees` y `TaskWithAssignees.comment_count` derivado de `tasks_with_stats`, además de `ManagedUser` (`src/types/index.ts:33-47`, `src/features/board/api.ts:15-35`).
 - **Fuentes de datos:** Supabase Auth/OAuth, PostgreSQL administrado, Storage y caché de TanStack Query. No se encontró una base de datos local.
 - **Convenciones:** TanStack Query, cinco minutos/un reintento por defecto; administración y usuarios asignables usan `staleTime: 0`. El catálogo de tableros se obtiene por RPC (`list_boards_with_pending_counts`) con `staleTime: 0` y refresco de 30 s; alta, renombrado y activación/desactivación invalidan `['boards']`. Crear o eliminar comentarios invalida `['tasks']` para refrescar el conteo de las tarjetas; renombrar/eliminar adjuntos invalida `['attachments']` y `['task-image-previews']` (`src/features/board/attachmentsApi.ts:181-203`). Listado administrativo de 50 por página y consulta de cuentas activas en lotes de 500. No hay timeout explícito ni contrato global de error; la Edge Function sí devuelve `{ error: string }` y el selector de tableros traduce códigos SQL a mensajes (`src/features/boards/BoardsPage.tsx:72-91`, `src/features/board/commentsApi.ts:53-75`).
-- **Integridad y permisos:** cada tarea tiene `board_id`. El portal local permite membresía o asignación en tablero activo, además de admin activo (`supabase/migrations/202610280001_board_assignment_access.sql:4-42`). En el código MCP local todas las tareas requieren asignación explícita, incluido admin, acceso al tablero y estado `backlog`, `por_hacer` o `haciendo`; no admin también requiere membresía. Iniciar y enviar a revisión son acciones separadas, y Finalizadas permanece manual. `202610290001` no se ha verificado remoto.
+- **Integridad y permisos:** cada tarea tiene `board_id`. El portal local permite membresía o asignación en tablero activo, además de admin activo (`supabase/migrations/202610280001_board_assignment_access.sql:4-42`). En el MCP todas las tareas requieren asignación explícita, incluido admin, acceso al tablero y estado `backlog`, `por_hacer` o `haciendo`; no admin también requiere membresía. Iniciar y enviar a revisión son acciones separadas, y Finalizadas permanece manual. Verificado por SQL remoto el 2026-10-29.
 - **Ciclo de vida de tableros:** `boards.is_active` permite desactivar un tablero sin borrar tareas, comentarios, adjuntos ni membresías. Mientras está desactivado, sus miembros dejan de verlo y de acceder a sus tareas (también por URL directa); el admin activo conserva el acceso y puede reactivarlo. El listado de pendientes suma `backlog`, `por_hacer` y `haciendo`.
 - **Campos sensibles/PII:** `whoami` devuelve identidad/email; tarea/adjuntos incluyen contenido privado, nombres/IDs y URLs temporales. `record_task_result` guarda comentario y `mcp_task_operations` conserva payload/recibo para idempotencia; no hay retención definida para el recibo local. No registrar tokens, enlaces firmados ni contenido privado en evidencias. Archivos y comentarios son material no confiable, no instrucciones.
 - **Límite de esta documentación:** registra el contrato observado y las comprobaciones remotas fechadas, pero no certifica la configuración desplegada de Supabase más allá de esas verificaciones ni sustituye una auditoría de seguridad.
@@ -47,7 +47,7 @@ Documentación canónica de datos y contratos consumidos por la aplicación. Lé
 - `supabase-schema.sql`: bootstrap de referencia para instalaciones nuevas; contiene también el aislamiento MCP. `supabase/migrations/` contiene secuencia local incremental. En el proyecto remoto actual, el ledger y el schema divergen para varias migraciones históricas; el detalle y la regla de no ejecutar `db push` a ciegas está en `supabase/README.md`. No reejecutar el bootstrap sobre una BD existente.
 - `src/types/index.ts`: tipos TypeScript usados por la app.
 - `src/lib/supabase.ts`: inicialización y nombres de variables necesarias.
-- `src/features/auth/`, `src/features/users/`, `src/features/boards/` y `src/features/board/`: operaciones cliente; `supabase/functions/admin-users/`: administración; `supabase/functions/mcp/`: identidad, contexto y workflow local. `202610280002_mcp_identity.sql` define hook/rol; `202610280003_mcp_task_read.sql` agrega lectura legacy; `202610290001_mcp_workflow.sql` define autorización conjunta, RPCs limitadas y tablas workflow en el bootstrap. Esta última no se verificó aplicada remotamente.
+- `src/features/auth/`, `src/features/users/`, `src/features/boards/` y `src/features/board/`: operaciones cliente; `supabase/functions/admin-users/`: administración; `supabase/functions/mcp/`: identidad, contexto y workflow. `202610280002_mcp_identity.sql` define hook/rol; `202610280003_mcp_task_read.sql` agrega lectura legacy; `202610290001_mcp_workflow.sql` define autorización conjunta, RPCs limitadas y tablas workflow en el bootstrap, y está aplicada y registrada en remoto.
 - `specs/04-modelo-datos.md` y `specs/05-auth-roles-permisos.md`: intención de producto y matriz prevista; contrastar con el SQL al cambiar el contrato.
 
 ## Discrepancias que deben conservarse visibles
@@ -93,15 +93,30 @@ alcance y las limitaciones de la evidencia operativa fechada.
 
 ### Workflow MCP local, evidencia reutilizada — 2026-10-29
 
-La implementación local posterior a fase 2 pasa 203 Vitest, 19 pruebas Deno MCP,
-lint y build. El harness PostgreSQL 16 desechable pasó seis suites (`mcp_identity`,
-`mcp_task_read`, `mcp_workflow`, `boards`, `task_assignments`, `user_access`) en
-incremental y bootstrap, además de dos comprobaciones de transacciones concurrentes
-para conflicto de versión e idempotencia de comentario. Auth/Storage son simulados;
-las fixtures SQL se revierten. No hubo prueba remota ni E2E con OAuth/Storage reales.
-El build conserva avisos de bundle >500 kB y `__dirname` de Vite. Esta sincronización
-no repitió esos comandos. La migración `202610290001` y Edge `0.3.0` siguen pendientes
-de activación/verificación remota; ver [guía de prueba](../docs/prueba-mcp.md).
+La implementación del workflow pasa 203 Vitest, 19 pruebas Deno MCP, lint y build. El
+harness PostgreSQL 16 desechable pasó seis suites (`mcp_identity`, `mcp_task_read`,
+`mcp_workflow`, `boards`, `task_assignments`, `user_access`) en incremental y bootstrap,
+además de dos comprobaciones de transacciones concurrentes para conflicto de versión e
+idempotencia de comentario. Auth/Storage son simulados; las fixtures SQL se revierten.
+El build conserva avisos de bundle >500 kB y `__dirname` de Vite. Esta sincronización no
+repitió esos comandos.
+
+### Activación del workflow MCP — 2026-10-29
+
+- `202610290001_mcp_workflow.sql` aplicada y registrada en el proyecto remoto con
+  preflight, historial aislado y dry-run que seleccionó solo ese archivo; no se
+  reaplicaron migraciones históricas ni se alteraron Vault, roles o seeds.
+- `mcp` desplegada como Edge **v4 ACTIVE**, `verify_jwt=false`, aplicación `0.3.0`;
+  los hashes de `index.ts`, `task.ts`, `workflow.ts` y `deno.json` descargados coinciden
+  con el repositorio.
+- SQL remoto: identidad, lectura y workflow aprobados con fixtures revertidos, grants/RLS
+  comprobados, sin concesiones ni datos de prueba residuales. `whoami` real correcto;
+  la solicitud anónima conserva HTTP 401 con desafío OAuth.
+- Publicación: `v0.13.0` (`0ebb61d`) y [Pages run 40963945319](https://github.com/furthurr/dashboardFurthurr/actions/runs/40963945319)
+  en success, con HTML y assets nuevos respondiendo 200.
+- **No acreditado:** consentimiento/revocación en navegador, catálogo autenticado
+  renovado y estudio de tareas/adjuntos reales desde el cliente LLM. Ver
+  [guía de prueba](../docs/prueba-mcp.md).
 
 ### MCP / OAuth — evidencia remota histórica de fase 1, 2026-10-28
 

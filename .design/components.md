@@ -4,10 +4,11 @@ Catálogo de componentes actuales, no una promesa de API reutilizable fuera de s
 
 ## Actualización focalizada — copia de UUID y workflow MCP, 2026-10-29
 
-Describe cambios locales sin commit sobre el producto publicado `c2677c9`, no una publicación. No añade
-tokens ni clases CSS propias; los botones reutilizan `ui-button ui-button--sm`,
-SVG decorativo de 16 px y estilos de foco existentes. Las entradas siguientes
-prevalecen sobre las descripciones históricas del botón de comentarios.
+Describe el workflow MCP y la copia de UUID, publicados en `v0.13.0` (commit
+`0ebb61d`). No añade tokens ni clases CSS propias; los botones reutilizan
+`ui-button ui-button--sm`, SVG decorativo de 16 px y estilos de foco existentes. Las
+entradas siguientes prevalecen sobre las descripciones históricas del botón de
+comentarios.
 
 | Componente/patrón | Propósito, estados y comportamiento | Fuente |
 | --- | --- | --- |
@@ -23,9 +24,10 @@ prevalecen sobre las descripciones históricas del botón de comentarios.
 Se reutilizan 203 pruebas Vitest (22 archivos), 19 Deno MCP y suites SQL locales,
 lint/build correctos de la implementación; esta sincronización no repite comandos.
 17 pruebas DOM OAuth cubren aprobación conjunta, permisos visibles/retirada,
-autoaprobación OAuth antigua y errores de autorización. No hay revisión de navegador
-responsive, descarga real, lector de pantalla o contraste; la UI y migración nuevas
-no se han verificado desplegadas. No se declara conformidad WCAG.
+autoaprobación OAuth antigua y errores de autorización. La UI y la migración se
+publicaron en `v0.13.0` y el backend se activó el 2026-10-29. No hay revisión de
+navegador responsive, descarga real, lector de pantalla o contraste, ni E2E del
+consentimiento en navegador. No se declara conformidad WCAG.
 [Guía de test](../docs/prueba-mcp.md) y [contratos de datos](../.data/01-endpoints.md).
 
 ## Registro de fase 1 — OAuth MCP y conexiones, 2026-10-28

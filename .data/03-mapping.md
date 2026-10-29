@@ -79,7 +79,7 @@ McpIdentity { id, email, full_name, role, client_id }
 Fuente: `supabase/functions/mcp/index.ts:25-38,50-66,129-150`,
 `supabase/migrations/202610280002_mcp_identity.sql:23-74`.
 
-## UUID de tarjeta → MCP contexto y flujo de trabajo (local, sin despliegue acreditado)
+## UUID de tarjeta → MCP contexto y flujo de trabajo (desplegado el 2026-10-29)
 
 1. `CopyTaskId` copia `Task.id` completo, sin prefijos, desde tarjeta o detalle.
 2. `taskInput` valida UUID/offsets/page size, rechaza campos extra y normaliza el

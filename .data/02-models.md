@@ -1,6 +1,6 @@
 # Modelos y tipos
 
-Los tipos del portal viven en `src/types/index.ts`; los casts de queries no validan ni completan campos. MCP valida DTOs de tarea/adjuntos y argumentos workflow con Zod en `supabase/functions/mcp/task.ts:4-35` y `supabase/functions/mcp/workflow.ts:6-25`; el portal valida los permisos MCP con Zod en `src/features/auth/mcpWorkflowAccess.ts:3-24`. El esquema de instalación nueva es `supabase-schema.sql`; `202610290001_mcp_workflow.sql` existe localmente y no hay evidencia de despliegue remoto.
+Los tipos del portal viven en `src/types/index.ts`; los casts de queries no validan ni completan campos. MCP valida DTOs de tarea/adjuntos y argumentos workflow con Zod en `supabase/functions/mcp/task.ts:4-35` y `supabase/functions/mcp/workflow.ts:6-25`; el portal valida los permisos MCP con Zod en `src/features/auth/mcpWorkflowAccess.ts:3-24`. El esquema de instalación nueva es `supabase-schema.sql`; `202610290001_mcp_workflow.sql` está aplicada y registrada en el proyecto remoto.
 
 ## Enumeraciones
 
