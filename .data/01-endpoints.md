@@ -1,6 +1,6 @@
 # Catálogo de operaciones de datos
 
-No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge Function propia y RPCs Postgres. Se documentan nombres, parámetros y respuestas reales sin URLs de proyecto. RLS/grants o comprobaciones servidor explícitas controlan cada operación.
+No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge Function administrativa, RPCs Postgres y el resource server MCP Streamable HTTP. Se documentan nombres, parámetros y respuestas sin valores de proyecto. RLS/grants o comprobaciones servidor explícitas controlan cada operación.
 
 ## Autenticación
 
@@ -32,6 +32,68 @@ No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge
 - Response: `AuthContext.signOut()` espera la promesa, pero no devuelve ni transforma el resultado.
 - Errores: no hay manejo local explícito en el código observado.
 - Fuente: `src/features/auth/AuthContext.tsx:95-98`; después limpia TanStack Query.
+
+## MCP remoto — servidor `dashboardFurthurr`
+
+Endpoint del recurso: `https://<project-ref>.supabase.co/functions/v1/mcp`.
+El transporte es Streamable HTTP stateless; el servidor anuncia una sola
+herramienta, `whoami`, sin recursos MCP ni herramientas de negocio.
+
+### Protected Resource Metadata — `GET {resource}/oauth-protected-resource`
+
+- Propósito: publicar `resource`, `authorization_servers` y métodos Bearer para
+  que un cliente descubra Supabase Auth según RFC 9728. No requiere token.
+- Response observado: `resource` es la URL canónica exacta del MCP,
+  `authorization_servers` contiene el issuer `/auth/v1`, `bearer_methods_supported`
+  contiene `header`, y `scopes_supported` contiene `email profile`.
+- Errores: métodos distintos de GET → 405; un Origin fuera de la allowlist → 403.
+- Fuente: `supabase/functions/mcp/index.ts:43-45,61-82`.
+
+### Desafío de autorización — MCP sin token
+
+- Una solicitud de protocolo sin Bearer devuelve HTTP 401 y `WWW-Authenticate`
+  con `resource_metadata="{resource}/oauth-protected-resource"` y scopes
+  `email profile`. La URL nunca se acepta desde `Host` o query parameters.
+- Los clientes deben iniciar Authorization Code + PKCE contra Supabase Auth y
+  enviar el access token en `Authorization: Bearer ...`; no enviar tokens de sesión
+  del portal ni tokens en URL.
+- La autorización interactiva pasa por `site_url` + `authorization_url_path` de
+  Auth, que redirige al consentimiento Pages con `authorization_id` opaco. Cada
+  cliente registra su propio OAuth client DCR/public y requiere consentimiento.
+- Error local observado sin autorización: HTTP 401 con `resource_metadata`; no se
+  incluyen códigos, secretos ni bearer en la respuesta.
+- Fuente: `supabase/functions/mcp/index.ts:84-91`, `src/features/auth/mcpOAuth.ts:2-21`.
+
+### Herramienta de identidad — `tools/call` `whoami`
+
+- Propósito: identificar al perfil activo asociado al token MCP y al cliente OAuth.
+- Request JSON-RPC: `tools/call` con `name: "whoami"` y argumentos vacíos. No hay
+  operaciones que acepten IDs de tableros/tareas u otros datos de usuario.
+- Response: objeto estructurado `id`, `email`, `full_name`, `role`, `client_id`;
+  contrato JSON Schema en [`contracts/mcp-whoami.schema.json`](contracts/mcp-whoami.schema.json).
+  Email, nombre e identificadores son PII y pasan al contexto del agente.
+- Auth servidor: `mcp_identity`, claim `aud` igual al resource URL y sesión activa
+  en `auth.sessions`; además se verifica firma ES256/RS256, `iss`, `exp`, `sub`,
+  `session_id` y `client_id`. La RPC `mcp_whoami()` es `SECURITY DEFINER` con
+  `search_path = ''` y valida estado activo, audience, client y sesión en cada call.
+- Respuestas de denegación: token ausente/inválido/revocado → 401; perfil inactivo
+  o autorización insuficiente → 403; error de persistencia inesperado → 503. El
+  server no reenvía el bearer a otro servicio ni usa `service_role`.
+- Fuente: `supabase/functions/mcp/index.ts:23-35,47-58,90-115`,
+  `supabase/migrations/202610280002_mcp_identity.sql:47-74`.
+
+### Consentimiento y concesiones OAuth
+
+- UI Pages: `/oauth/consent?authorization_id=<opaque-id>` muestra cliente, callback,
+  scopes y cuenta; la persona puede autorizar o denegar. Después de login, `LoginPage`
+  vuelve al consentimiento. El callback procede solo del `redirect_url` de Auth y
+  permite HTTPS o loopback HTTP del cliente público.
+- Gestión: `/profile/connections` lista grants y permite `revokeGrant(clientId)`;
+  Auth elimina sesiones del cliente y `mcp_whoami()` vuelve a comprobar la sesión.
+- Scopes `email`/`profile` determinan claims de identidad; **no son permisos de base
+  de datos**. El aislamiento real está en el rol SQL dedicado y grants/policies.
+- Fuente: `src/App.tsx:11-16,39-42`, `src/features/auth/OAuthConsentPage.tsx:18-78`,
+  `src/features/auth/OAuthConnectionsPage.tsx:15-41`, `supabase/migrations/202610280002_mcp_identity.sql:23-74`.
 
 ## PostgreSQL vía Supabase
 

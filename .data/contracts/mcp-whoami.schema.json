@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dashboardfurthurr:mcp:whoami:response",
+  "title": "DashboardFurthurrMcpIdentity",
+  "description": "Identidad del perfil activo devuelta por la única herramienta MCP de fase 1.",
+  "type": "object",
+  "required": ["id", "email", "full_name", "role", "client_id"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID de profiles/auth.uid()."
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Correo del perfil; PII."
+    },
+    "full_name": {
+      "type": "string",
+      "description": "Nombre completo del perfil; PII."
+    },
+    "role": {
+      "type": "string",
+      "enum": ["admin", "usuario", "invitado"],
+      "description": "Rol de producto almacenado en profiles, no rol SQL de sesión."
+    },
+    "client_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identificador OAuth del cliente que autorizó la conexión."
+    }
+  },
+  "additionalProperties": false
+}

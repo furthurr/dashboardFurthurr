@@ -51,3 +51,31 @@ Fuente: `src/features/boards/api.ts`, `src/features/board/BoardPage.tsx:411`, `s
 - Las interfaces/uniones de `src/types/index.ts:1-78` describen tipos estáticos; `parseAction` sí valida los payloads administrativos de entrada, no las respuestas del SDK.
 - Las respuestas se convierten a esos tipos mediante casts en algunas consultas (`src/features/board/api.ts:29-35`, `src/features/board/commentsApi.ts:15-17`); no se observa una validación runtime del payload. `comment_count` se convierte explícitamente a `number` antes del merge.
 - No hay una capa de mapeo DTO-dominio general: las queries de cada feature adaptan directamente el resultado donde hace falta.
+
+## Identidad OAuth → MCP `whoami`
+
+```text
+OAuth client
+  └── authorization_code + PKCE + resource=<MCP resource URL>
+        ↓ Supabase Auth, consentimiento en Pages
+OAuth access token { sub, client_id, session_id, role=mcp_identity, aud=<resource> }
+        ↓ firma/issuer/audience/exp y sesión comprobadas por la Edge Function
+PostgREST RPC mcp_whoami() bajo auth.uid() / rol SQL mcp_identity
+        ↓ lookup de profile activo, no lectura genérica de tablas
+McpIdentity { id, email, full_name, role, client_id }
+```
+
+- `sub` se compara con `profiles.id`; `client_id` debe coincidir con
+  `auth.sessions.oauth_client_id`; `aud` coincide exactamente con
+  `mcp_oauth_configuration.resource_url`.
+- El JWT `role=mcp_identity` es un rol de conexión Postgres aislado y distinto de
+  `profiles.role`, que aparece en la respuesta como rol de producto.
+- La Edge Function no transforma ni reenvía el token a APIs de negocio; lo usa
+  únicamente para la RPC `mcp_whoami()`, que valida la sesión y proyecta campos de
+  perfil activo. La validación JWT en Deno y la comprobación de sesión en SQL son
+  controles complementarios.
+- `McpIdentity` es PII (email/nombre/IDs) que el agente recibe en contexto. El
+  contrato JSON Schema es [`contracts/mcp-whoami.schema.json`](contracts/mcp-whoami.schema.json).
+
+Fuente: `supabase/functions/mcp/index.ts:23-58,90-105`,
+`supabase/migrations/202610280002_mcp_identity.sql:23-74`.

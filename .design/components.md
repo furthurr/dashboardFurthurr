@@ -2,6 +2,25 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
+## Actualización focalizada — OAuth MCP y conexiones, 2026-10-28
+
+El flujo visual usa estilos y componentes existentes; no agrega tokens, tema ni
+clases CSS. El contenido de identidad/cliente que muestra consentimiento incluye
+PII e identificadores, por lo que la UI advierte revisar cliente y callback.
+
+| Componente/patrón | Propósito, estados y comportamiento | Fuente |
+| --- | --- | --- |
+| `OAuthConsentPage` | Ruta `#/oauth/consent`; shell y panel de auth. Redirige a login conservando el `authorization_id`; muestra comprobación de sesión, perfil inactivo, carga/error recuperable, cliente, ID, redirect URI y scopes; permite autorizar o denegar. Muestra advertencia de PII y que la contraseña no se comparte | `src/features/auth/OAuthConsentPage.tsx:18-78`, `src/features/auth/LoginPage.tsx:25-28`, `src/features/auth/mcpOAuth.ts:2-21` |
+| `OAuthConnectionsPage` | Ruta protegida `#/profile/connections`; cabecera de perfil, lista de grants, estado de carga/error/vacío, botón destructivo de revocar y feedback de operación. Revoca el grant OAuth, no elimina datos de negocio | `src/features/auth/OAuthConnectionsPage.tsx:15-57`, `src/App.tsx:39-42` |
+| Confirmación y callback OAuth | La solicitud contiene un ID opaco, no un redirect arbitrario; la navegación de retorno se acepta solo desde `redirect_url` de Supabase Auth y el helper limita destinos a HTTPS o loopback HTTP | `src/features/auth/mcpOAuth.ts:2-36`, `src/features/auth/OAuthConsentPage.tsx:23-49` |
+
+### Verificación y límites
+
+Las pruebas DOM prueban consentimiento, denegación, reintentos, estado inactivo,
+revocación y callback seguro. No se hizo revisión visual del layout MCP en navegador,
+cálculo de contraste ni auditoría con lector de pantalla; no se declara conformidad
+WCAG. El build remoto de Pages pasó, pero ello no equivale a validación visual.
+
 ## Actualización focalizada — adjuntos, eliminación de tableros y avatares, 2026-10-26
 
 Describe el árbol local aún sin commit sobre adjuntos, tableros y avatares. `HEAD` es `bbacf5c62a8ab0bf144e602ae3666c4026882f0e` (`v0.9.0` en preparación); esta entrada no afirma que esos cambios estén incluidos en `HEAD` ni publicados.

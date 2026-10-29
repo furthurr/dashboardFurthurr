@@ -2,6 +2,31 @@
 
 ## Autenticación y autorización
 
+### Clientes MCP remotos
+
+- El endpoint MCP usa Streamable HTTP y Supabase Auth OAuth 2.1 Authorization Code
+  + PKCE/DCR. Cada herramienta recibe Bearer por header; no se aceptan tokens de
+  sesión del portal, query-string ni token passthrough (`supabase/functions/mcp/index.ts:61-91`).
+- El 401 incluye `WWW-Authenticate` con la URL de Protected Resource Metadata y
+  scopes mínimos `email profile`. Son scopes OIDC de identidad, no permisos de
+  Postgres. La autorización de datos se impone mediante `role=mcp_identity`, la
+  audiencia exacta del recurso y `mcp_whoami()` (`supabase/functions/mcp/index.ts:43-45,84-91`,
+  `supabase/migrations/202610280002_mcp_identity.sql:23-74`).
+- `mcp_identity` no hereda `authenticated`/`service_role`, no recibe grants de
+  tablas/vistas/RPC de negocio y solo ejecuta `mcp_whoami()`. Las cuentas inactivas,
+  sesiones revocadas y clientes/audiencias no coincidentes se rechazan. `admin-users`
+  también rechaza los claims OAuth después de verificar la firma del token.
+- OAuth Server/DCR de Supabase está en beta; el cliente DCR declara su propio nombre
+  y callback, lo que no prueba que sea confiable. La UI muestra esos valores y exige
+  consentimiento; no se activa `autoApprove` en los presets. El usuario puede
+  revocar grants desde el portal.
+- El acceso sólo expone `whoami`, no endpoints/RPCs de negocio. El resultado
+  `{id,email,full_name,role,client_id}` contiene PII y se transfiere al contexto del
+  agente. Trátalo como dato de usuario y no lo registres/publices.
+- En Supabase, aplicar únicamente migraciones pendientes verificadas. El proyecto
+  remoto consultado tenía un ledger incompleto respecto a objetos observados; la
+  reconciliación se documenta en `supabase/README.md` antes de cualquier `db push`.
+
 - La app inicializa un único cliente de Supabase con `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` (`src/lib/supabase.ts:1-10`).
 - `AuthProvider` hidrata sesión, escucha cambios y consulta perfil. Descarta respuestas de otra identidad y refresca cada 30 s/al recuperar foco; el login usa `signInWithPassword`. Ya no hay `signUp` cliente (`src/features/auth/AuthContext.tsx:27-98`, `src/features/auth/LoginPage.tsx:12-27`).
 - Las altas usan Edge Function con `auth.admin.createUser`, correo confirmado y rol `usuario` forzado; el registro público se deshabilita por configuración. `verify_jwt = false` del gateway se compensa con `auth.getUser` y comprobación de admin activo dentro de la función (`supabase/functions/admin-users/index.ts:17-50`, `supabase/config.toml`).

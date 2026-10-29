@@ -37,6 +37,22 @@ Correspondencia: `public.profiles`; extiende la identidad de `auth.users`.
 
 Fuente: `src/types/index.ts:7-17`, `supabase/migrations/202610190001_user_administration.sql:4-16`. El default de columna de rol es `invitado`; el trigger de alta y la función administrativa asignan `usuario` en el flujo actual.
 
+## `McpIdentity` — respuesta de `whoami`
+
+La herramienta MCP devuelve una proyección explícita de la cuenta activa y del
+cliente OAuth. No es el JWT ni una sesión completa y no se persiste como tabla.
+
+| Campo | Tipo | Requerido | Sensible/PII | Notas |
+| --- | --- | --- | --- | --- |
+| `id` | UUID string | Sí | Identificador de cuenta | Igual a `profiles.id` / `auth.uid()` validado en la sesión OAuth |
+| `email` | string/email | Sí | PII alta | `profiles.email` |
+| `full_name` | string | Sí | PII | `profiles.full_name` |
+| `role` | `UserRole` | Sí | Dato de autorización | Rol de producto del perfil (`admin`, `usuario`, `invitado`), no `role=mcp_identity` del JWT |
+| `client_id` | UUID string | Sí | Identificador de integración | Cliente OAuth registrado en `auth.oauth_clients` |
+
+El JSON Schema completo está en [`contracts/mcp-whoami.schema.json`](contracts/mcp-whoami.schema.json). No incluye access/refresh token, `session_id`, tablas de negocio ni referencias a tableros.
+Fuente: `supabase/functions/mcp/index.ts:12-18,100-105`, `supabase/migrations/202610280002_mcp_identity.sql:65-71`.
+
 ## `Task` y `TaskWithAssignees`
 
 Correspondencia: `public.tasks`; `TaskWithAssignees` agrega `assignees` y contadores opcionales.

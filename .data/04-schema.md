@@ -1,8 +1,8 @@
 # Schema de persistencia Supabase
 
-La persistencia es PostgreSQL gestionado fuera de la SPA. `supabase-schema.sql` es el bootstrap completo; `supabase/migrations/` contiene los cambios incrementales para instalaciones existentes. La documentación conserva la verificación remota histórica de las migraciones hasta `202610220002_board_lifecycle.sql` en octubre de 2026. En el árbol local existen además `202610260001_task_attachment_management.sql`, `202610260002_delete_inactive_boards.sql` y `202610260003_profile_avatars.sql`; su aplicación remota no se verificó en esta sincronización.
+La persistencia es PostgreSQL gestionado fuera de la SPA. `supabase-schema.sql` es el bootstrap completo; `supabase/migrations/` contiene cambios incrementales para instalaciones existentes. El bootstrap y `202610280002_mcp_identity.sql` incluyen el nuevo rol/recurso MCP; las tablas de sesión y clientes OAuth pertenecen al schema administrado `auth`, no son tablas de negocio del producto.
 
-Ese registro remoto de 2026-10-22 cubre `202610220001`/`202610220002`, las tres suites SQL y el estado observado entonces; no se debe extrapolar a los cambios posteriores. Las pruebas de `supabase/tests/boards.sql` no se ejecutaron en esta sincronización porque no había stack Supabase local y no se consultó el remoto. El bootstrap local ya incluye también los objetos de borrado de tablero, gestión de nombre de adjunto y avatar descritos abajo.
+Verificación remota actual (2026-10-28): la migración `202610280002` se ejecutó transaccionalmente y el probe `tests/mcp_identity.sql` pasó con `ROLLBACK`. La tabla de control de migraciones enumera `202610190001`, `202610200001`, `202610200002`, `202610210001`, `202610220001` y `202610280002`, mientras que el schema observado incluye cambios de `202610220002`, `202610280001` y algunas policies de `202610260003`. La policy de renombrado `202610260001` y la RPC `202610260002` no se encontraron. Este desajuste se explica en `supabase/README.md`; no inferir migraciones aplicadas por presencia/ausencia de objetos ni ejecutar `db push` a ciegas.
 
 ## Modelo relacional
 
@@ -79,6 +79,10 @@ erDiagram
     integer file_size
     text mime_type
     timestamptz created_at
+  }
+  MCP_OAUTH_CONFIGURATION {
+    boolean singleton PK
+    text resource_url
   }
 ```
 
@@ -177,6 +181,25 @@ El renombrado modifica solo `file_name`: no mueve el objeto ni altera su path, M
 `delete_inactive_board(uuid)` exige admin activo y un tablero existente con `is_active = false`. Bloquea la fila, elimina las tareas del tablero y después la fila de `boards`; las FK eliminan por cascada asignaciones, comentarios y metadata de adjuntos. La FK de `tasks.board_id` usa `ON DELETE RESTRICT`, por lo que el borrado explícito de tareas precede al de tablero (`supabase-schema.sql:727-739`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-21`).
 
 La API cliente enumera metadata/paths y elimina objetos de Storage antes de invocar la RPC. La limpieza de archivos y la transacción PostgreSQL no son atómicas: si falla Storage, la RPC no se invoca; si falla la RPC después de Storage, los objetos pueden haberse eliminado aunque las filas sigan. La migración local no se verificó en remoto (`src/features/boards/api.ts:69-145`).
+
+## Role, hook y persistencia auxiliar del MCP
+
+El MCP no agrega columnas de negocio a `profiles` ni una tabla por usuario. Sí
+declara una tabla de configuración de recurso y usa la tabla administrada
+`auth.sessions` para comprobar revocación/expiración:
+
+| Objeto | Propósito y permisos | Fuente |
+| --- | --- | --- |
+| Rol SQL `mcp_identity` | `NOLOGIN NOINHERIT`, miembro habilitado para `authenticator`; no hereda `authenticated`/`service_role` ni tiene grants de tablas/vistas o RPCs de negocio. Sólo ejecuta `mcp_whoami()` | `supabase/migrations/202610280002_mcp_identity.sql:4-10,73-109` |
+| `public.mcp_oauth_configuration` | Singleton `{ singleton: true, resource_url: text }`; RLS activado y sin grants cliente/MCP. La URL debe coincidir byte a byte con JWT `aud` | `supabase/migrations/202610280002_mcp_identity.sql:12-21` |
+| `public.mcp_access_token_hook(event jsonb)` | Auth la ejecuta como `supabase_auth_admin`. Tokens ordinarios salen inalterados; OAuth requiere un perfil activo y recibe `client_id`, `role=mcp_identity`, `aud=resource_url` | `supabase/migrations/202610280002_mcp_identity.sql:23-45` |
+| `public.mcp_whoami()` | `SECURITY DEFINER`, path vacío; requiere rol, cliente y audiencia MCP, sesión vigente en `auth.sessions` con el mismo usuario/cliente y perfil `is_active`. Devuelve identidad, no acceso general a datos | `supabase/migrations/202610280002_mcp_identity.sql:47-74` |
+| Policies «OAuth identity isolation» | Policies restrictivas sobre tablas de negocio/Storage niegan tokens OAuth identificados por `client_id`; el rol sin grants evita que pueda invocar RPCs de negocio `SECURITY DEFINER` | `supabase/migrations/202610280002_mcp_identity.sql:76-109` |
+
+`mcp_identity` es un rol de conexión Postgres, **no** un valor adicional de
+`profiles.role`. El hook opera sobre cualquier cliente OAuth del proyecto, no sólo
+MCP; no sustituir un hook anterior ni habilitar el patrón en proyectos con otros
+clientes OAuth sin revisar el efecto global.
 
 ## Storage
 

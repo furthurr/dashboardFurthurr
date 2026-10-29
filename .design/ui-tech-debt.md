@@ -2,6 +2,17 @@
 
 Hallazgos visuales/documentales detectados en los componentes y estilos revisados. Esta revisión es documental: no se modificó UI ni se ejecutó una auditoría automatizada de accesibilidad.
 
+## Revisión focalizada — OAuth MCP (2026-10-28)
+
+`OAuthConsentPage` reutiliza `auth-shell`, `auth-panel`, `ui-feedback`, `ui-button`
+y regiones `status` existentes; `OAuthConnectionsPage` reutiliza
+`board-shell`, `board-header`, `ui-feedback` y la variante destructiva. No se
+introducen tokens o clases CSS. Pruebas DOM Vitest cubren nombre/status/alert,
+cliente, callback y consentimiento; **no** constituyen revisión visual, cálculo
+de contraste, lector de pantalla ni auditoría WCAG. No se verificó un hallazgo
+visual nuevo por inspección estática. Fuentes: `src/features/auth/OAuthConsentPage.tsx:56-78`,
+`src/features/auth/OAuthConnectionsPage.tsx:44-57`, `src/index.css`.
+
 ## Revisión focalizada — tableros y avatares, 2026-10-26
 
 La eliminación permanente de tableros inactivos usa la variante destructiva existente y una confirmación con nombre/advertencia; los controles de avatar tienen nombre accesible, estados de espera/error y fallback si la imagen no carga (`src/features/boards/BoardsPage.tsx:69-70,187-207`, `src/shared/ui/AccountMenu.tsx:61-73`, `src/shared/ui/ProfileAvatar.tsx:17-45`). No se detecta un hallazgo de accesibilidad verificable nuevo por lectura estática. No se ejecutaron pruebas, comprobación visual en navegador, contraste ni lector de pantalla durante esta actualización; por tanto, no se declaran esas propiedades validadas visualmente.

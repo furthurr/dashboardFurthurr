@@ -1,6 +1,15 @@
 # Deuda técnica de datos/APIs
 
-Hallazgos de contrato y consistencia observados en la capa de datos. Esta sincronización documenta evidencia; no modifica producto, ejecuta SQL remoto ni es una auditoría de seguridad.
+Hallazgos de contrato y consistencia observados en la capa de datos. Esta
+sincronización documenta evidencia y sólo hizo consultas remotas de lectura; no
+modifica producto ni es una auditoría de seguridad.
+
+Revisión de MCP 2026-10-28: el proyecto remoto fue consultado ese mismo día tras
+activar Supabase OAuth y desplegar `mcp`. El probe `supabase/tests/mcp_identity.sql`
+pasó remotamente y revierte sus fixtures. La tabla de control de migraciones y los
+objetos reales divergen en migraciones históricas; D-11 documenta el riesgo
+operativo. No se certifica la seguridad de la configuración completa ni se
+reemplaza una auditoría de seguridad del proyecto.
 
 Revisión focalizada 2026-10-21: D-03 sigue **parcialmente resuelta** por `AssigneeProfile`. D-04 queda **resuelta para el contrato observado**: path de tareas, comprobación del resultado de eliminación y soporte de paths previos en la policy. D-02 se reduce: vistas de archivos usan URLs firmadas, pero `file_url` sigue persistiendo una URL generada por `getPublicUrl` aunque el bucket sea privado. La migración y probes se ejecutaron en el proyecto Supabase seleccionado; esto no es auditoría de seguridad ni certifica otros entornos.
 
@@ -33,6 +42,8 @@ Revisión documental del árbol local 2026-10-26: se incorporan el borrado perma
 | D-03 | Parcialmente resuelta: responsables usan `AssigneeProfile` explícito; el autor de comentarios aún se castea a `Profile` completo desde una proyección parcial. | `src/types/index.ts:41-47`, `:55-66`, `src/features/board/commentsApi.ts:7-16` | El autor puede carecer de email, estado activo y otros campos que el tipo exige. | Bajo | Tipar la proyección de autor o ampliar/validar la respuesta; no reabrir el caso ya corregido de responsables. |
 | D-04 | **Resuelta y versionada**: las cargas nuevas usan `<taskId>/<UUID>.<ext>`; la policy autoriza por metadata/tarea, contempla paths legacy y cliente comprueba error al borrar. | `src/features/board/attachmentsApi.ts`, `supabase/migrations/202610210001_boards.sql:133-172` | No se reproduce el desacople de path detectado en la versión anterior; falta comprobar el entorno real. | — | Verificar el entorno real; no equivale a auditoría de Storage. |
 | D-09 | Abierta: borrado de tablero ejecuta limpieza de objetos en Storage antes de la RPC PostgreSQL; no hay transacción común ni compensación distribuida. | `src/features/boards/api.ts:101-131`, `supabase/migrations/202610260002_delete_inactive_boards.sql:17-20` | Si la RPC falla tras quitar objetos, quedan metadata/tareas del tablero con adjuntos ya eliminados; si la limpieza de Storage falla parcialmente, puede haber objetos retirados y la RPC no se ejecuta. | Medio | Mantener el flujo idempotente y estudiar reconciliación/reintento explícito o una estrategia de borrado diferido. No afirmar atomicidad. |
+| D-10 | Abierta/mitigada por diseño: Supabase OAuth Server está en beta; DCR acepta registros de clientes dinámicos y el Custom Access Token Hook es global para los clientes OAuth del proyecto. | `supabase/config.toml:13-24`, `supabase/migrations/202610280002_mcp_identity.sql:23-45`, `mcp/README.md` | Cambios de hook/claims tienen efecto transversal; nombres DCR son declarativos y no verifican identidad de la aplicación. La autorización MCP sólo expone PII de perfil y no datos de negocio. | Medio | Mantener consentimiento visible y el rol `mcp_identity` sin herencia/grants de negocio; revisar/revocar grants no usados y probar cada nuevo cliente. Antes de aceptar otros usos OAuth, componer el hook sin ampliar esta política global por accidente. |
+| D-11 | Abierta: el ledger remoto no representa todos los cambios SQL observados en el schema. | `supabase/README.md` (estado remoto consultado 2026-10-28), `supabase/migrations/202610260001_task_attachment_management.sql`, `202610260002_delete_inactive_boards.sql`, `202610260003_profile_avatars.sql`, `202610280001_board_assignment_access.sql` | `supabase_migrations.schema_migrations` contiene `202610190001`–`202610220001` y `202610280002`, pero no `202610220002`, `202610260001`–`202610260003` ni `202610280001`; el schema sí muestra funciones de ciclo de vida/asignación y policies de avatar, pero no la policy 260001 ni la RPC 260002. Un `db push` global podría aplicar SQL cuya operación efectiva no es deducible solo desde el ledger. | Medio | Antes de futuras migraciones, comparar SQL completo/objetos, decidir reconciliación del historial con responsables de Supabase y aplicar sólo una secuencia aprobada; no hacer `db push` a ciegas. |
 
 ## 🟢 Baja
 

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-10-27T08:44:53Z",
-  "source_commit": "bbacf5c62a8ab0bf144e602ae3666c4026882f0e",
+  "generated_at": "2026-10-29T01:41:54Z",
+  "source_commit": "267cc910b2f5623f3b9e1ee3d86f3bfebd2c40e",
   "root": ".",
   "modules": [
     {
@@ -18,10 +18,10 @@
       "id": "auth",
       "name": "Autenticación",
       "path": "src/features/auth",
-      "responsibility": "Gestiona login, sesión, perfil activo y rutas protegidas; el registro antiguo redirige a administración.",
+      "responsibility": "Gestiona login, sesión, perfil activo, rutas protegidas, consentimiento OAuth MCP y revocación de conexiones; el registro antiguo redirige a administración.",
       "kind": "feature",
       "tech": ["React", "TypeScript", "Supabase Auth"],
-      "entrypoints": ["src/features/auth/AuthContext.tsx", "src/features/auth/ProtectedRoute.tsx"],
+      "entrypoints": ["src/features/auth/AuthContext.tsx", "src/features/auth/ProtectedRoute.tsx", "src/features/auth/OAuthConsentPage.tsx", "src/features/auth/OAuthConnectionsPage.tsx", "src/features/auth/mcpOAuth.ts"],
       "depends_on": ["supabase-client", "shared-types"]
     },
     {
@@ -44,7 +44,7 @@
       "tech": ["React", "TypeScript", "TanStack Query", "Supabase PostgREST/RPC"],
       "entrypoints": ["src/features/boards/BoardsPage.tsx", "src/features/boards/BoardRoute.tsx", "src/features/boards/api.ts"],
       "depends_on": ["auth", "board", "supabase-client", "shared-types", "shared-ui", "database-schema"],
-      "notes": "Comparte AssigneePicker/consulta de usuarios con board; el catálogo usa list_boards_with_pending_counts. El borrado limpia objetos Storage antes de delete_inactive_board; las fases no son atómicas. Los cambios locales de borrado no están incluidos en source_commit ni verificados en remoto."
+      "notes": "Comparte AssigneePicker/consulta de usuarios con board; el catálogo usa list_boards_with_pending_counts. El borrado limpia objetos Storage antes de delete_inactive_board; las fases no son atómicas. El working tree local añade un mensaje PGRST202 para la RPC ausente en remote; no está incluido en source_commit."
     },
     {
       "id": "users",
@@ -102,12 +102,12 @@
       "id": "database-schema",
       "name": "Schema Supabase",
       "path": "supabase-schema.sql",
-      "responsibility": "Mantiene el bootstrap Postgres, RLS, Storage, vistas, grants y RPCs, incluido ciclo de vida/borrado de tableros y gestión de avatar/adjuntos.",
+      "responsibility": "Mantiene bootstrap Postgres, RLS, Storage, vistas, grants y RPCs de negocio, más rol/tabla/hook/RPC de identidad MCP.",
       "kind": "other",
       "tech": ["PostgreSQL", "SQL"],
       "entrypoints": ["supabase-schema.sql"],
       "depends_on": [],
-      "notes": "El schema local contiene los objetos recientes de avatar, nombre de adjunto y borrado de tableros; no se verificó su aplicación remota. Los cambios del árbol de trabajo no están incluidos en source_commit."
+      "notes": "El bootstrap incluye mcp_identity, mcp_oauth_configuration, mcp_access_token_hook, mcp_whoami y aislamiento OAuth. El estado remoto se describe en .data/04-schema.md y supabase/README.md; el ledger no coincide con todas las huellas SQL observadas."
     },
     {
       "id": "database-migrations",
@@ -116,20 +116,42 @@
       "responsibility": "Evoluciona instalaciones existentes con estado de cuenta, RPCs, políticas de membresía, ciclo de vida/borrado de tableros y permisos de adjuntos/avatares.",
       "kind": "other",
       "tech": ["PostgreSQL", "SQL"],
-      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql", "supabase/migrations/202610200002_shared_task_editing.sql", "supabase/migrations/202610210001_boards.sql", "supabase/migrations/202610220001_board_access_returning.sql", "supabase/migrations/202610220002_board_lifecycle.sql", "supabase/migrations/202610260001_task_attachment_management.sql", "supabase/migrations/202610260002_delete_inactive_boards.sql", "supabase/migrations/202610260003_profile_avatars.sql"],
+      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql", "supabase/migrations/202610200002_shared_task_editing.sql", "supabase/migrations/202610210001_boards.sql", "supabase/migrations/202610220001_board_access_returning.sql", "supabase/migrations/202610220002_board_lifecycle.sql", "supabase/migrations/202610260001_task_attachment_management.sql", "supabase/migrations/202610260002_delete_inactive_boards.sql", "supabase/migrations/202610260003_profile_avatars.sql", "supabase/migrations/202610280001_board_assignment_access.sql", "supabase/migrations/202610280002_mcp_identity.sql"],
       "depends_on": ["database-schema"],
-      "notes": "202610220001/202610220002 y las suites SQL se verificaron en remoto el 2026-10-22 (registro histórico). Las migraciones 202610260001–202610260003 son locales; no se verificó su aplicación remota ni se ejecutaron suites SQL en esta sincronización. Los cambios de este mapa posteriores a source_commit representan el árbol de trabajo sin commit."
+      "notes": "La migración 202610280002 está aplicada y registrada en remote; el probe mcp_identity pasó con ROLLBACK. El ledger de producción no registra 202610220002, 202610260001–202610260003 ni 202610280001 aunque algunas huellas de esos objetos existen; reconciliar antes de db push."
     },
     {
       "id": "admin-users",
       "name": "Función administrativa de cuentas",
       "path": "supabase/functions/admin-users",
-      "responsibility": "Verifica identidad y admin activo antes de ejecutar acciones privilegiadas de cuentas, incluida la promoción a admin.",
+      "responsibility": "Verifica identidad, rechaza tokens OAuth y exige admin activo antes de ejecutar acciones privilegiadas de cuentas, incluida la promoción.",
       "kind": "service",
       "tech": ["Deno", "TypeScript", "Supabase Edge Functions", "Supabase Auth"],
       "entrypoints": ["supabase/functions/admin-users/index.ts"],
       "depends_on": ["database-schema"],
-      "notes": "Despliegue separado de GitHub Pages; instrucciones en supabase/README.md. El listado local ahora incluye avatar_url; la última evidencia de remoto de admin-users es del 2026-10-22 (versión 4 ACTIVE e identidad de código), sin verificación remota durante esta sincronización. La comprobación funcional de promote-admin fue manual en 2026-10-22. Los cambios locales no están incluidos en source_commit."
+      "notes": "Despliegue separado de GitHub Pages. Versión 6 ACTIVE verificada en el proyecto actual el 2026-10-28; bloquea claims client_id antes de acceso privilegiado."
+    },
+    {
+      "id": "mcp-edge",
+      "name": "MCP remoto de identidad",
+      "path": "supabase/functions/mcp",
+      "responsibility": "Valida tokens OAuth aud-bound y sesión activa; expone únicamente la herramienta whoami vía Streamable HTTP.",
+      "kind": "service",
+      "tech": ["Deno", "TypeScript", "Supabase Edge Functions", "MCP", "OAuth 2.1"],
+      "entrypoints": ["supabase/functions/mcp/index.ts"],
+      "depends_on": ["database-schema"],
+      "notes": "No usa service_role ni pasa el bearer a APIs de negocio. MCP v2 ACTIVE en el proyecto actual; la autorización usa rol SQL mcp_identity."
+    },
+    {
+      "id": "mcp-installation",
+      "name": "Instalación project-scoped de MCP",
+      "path": "mcp",
+      "responsibility": "Ayuda al usuario a escoger un cliente y sus presets de conexión sin incluir credenciales.",
+      "kind": "other",
+      "tech": ["Markdown", "JSON", "MCP"],
+      "entrypoints": ["mcp/README.md", "opencode.json", ".kiro/settings/mcp.json", ".vscode/mcp.json", ".mcp.json", ".agents/mcp_config.json", ".pi/mcp.json"],
+      "depends_on": ["mcp-edge"],
+      "notes": "Claude Desktop requiere un conector remoto configurado en su UI; los presets project-scoped no equivalen a OAuth E2E validado por cada cliente."
     },
     {
       "id": "product-specs",
@@ -150,7 +172,7 @@
       "tech": ["GitHub Actions", "Node.js", "Vite"],
       "entrypoints": [".github/workflows/deploy.yml"],
       "depends_on": ["web-app"],
-      "notes": "El workflow publica la SPA, no SQL ni Edge Functions. La documentación del proyecto registra v0.8.1 (run 40004615822) como última publicación conocida; no se consultó el remoto en esta sincronización y no se afirma que incluya los cambios locales actuales."
+      "notes": "El workflow publica la SPA, no SQL ni Edge Functions. Última publicación verificada: Pages run 40796012117, commit 267cc91, success (2026-10-28)."
     }
   ]
 }

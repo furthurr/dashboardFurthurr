@@ -16,17 +16,33 @@ Solo servidor Edge, nunca en el build Vite:
 
 Fuente: `supabase/functions/admin-users/index.ts:20-23`. Los placeholders no representan valores desplegados.
 
+El MCP no usa `service_role`. La Edge Function necesita la clave publishable del
+proyecto como `SUPABASE_ANON_KEY` y el access token OAuth individual en el header
+de cada request; la consulta se ejecuta con `role=mcp_identity`.
+
+| Variable/ajuste | Uso | Restricción |
+| --- | --- | --- |
+| `SUPABASE_URL` | URL de Auth/PostgREST/JWKS, inyectada en el runtime Edge | Mantener el issuer estándar del mismo proyecto |
+| `SUPABASE_ANON_KEY` | Clave publishable del proyecto para crear el cliente de la RPC | Sólo runtime Edge; no es privilegio ni reemplazo del bearer del usuario |
+| `MCP_RESOURCE_URL` | Audiencia canónica validada por el handler y `mcp_whoami()` | Debe coincidir exactamente con `mcp_oauth_configuration.resource_url`; HTTPS y la ruta `/functions/v1/mcp` |
+| `MCP_ALLOWED_ORIGINS` | Allowlist CORS de orígenes web si se requiere | Lista separada por comas; vacío no añade Origins de navegador |
+| Auth Site URL / Authorization Path | URL raíz de la SPA y path de consentimiento GoTrue | La SPA actual es Pages con HashRouter: Site URL al root publicado y Authorization Path `/`; GoTrue añade `authorization_id` como query |
+| Custom Access Token Hook | Cambia claims de tokens OAuth para el rol/recurso MCP | `pg-functions://postgres/public/mcp_access_token_hook`; preservar tokens normales y no sobrescribir hooks existentes |
+
+OAuth Server de Supabase está en beta. Auth debe firmar con ES256/RS256 (JWKS) para
+que el MCP valide firma y audiencia; no habilitar el hook si el proyecto usa HS256
+sin un plan aparte de rotación de claves. DCR está activado para los clientes MCP.
+
 ## Build/deploy observado
 
 - Instalación reproducible por `npm ci` y build mediante `npm run build` (`.github/workflows/deploy.yml:24-37`).
 - El build sube `dist` como artefacto de GitHub Pages (`.github/workflows/deploy.yml:39-53`).
 - El prefijo de hosting está fijado en `vite.config.ts:6-13`.
 - El repositorio no permite verificar si los secretos están configurados en GitHub ni qué proyecto Supabase corresponde a cada entorno.
-- El build de Pages no despliega Edge Functions, migraciones ni ajustes de Auth. Para una instalación existente, la secuencia local completa es `202610190001_user_administration.sql` → `202610200001_task_assignments.sql` → `202610200002_shared_task_editing.sql` → `202610210001_boards.sql` → `202610220001_board_access_returning.sql` → `202610220002_board_lifecycle.sql` → `202610260001_task_attachment_management.sql` → `202610260002_delete_inactive_boards.sql` → `202610260003_profile_avatars.sql`; aplica solo las pendientes y no reejecutes el bootstrap. Esta secuencia también está descrita en `supabase/README.md`. La aplicación remota de las tres migraciones nuevas no se verificó ni se ejecutaron pruebas SQL en esta sincronización.
-- `supabase/config.toml` declara `auth.enable_signup = false` y `functions.admin-users.verify_jwt = false`; la validación explícita está dentro de la función y el alta administrativa confirma la cuenta con `email_confirm: true`. La última comprobación remota documentada es del 2026-10-22 (`config diff` sin cambios aplicables y `verify_jwt: false`); no se volvió a consultar el remoto aquí.
-- Historial SQL verificado el 2026-10-22: `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql` se aplicaron en ese orden; las suites remotas `boards.sql`, `task_assignments.sql` y `user_access.sql` pasaron con fixtures revertidos mediante `ROLLBACK`. La SPA de ciclo de vida se publicó entonces como `v0.6.0` (run `39860177282`). Este registro es histórico, no una comprobación de los cambios locales actuales.
-- Historial Edge/Auth verificado el 2026-10-22: `admin-users` quedó en versión 4 ACTIVE con código idéntico al repo; Auth no mostró cambios aplicables y el flujo `promote-admin` se confirmó manualmente en producción. No se repitieron esas verificaciones en esta sincronización.
-- Estado de sincronización local 2026-10-26: las tres migraciones nuevas y los cambios de SPA están en el árbol de trabajo sin commit. La documentación del proyecto identifica `v0.8.1` (run `40004615822`) como la última publicación registrada; no se verificó por remoto que incluya cambios posteriores.
+- El build de Pages no despliega Edge Functions, migraciones ni ajustes de Auth. Para una instalación existente revisa la secuencia completa en `supabase/README.md` y el estado registrado en Supabase antes de aplicar cualquier migración. En el proyecto remoto consultado el 2026-10-28 el ledger y los objetos del schema no coinciden para varias migraciones previas; no aplicar la lista local en bloque ni volver a ejecutar el bootstrap.
+- `supabase/config.toml` declara `auth.enable_signup = false`, `functions.admin-users.verify_jwt = false` y `functions.mcp.verify_jwt = false`. Esta última sólo permite el discovery/challenge en gateway; la Edge Function comprueba cada bearer. OAuth Server, DCR y el custom access-token hook fueron habilitados en el proyecto actual el 2026-10-28; el `config diff` posterior no dejó cambios declarados.
+- Historial SQL consultado el 2026-10-28: el ledger contiene las entradas `202610190001`, `202610200001`, `202610200002`, `202610210001`, `202610220001` y `202610280002`. El estado de objetos muestra firmas/policies que corresponden a `202610220002`, `202610280001` y parte de `202610260003`, mientras no se hallaron la policy de nombre de adjunto (`202610260001`) ni `delete_inactive_board` (`202610260002`). `202610280002` se aplicó por SQL transaccional y se registró; ver la discrepancia completa en `supabase/README.md`. La suite MCP remota pasó con `ROLLBACK`.
+- Edge/Auth actual consultado el 2026-10-28: `mcp` versión 2 ACTIVE; `admin-users` versión 6 ACTIVE; Pages publicó el commit `267cc91` en el run `40796012117`. No implica que todo cliente de escritorio/CLI haya completado OAuth; OpenCode Desktop verificó `whoami` antes del renombrado del alias, y se requiere reautorizar/verificar el nombre `dashboardFurthurr`.
 
 ## Higiene
 
