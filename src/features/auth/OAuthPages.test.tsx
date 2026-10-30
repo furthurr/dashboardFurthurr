@@ -25,6 +25,40 @@ function consent() {
   </Routes></MemoryRouter>)
 }
 const details = { authorization_id: id, user: { id, email: 'person@example.test' }, client: { id, name: 'Cliente de prueba' }, redirect_uri: 'http://localhost:3000/callback', scope: 'email profile' }
+it('conexión antigua no recibe automatización y habilitar/retirar requiere acciones independientes', async () => {
+  const permissions = ['read_tasks','start_task','comment_task','review_task']
+  oauth.listGrants.mockResolvedValue({ data: [{ client: { id, name: 'Cliente' }, scopes: [] }], error: null })
+  rpc.mockResolvedValueOnce({ data: [{ client_id: id, permissions }], error: null })
+    .mockResolvedValueOnce({ error: null })
+    .mockResolvedValueOnce({ data: [{ client_id: id, permissions, automatic_advance: true }], error: null })
+    .mockResolvedValueOnce({ error: null })
+    .mockResolvedValueOnce({ data: [{ client_id: id, permissions, automatic_advance: false }], error: null })
+  render(<MemoryRouter><OAuthConnectionsPage /></MemoryRouter>)
+  const box = await screen.findByRole('checkbox', { name: 'Avance automático de Cliente' })
+  expect(box).not.toBeChecked()
+  expect(rpc).not.toHaveBeenCalledWith('mcp_set_automation_consent', expect.anything())
+  await userEvent.click(box)
+  expect(rpc).toHaveBeenCalledWith('mcp_set_automation_consent', { p_client_id: id, p_enabled: true })
+  expect(await screen.findByText(/Avance automático autorizado/)).toBeVisible()
+  expect(box).toBeChecked()
+  await userEvent.click(box)
+  expect(rpc).toHaveBeenCalledWith('mcp_set_automation_consent', { p_client_id: id, p_enabled: false })
+  expect(await screen.findByText('Autorización de avance automático retirada.')).toBeVisible()
+  expect(box).not.toBeChecked()
+})
+it('no habilita automatización sin workflow y muestra error si no puede confirmar el cambio', async () => {
+  oauth.listGrants.mockResolvedValue({ data: [{ client: { id, name: 'Cliente' }, scopes: [] }], error: null })
+  rpc.mockResolvedValueOnce({ data: [{ client_id: id, permissions: ['read_tasks'] }], error: null })
+  const view = render(<MemoryRouter><OAuthConnectionsPage /></MemoryRouter>)
+  expect(await screen.findByRole('checkbox')).toBeDisabled()
+  view.unmount()
+  rpc.mockResolvedValueOnce({ data: [{ client_id: id, permissions: ['read_tasks','start_task','comment_task','review_task'] }], error: null })
+    .mockResolvedValueOnce({ error: { code: '42501' } })
+  render(<MemoryRouter><OAuthConnectionsPage /></MemoryRouter>)
+  await userEvent.click(await screen.findByRole('checkbox'))
+  expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo confirmar la autorización automática')
+  expect(screen.getByRole('checkbox')).toBeDisabled()
+})
 it('sin sesión exige login y no consulta ni aprueba la solicitud', async () => {
   state.user = null
   consent()

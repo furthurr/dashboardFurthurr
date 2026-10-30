@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { TaskDetailModal } from './TaskDetailModal'
 import type { TaskAttachment, TaskWithAssignees } from '@/types'
+vi.mock('../auth/mcpAutomation', () => ({ getTaskAutomation: vi.fn().mockResolvedValue(false), setTaskAutomation: vi.fn() }))
 
 const task: TaskWithAssignees = {
   board_id: 'offline',

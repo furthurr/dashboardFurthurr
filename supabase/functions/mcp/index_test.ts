@@ -69,6 +69,12 @@ Deno.test('MCP initialize, tools/list and whoami remain compatible, with no cros
   assert(initialized.result.serverInfo.name === 'dashboardFurthurr')
   const tools = await (await handle(request('POST', rpc('tools/list'), token))).json()
   assert(tools.result.tools.length === 6 && tools.result.tools[0].name === 'whoami' && tools.result.tools[1].name === 'get_task')
+  assert(tools.result.tools.every((tool: { inputSchema: { type?: string } }) => tool.inputSchema.type === 'object'))
+  for (const name of ['start_task','submit_task_for_review']) {
+    const advertised = JSON.stringify(tools.result.tools.find((tool: { name: string }) => tool.name === name).inputSchema)
+    assert(advertised.includes('authorization_mode') && advertised.includes('automatic'))
+    if (name === 'submit_task_for_review') assert(advertised.includes('work_completed'))
+  }
   assert(initialized.result.instructions.includes('Nunca finalices'))
   const result = await (await handle(request('POST', rpc('tools/call', { name: 'whoami', arguments: {} }), token))).json()
   assert(result.result.structuredContent.id === id && result.result.structuredContent.role === 'admin')
@@ -110,6 +116,8 @@ Deno.test('get_task returns structured full task data, pagination and short-live
   assert(attachment.download_url.includes('/sign/') && Date.parse(attachment.expires_at) > Date.now())
   assert(attachment.download_error === null && !('file_url' in attachment))
   assert(result.structuredContent.comments.next_offset === 1 && result.structuredContent.attachments.next_offset === null)
+  assert(result.structuredContent.workflow.next_tool === 'start_task')
+  assert(result.structuredContent.workflow.guidance.includes('aceptación explícita'))
   assert(response.headers.get('Cache-Control') === 'no-store' && !JSON.stringify(result).includes(token))
 })
 
@@ -137,7 +145,7 @@ Deno.test('get_task requires new explicit consent, hides access/existence and ne
     if (code === 'PT403') assert(result.content[0].text.includes('Vuelve a autorizar'))
     if (code === 'PT412') assert(result.content[0].text.includes('Asígnate manualmente'))
     if (code === 'PT409') assert(result.content[0].text.includes('muévela manualmente'))
-    if (code === 'PT404') assert(result.content[0].text === 'Tarea no disponible o sin acceso.')
+    if (code === 'PT404') assert(result.content[0].text.startsWith('Tarea no disponible o sin acceso.'))
     assert(!JSON.stringify(result).includes('internal'))
   }
   assert(signs === 0)
@@ -162,6 +170,8 @@ Deno.test('workflow tools validate user approval, dispatch bounded actions and n
   ] as const) {
     const result = (await (await handle(request('POST', rpc('tools/call', { name, arguments: { ...args, ...extra } }), token))).json()).result
     assert(!result.isError && result.structuredContent.task_id === id)
+    assert(typeof result.structuredContent.workflow.guidance === 'string')
+    if (name === 'record_task_result') assert(result.structuredContent.workflow.guidance.includes('aceptación explícitas'))
   }
   assert(calls.join() === 'start_task,comment_task,review_task')
   for (const extra of [{ user_approved: false, context_summary: 'No' }, { user_approved: true, context_summary: 'Yes', status: 'finalizadas' }]) {
@@ -169,6 +179,45 @@ Deno.test('workflow tools validate user approval, dispatch bounded actions and n
     assert(result.error || result.result?.isError)
   }
   assert(calls.length === 3)
+})
+
+Deno.test('automatic workflow preserves honest payloads and actionable receipts, errors never imply completion', async () => {
+  const token = await sign()
+  let allowed = true
+  const calls: Record<string, unknown>[] = []
+  const handle = createHandler(config, { verify: verifier, identify: async () => identity,
+    getTask: async () => ({ ...raw, automatic_advance: allowed, attachments: { total: 0, offset: 0, next_offset: null, items: [] } }),
+    workTask: (_bearer, action, args) => {
+      calls.push(args)
+      if (!allowed) throw new TaskError('PT403')
+      return Promise.resolve({ request_id: args.request_id, replayed: false, task_id: id,
+        status: action === 'review_task' ? 'en_revision' : 'haciendo', updated_at: '2026-10-29T12:00:00Z',
+        comment_id: action === 'comment_task' ? clientId : null, authorization_mode: 'automatic', automatic_advance: true })
+    } })
+  const call = async (name: string, args: unknown) => (await (await handle(request('POST', rpc('tools/call', { name, arguments: args }), token))).json()).result
+  const task = await call('get_task', { task_id: id })
+  assert(task.structuredContent.automatic_advance && task.structuredContent.workflow.guidance.includes('sin aceptación adicional'))
+  const args = { task_id: id, request_id: clientId, expected_updated_at: '2026-10-29T12:00:00Z', authorization_mode: 'automatic' }
+  for (const [name, extra] of [
+    ['start_task', { context_summary: 'Studied scope' }],
+    ['record_task_result', { summary: 'Done', changes: 'Files', clarifications: 'None', validation: 'Not executed', observations: 'None' }],
+    ['submit_task_for_review', { work_completed: true, comment_id: clientId }],
+  ] as const) {
+    const result = await call(name, { ...args, ...extra })
+    assert(!result.isError && result.structuredContent.authorization_mode === 'automatic')
+    if (name === 'record_task_result') assert(result.structuredContent.workflow.guidance.includes('sin segunda aprobación'))
+  }
+  assert(calls.length === 3 && calls.every(args => !('user_approved' in args) && !('user_validated' in args)))
+  for (const extra of [{ user_approved: true, context_summary: 'False claim' }, { user_approved: false, context_summary: 'False claim' }]) {
+    assert((await call('start_task', { ...args, ...extra })).isError)
+  }
+  assert((await call('submit_task_for_review', { ...args, comment_id: clientId, work_completed: false })).isError)
+  assert(calls.length === 3)
+  allowed = false
+  const failed = await call('start_task', { ...args, context_summary: 'Scope' })
+  assert(failed.isError && !failed.structuredContent)
+  const revoked = await call('get_task', { task_id: id })
+  assert(!revoked.structuredContent.automatic_advance && revoked.structuredContent.workflow.guidance.includes('aceptación explícita'))
 })
 
 Deno.test('attachment tool reauthorizes before download and never exposes metadata paths', async () => {

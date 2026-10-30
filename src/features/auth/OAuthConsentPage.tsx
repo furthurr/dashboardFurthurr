@@ -99,7 +99,7 @@ export function OAuthConsentPage() {
           </div>
           <p>Al autorizar concedes acceso a tu identidad (nombre, correo, identificador y rol) y estos permisos, sin pasos adicionales en tu perfil:</p>
           <ul className="list-disc space-y-2 pl-5">{Object.entries(permissionLabels).map(([key, label]) => <li key={key}>{label}</li>)}</ul>
-          <p>Solo tareas donde estés asignado y tengas acceso al tablero, en Backlog, Por hacer o Haciendo. Iniciar y enviar a revisión requieren tu aceptación en la conversación. Nunca permite finalizar tareas, asignarte ni reabrirlas. Puedes retirar permisos o revocar la conexión en tu perfil.</p>
+          <p>Solo tareas donde estés asignado y tengas acceso al tablero, en Backlog, Por hacer o Haciendo. Iniciar y enviar a revisión requieren tu aceptación en la conversación salvo que habilites por separado el avance automático tanto en Perfil &gt; Conexiones como en el detalle de la tarea. Esta autorización no activa la automatización. Nunca permite finalizar tareas, asignarte ni reabrirlas. Puedes retirar permisos o revocar la conexión en tu perfil.</p>
           <p>Los adjuntos y comentarios se compartirán con la aplicación y su asistente. Los archivos descargados y enlaces temporales ya emitidos no se pueden retirar retroactivamente.</p>
           <p className="text-sm text-[var(--color-text-muted)]">El nombre lo declara la aplicación; no acredita que sea de confianza. Revisa la dirección de retorno. Tu contraseña no se comparte con ella.</p>
           {approvedCallback && <p>La identidad OAuth ya fue autorizada. Estos permisos adicionales requieren tu aceptación; continuar sin ampliarlos conserva únicamente los permisos existentes.</p>}

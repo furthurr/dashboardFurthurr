@@ -17,6 +17,7 @@ export const taskInput = z.object({
   page_size: z.number().int().min(1).max(100).default(50),
 }).strict()
 const fields = {
+  automatic_advance: z.boolean().optional(),
   task: z.object({ id: z.guid(), title: z.string(), description: z.string().nullable(),
     status: z.enum(['backlog', 'por_hacer', 'haciendo', 'en_revision', 'finalizadas']),
     priority: z.enum(['urgente', 'alta', 'normal', 'baja']), special_notes: z.string().nullable(),
@@ -29,7 +30,7 @@ const fields = {
 export const rawTaskSchema = z.object({ ...fields, attachments: page(attachment.extend({ file_url: z.string() })) })
 export const taskOutput = z.object({ ...fields, attachments: page(attachment.extend({
   download_url: z.string().url().nullable(), expires_at: z.string().nullable(), download_error: z.string().nullable(),
-})) })
+})), workflow: z.object({ next_tool: z.literal('start_task'), guidance: z.string() }).optional() })
 export type TaskInput = z.infer<typeof taskInput>
 export type RawTask = z.infer<typeof rawTaskSchema>
 export type TaskResult = z.infer<typeof taskOutput>
@@ -89,5 +90,11 @@ export async function addDownloads(raw: RawTask, supabaseUrl: string,
   for (let offset = 0; offset < raw.attachments.items.length; offset += 5) {
     items.push(...await Promise.all(raw.attachments.items.slice(offset, offset + 5).map(convert)))
   }
-  return taskOutput.parse({ ...raw, attachments: { ...raw.attachments, items } })
+  return taskOutput.parse({ ...raw, attachments: { ...raw.attachments, items }, workflow: {
+    next_tool: 'start_task',
+    guidance: 'Consulta todas las páginas y estudia los adjuntos relevantes. Aclara dudas esenciales; si no puedes completar el contexto, detente. ' +
+      (raw.automatic_advance ? 'Ambas autorizaciones vigentes: puedes usar start_task con authorization_mode=automatic sin aceptación adicional ni user_approved.'
+        : 'Obtén aceptación explícita antes de iniciar; usa user_approved=true solo si ocurrió.') +
+      ' Usa task.id y task.updated_at como task_id y expected_updated_at, y un request_id UUID nuevo. La consulta no cambia el estado.',
+  } })
 }

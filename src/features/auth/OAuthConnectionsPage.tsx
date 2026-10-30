@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthContext'
+import { setConnectionAutomation } from './mcpAutomation'
 import { listWorkflowAccess, permissionLabels, revokeWorkflowPermission, type WorkflowAccess, type WorkflowPermission } from './mcpWorkflowAccess'
 
 type Grants = NonNullable<Awaited<ReturnType<typeof supabase.auth.oauth.listGrants>>['data']>
@@ -61,10 +62,24 @@ export function OAuthConnectionsPage() {
     } finally { setBusy(null) }
   }
 
+  async function changeAutomation(clientId: string, enabled: boolean) {
+    if (busy) return
+    setBusy(clientId); setAccessError(''); setNotice('')
+    try {
+      await setConnectionAutomation(clientId, enabled)
+      setAccess(await listWorkflowAccess())
+      setNotice(enabled ? 'Avance automático autorizado para esta conexión. También debe habilitarse en cada tarea.' : 'Autorización de avance automático retirada.')
+    } catch {
+      setAccess(null)
+      setAccessError('No se pudo confirmar la autorización automática. Reintenta para comprobar su estado.')
+    } finally { setBusy(null) }
+  }
+
   return <main className="board-shell min-h-screen">
     <header className="board-header"><div><h1>Conexiones autorizadas</h1><p>Consulta y retira los permisos de las aplicaciones conectadas.</p></div><Link className="ui-button" to="/profile">Volver al perfil</Link></header>
     <section className="mx-auto max-w-2xl space-y-5 px-4 py-8" aria-busy={busy !== null}>
       {notice && <p role="status" className="ui-feedback">{notice}</p>}
+      {busy !== null && <p role="status">Actualizando conexión…</p>}
       {(error || accessError) && <div role="alert" className="ui-feedback ui-feedback--error"><p>{error || accessError}</p><button className="ui-button mt-3" disabled={busy !== null} onClick={() => setAttempt(value => value + 1)}>Reintentar</button></div>}
       <p className="text-sm text-[var(--color-text-muted)]">Los permisos se conceden al autorizar la conexión, no al iniciar sesión. Solo se puede trabajar sobre tareas asignadas en etapas permitidas y con acceso al tablero. Retirar lectura de tareas bloquea también el trabajo. Para recuperar permisos retirados o ampliar una conexión antigua, vuelve a conectar desde el cliente MCP y acepta la autorización completa. Nunca se permite pasar a Finalizadas.</p>
       <p className="text-sm text-[var(--color-text-muted)]">Los archivos descargados y enlaces temporales ya emitidos no se pueden retirar retroactivamente.</p>
@@ -80,6 +95,12 @@ export function OAuthConnectionsPage() {
             <span>{label}: {permissions.includes(key as WorkflowPermission) ? 'Autorizado' : 'No autorizado'}</span>
             {permissions.includes(key as WorkflowPermission) && <button className="ui-button ui-button--sm ml-2" disabled={busy !== null} onClick={() => void revoke(grant.client.id, key as WorkflowPermission)} aria-label={`Retirar permiso: ${label} de ${grant.client.name || grant.client.id}`}>Retirar permiso</button>}
           </li>)}</ul>}
+          <label className="flex items-center gap-2"><input type="checkbox"
+            aria-label={`Avance automático de ${grant.client.name || grant.client.id}`}
+            checked={access?.find(item => item.client_id === grant.client.id)?.automatic_advance === true}
+            disabled={busy !== null || access === null || !['read_tasks','start_task','comment_task','review_task'].every(key => permissions.includes(key as WorkflowPermission))}
+            onChange={event => void changeAutomation(grant.client.id, event.target.checked)} />Autorizar avance automático para esta conexión</label>
+          <p className="text-sm">Autorización independiente y desactivada por defecto: permite iniciar y enviar a revisión sin aceptación adicional, solo en tareas que también lo habiliten y después de registrar resultados. No finaliza, asigna ni reabre. Puedes retirarla aquí; renovar o revocar el consentimiento OAuth la invalida. Las indicaciones al modelo no garantizan su cumplimiento.</p>
           <div className="flex flex-wrap gap-3">
             {permissions.length > 0 && <button className="ui-button" disabled={busy !== null || access === null} onClick={() => void revoke(grant.client.id, 'all')}>Retirar todos los permisos de tareas</button>}
             <button className="ui-button ui-button--danger" disabled={busy !== null} onClick={() => void revoke(grant.client.id)} aria-label={`Revocar conexión de ${grant.client.name || grant.client.id}`}>Revocar conexión</button>

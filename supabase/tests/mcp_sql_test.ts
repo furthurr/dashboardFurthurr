@@ -34,7 +34,7 @@ Deno.test('MCP SQL isolation and portal regressions: incremental + fresh bootstr
       await sql(mode, await read('supabase/tests/support/mcp_harness.sql'))
       await sql(mode, mode === 'bootstrap' ? schema : schema.slice(0, schema.indexOf(marker)))
       if (mode === 'incremental') {
-        for (const migration of ['202610280002_mcp_identity', '202610280003_mcp_task_read', '202610290001_mcp_workflow']) {
+        for (const migration of ['202610280002_mcp_identity', '202610280003_mcp_task_read', '202610290001_mcp_workflow', '202610300001_mcp_automation']) {
           await sql(mode, await read(`supabase/migrations/${migration}.sql`))
         }
       }
@@ -43,7 +43,7 @@ Deno.test('MCP SQL isolation and portal regressions: incremental + fresh bootstr
       await sql(mode, `insert into auth.users(id,email,raw_user_meta_data)
         values('00000000-0000-0000-0000-000000000001','admin@example.test','{}');
         update public.profiles set role='admin' where id='00000000-0000-0000-0000-000000000001';`)
-      for (const probe of ['mcp_identity', 'mcp_task_read', 'mcp_workflow', 'boards', 'task_assignments', 'user_access']) {
+      for (const probe of ['mcp_identity', 'mcp_task_read', 'mcp_workflow', 'mcp_automation', 'boards', 'task_assignments', 'user_access']) {
         await sql(mode, await read(`supabase/tests/${probe}.sql`))
         console.log(`PASS ${mode}: ${probe}`)
       }
@@ -86,6 +86,50 @@ Deno.test('MCP SQL isolation and portal regressions: incremental + fresh bootstr
         then raise exception 'Concurrent retry duplicated comment'; end if; end $$;`)
       if (count.includes('ERROR')) throw new Error('Concurrent retry failed')
       console.log(`PASS ${mode}: concurrent version conflict and idempotent result`)
+      // Repeat with the automatic mode: no synthetic human flags and the same
+      // version/idempotency guarantees as the compatible manual workflow.
+      await sql(mode, `
+        insert into public.mcp_automation_consents(consent_id,profile_id,client_id,consent_granted_at)
+          select id,user_id,client_id,granted_at from auth.oauth_consents where id='${consent}';
+        insert into public.mcp_task_automation(task_id,enabled_by) values('${task}','${user}');
+        update public.tasks set status='backlog' where id='${task}';
+        delete from public.comments where task_id='${task}';`)
+      const autoVersion = (await sql(mode, `select updated_at from public.tasks where id='${task}';`)).split('\n').map(line => line.trim()).find(line => /^2026-/.test(line))
+      if (!autoVersion) throw new Error('Missing automatic concurrency version')
+      const autoStarts = await Promise.allSettled([call('start_task', crypto.randomUUID(), autoVersion, { authorization_mode: 'automatic', context_summary: 'Studied scope' }),
+        call('start_task', crypto.randomUUID(), autoVersion, { authorization_mode: 'automatic', context_summary: 'Studied scope' })])
+      if (autoStarts.filter(result => result.status === 'fulfilled').length !== 1) throw new Error('Automatic concurrent starts bypassed version check')
+      const resultVersion = (await sql(mode, `select updated_at from public.tasks where id='${task}';`)).split('\n').map(line => line.trim()).find(line => /^2026-/.test(line))
+      if (!resultVersion) throw new Error('Missing automatic result version')
+      const autoRequest = crypto.randomUUID(), autoPayload = { ...payload, authorization_mode: 'automatic' }
+      await Promise.all([call('comment_task', autoRequest, resultVersion, autoPayload), call('comment_task', autoRequest, resultVersion, autoPayload)])
+      await sql(mode, `do $$ begin if (select count(*) from public.comments where task_id='${task}') <> 1
+        then raise exception 'Automatic concurrent retry duplicated result'; end if; end $$;`)
+      console.log(`PASS ${mode}: automatic concurrent version conflict and idempotent result`)
+      const portalClaims = JSON.stringify({ sub: user, role: 'authenticated' })
+      for (const target of ['connection', 'task']) {
+        const label = `automation-revoke-${target}`
+        const setter = target === 'connection'
+          ? `public.mcp_set_automation_consent('${client}',false)` : `public.mcp_set_task_automation('${task}',false)`
+        const withdrawal = sql(mode, `set application_name='${label}'; begin;
+          select set_config('request.jwt.claims','${portalClaims}',false); set local role authenticated;
+          select ${setter}; select pg_sleep(1); commit;`)
+        let observed = false
+        for (let attempt = 0; attempt < 30; attempt++) {
+          const ready = await sql(mode, `select exists(select 1 from pg_stat_activity
+            where application_name='${label}' and wait_event='PgSleep') as ready;`)
+          if (/\bt\b/.test(ready)) { observed = true; break }
+          await new Promise(resolve => setTimeout(resolve, 20))
+        }
+        if (!observed) { await withdrawal; throw new Error('Did not observe concurrent opt-out transaction') }
+        const results = await Promise.allSettled([withdrawal,
+          call('start_task', crypto.randomUUID(), resultVersion, { authorization_mode: 'automatic', context_summary: 'Revoked scope' })])
+        if (results[0].status !== 'fulfilled' || results[1].status !== 'rejected'
+          || !String(results[1].reason).includes('Both automation authorizations required')) throw new Error('Concurrent opt-out failed closed check')
+        if (target === 'connection') await sql(mode, `select set_config('request.jwt.claims','${portalClaims}',false);
+          set role authenticated; select public.mcp_set_automation_consent('${client}',true);`)
+      }
+      console.log(`PASS ${mode}: concurrent connection and task withdrawal block automatic mutations`)
     }
   } finally { await docker(['stop', name]) }
 })

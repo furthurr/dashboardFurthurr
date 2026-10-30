@@ -22,6 +22,7 @@ vi.mock('./api', () => ({
   useSetTaskAssignees: () => mocks.assign,
 }))
 vi.mock('./assigneesApi', () => ({ useAssignableUsers: mocks.users }))
+vi.mock('../auth/mcpAutomation', () => ({ getTaskAutomation: vi.fn().mockResolvedValue(false), setTaskAutomation: vi.fn() }))
 vi.mock('@/features/boards/api', () => ({ useMoveTaskToBoard: () => ({ mutateAsync: vi.fn(), isPending: false }) }))
 vi.mock('./commentsApi', () => ({
   useComments: () => ({ data: [], isLoading: false, error: null }),

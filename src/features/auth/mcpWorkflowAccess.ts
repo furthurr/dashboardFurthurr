@@ -6,12 +6,12 @@ export const permissionLabels = {
   read_attachments: 'Leer archivos de texto, imágenes y otros adjuntos',
   start_task: 'Iniciar tareas en Haciendo',
   comment_task: 'Publicar comentarios de trabajo',
-  review_task: 'Enviar tareas a En revisión tras tu validación',
+  review_task: 'Enviar tareas a En revisión con validación o autorización automática independiente',
 } as const
 export type WorkflowPermission = keyof typeof permissionLabels
 const accessSchema = z.array(z.object({ client_id: z.guid(), permissions: z.array(z.enum([
   'read_tasks', 'read_attachments', 'start_task', 'comment_task', 'review_task',
-])) }))
+])), automatic_advance: z.boolean().optional() }))
 export type WorkflowAccess = z.infer<typeof accessSchema>[number]
 
 const requestSchema = z.object({ authorized: z.boolean(), details: z.object({
