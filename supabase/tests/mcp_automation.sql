@@ -9,9 +9,10 @@ select set_config('test.task',gen_random_uuid()::text,true);
 select set_config('test.board',gen_random_uuid()::text,true);
 insert into auth.users(id,email) values(current_setting('test.user')::uuid,'automation@example.test');
 update public.profiles set role='usuario' where id=current_setting('test.user')::uuid;
-insert into auth.oauth_clients(id,client_name) values(current_setting('test.client')::uuid,'Automation fixture');
+insert into auth.oauth_clients(id,client_name,redirect_uris,grant_types,client_type,token_endpoint_auth_method,registration_type,client_secret_hash)
+  values(current_setting('test.client')::uuid,'Automation fixture','https://example.test/callback','authorization_code,refresh_token','public','none','manual','');
 insert into auth.sessions(id,user_id,oauth_client_id) values(current_setting('test.session')::uuid,current_setting('test.user')::uuid,current_setting('test.client')::uuid);
-insert into auth.oauth_consents(user_id,client_id) values(current_setting('test.user')::uuid,current_setting('test.client')::uuid);
+insert into auth.oauth_consents(id,user_id,client_id,scopes) values(gen_random_uuid(),current_setting('test.user')::uuid,current_setting('test.client')::uuid,'email profile');
 insert into public.mcp_workflow_permissions(consent_id,profile_id,client_id,consent_granted_at,permissions)
   select id,user_id,client_id,granted_at,array['read_tasks','read_attachments','start_task','comment_task','review_task']
   from auth.oauth_consents where client_id=current_setting('test.client')::uuid;
@@ -140,7 +141,7 @@ select set_config('request.jwt.claims',current_setting('test.portal'),true);
 set local role authenticated;
 select public.mcp_set_automation_consent(current_setting('test.client')::uuid,true);
 reset role;
-update auth.oauth_consents set revoked_at=now() where client_id=current_setting('test.client')::uuid;
+update auth.oauth_consents set revoked_at=granted_at+interval '1 second' where client_id=current_setting('test.client')::uuid;
 do $$ begin
   if exists(select 1 from public.mcp_automation_consents where client_id=current_setting('test.client')::uuid) then raise exception 'Revocation kept automation'; end if;
 end $$;
