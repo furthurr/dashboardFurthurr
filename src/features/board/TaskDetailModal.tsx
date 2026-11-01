@@ -9,7 +9,6 @@ import { AttachmentsList } from './AttachmentsList'
 import { AssigneePicker, type AssigneeOptions } from './AssigneePicker'
 import { getClipboardImages } from './clipboardImages'
 import { CopyTaskId } from './CopyTaskId'
-import { TaskAutomation } from './TaskAutomation'
 
 type Operation = void | Promise<unknown>
 interface TaskDetailModalProps {
@@ -209,7 +208,6 @@ function TaskDetailContent({ task, comments, attachments, onClose, onSave, onDel
               </div>
             </fieldset>
           </form>
-          <TaskAutomation taskId={task.id} />
           {onSaveAssignees ? <div className="mt-5 space-y-3">
             <AssigneePicker {...assigneeOptions} initialAssignees={task.assignees} value={assigneeIds} onChange={setAssigneeIds} disabled={busy} />
             <p className="text-sm text-[var(--color-text-muted)]">Las asignaciones se guardan por separado de los demás campos de la tarea.</p>

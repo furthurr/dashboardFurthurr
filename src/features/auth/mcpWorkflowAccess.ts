@@ -6,7 +6,7 @@ export const permissionLabels = {
   read_attachments: 'Leer archivos de texto, imágenes y otros adjuntos',
   start_task: 'Iniciar tareas en Haciendo',
   comment_task: 'Publicar comentarios de trabajo',
-  review_task: 'Enviar tareas a En revisión con validación o autorización automática independiente',
+  review_task: 'Enviar tareas a En revisión después de publicar el resultado',
 } as const
 export type WorkflowPermission = keyof typeof permissionLabels
 const accessSchema = z.array(z.object({ client_id: z.guid(), permissions: z.array(z.enum([
@@ -34,8 +34,4 @@ export async function listWorkflowAccess(): Promise<WorkflowAccess[]> {
   const parsed = accessSchema.safeParse(data)
   if (error || !parsed.success) throw new Error('No se pudieron comprobar los permisos. Puede faltar la migración del MCP.')
   return parsed.data
-}
-export async function revokeWorkflowPermission(clientId: string, permission: WorkflowPermission | 'all'): Promise<void> {
-  const { error } = await supabase.rpc('mcp_revoke_workflow_permission', { p_client_id: clientId, p_permission: permission })
-  if (error) throw new Error('No se pudo retirar el permiso. Inténtalo de nuevo.')
 }

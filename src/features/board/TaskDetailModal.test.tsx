@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { TaskDetailModal } from './TaskDetailModal'
 import type { TaskAttachment, TaskWithAssignees } from '@/types'
-vi.mock('../auth/mcpAutomation', () => ({ getTaskAutomation: vi.fn().mockResolvedValue(false), setTaskAutomation: vi.fn() }))
 
 const task: TaskWithAssignees = {
   board_id: 'offline',
@@ -46,6 +45,12 @@ describe('Traslado de tareas entre tableros', () => {
   })
 })
 const base = { task, comments: [], attachments: [], isOpen: true, onClose: vi.fn() }
+
+it('no ofrece autorización automática por tarea', () => {
+  render(<TaskDetailModal {...base} onSave={vi.fn()} />)
+  expect(screen.queryByRole('checkbox', { name: /avance automático/i })).not.toBeInTheDocument()
+  expect(screen.queryByText(/Autorizar avance automático/)).not.toBeInTheDocument()
+})
 
 describe('ID de tarea en el detalle', () => {
   it('muestra el UUID y permite copiarlo desde cualquier pestaña sin permiso de edición', async () => {

@@ -13,5 +13,8 @@ Deno.test('MCP bootstrap and incremental migration stay identical', async () => 
   const tokens = (sql: string) => (sql.match(/--[^\n]*|\/\*[\s\S]*?\*\/|'(?:''|[^'])*'|[a-zA-Z_][a-zA-Z_0-9]*|[^\s]/g) ?? [])
     .filter(token => !token.startsWith('--') && !token.startsWith('/*')).join('\n')
   const automation = await Deno.readTextFile(new URL('supabase/migrations/202610300001_mcp_automation.sql', root))
-  if (tokens(schema.slice(schema.indexOf(marker))) !== tokens(automation)) throw new Error('Automation bootstrap SQL differs from incremental migration')
+  const unifiedMarker = '-- MCP unified consent bootstrap: equivalent to 202610300002_mcp_unified_consent.sql.'
+  if (tokens(schema.slice(schema.indexOf(marker), schema.indexOf(unifiedMarker))) !== tokens(automation)) throw new Error('Automation bootstrap SQL differs from incremental migration')
+  const unified = await Deno.readTextFile(new URL('supabase/migrations/202610300002_mcp_unified_consent.sql', root))
+  if (tokens(schema.slice(schema.indexOf(unifiedMarker))) !== tokens(unified)) throw new Error('Unified consent bootstrap differs from migration')
 })

@@ -19,6 +19,7 @@ export function OAuthConsentPage() {
   const [busy, setBusy] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [approvedCallback, setApprovedCallback] = useState<string | null>(null)
+  const [lastDecision, setLastDecision] = useState(true)
 
   useEffect(() => {
     if (!id || isLoading || !user || !profile?.is_active) return
@@ -52,6 +53,7 @@ export function OAuthConsentPage() {
 
   async function decide(approve: boolean) {
     if (!id || !details || details.user.id !== user?.id || busy || !profile?.is_active) return
+    setLastDecision(approve)
     setBusy(true); setError('')
     try {
       if (approve && approvedCallback) {
@@ -60,8 +62,12 @@ export function OAuthConsentPage() {
         return
       }
       if (!approve && approvedCallback) {
-        // OAuth identity was already approved by Auth. Do not broaden it.
-        redirectOAuthCallback(approvedCallback)
+        // Identity approval is not application consent. Do not deliver its code.
+        const { error } = await supabase.auth.oauth.revokeGrant({ clientId: details.client.id })
+        if (error) throw new Error()
+        setApprovedCallback(null); setDetails(null)
+        setError('Conexión denegada. Inicia una nueva solicitud desde tu cliente MCP si deseas conectar.')
+        setBusy(false)
         return
       }
       const { data, error } = approve
@@ -88,7 +94,7 @@ export function OAuthConsentPage() {
       : !active ? <p role="alert">Necesitas un perfil activo de Furthurr para autorizar conexiones. Contacta a tu administrador.</p>
       : <>
         <p>Cuenta: <strong>{profile.email}</strong></p>
-        {error && <div className="ui-feedback ui-feedback--error" role="alert"><p>{error}</p><button className="ui-button mt-3" disabled={busy} onClick={() => approvedCallback ? void decide(true) : setAttempt(value => value + 1)}>Reintentar</button></div>}
+        {error && <div className="ui-feedback ui-feedback--error" role="alert"><p>{error}</p><button className="ui-button mt-3" disabled={busy} onClick={() => approvedCallback ? void decide(lastDecision) : setAttempt(value => value + 1)}>Reintentar</button></div>}
         {!details && !error && <p role="status">Cargando solicitud…</p>}
         {details && <>
           <div className="ui-feedback space-y-3 break-words">
@@ -99,11 +105,11 @@ export function OAuthConsentPage() {
           </div>
           <p>Al autorizar concedes acceso a tu identidad (nombre, correo, identificador y rol) y estos permisos, sin pasos adicionales en tu perfil:</p>
           <ul className="list-disc space-y-2 pl-5">{Object.entries(permissionLabels).map(([key, label]) => <li key={key}>{label}</li>)}</ul>
-          <p>Solo tareas donde estés asignado y tengas acceso al tablero, en Backlog, Por hacer o Haciendo. Iniciar y enviar a revisión requieren tu aceptación en la conversación salvo que habilites por separado el avance automático tanto en Perfil &gt; Conexiones como en el detalle de la tarea. Esta autorización no activa la automatización. Nunca permite finalizar tareas, asignarte ni reabrirlas. Puedes retirar permisos o revocar la conexión en tu perfil.</p>
+          <p>Solo tareas donde estés asignado y tengas acceso al tablero, en Backlog, Por hacer o Haciendo. El avance automático está incluido: la aplicación puede iniciar tareas y enviarlas a revisión sin una nueva aceptación en la conversación, después de publicar un resultado vigente y declarar el trabajo completado. Nunca permite finalizar tareas, asignarte ni reabrirlas. Todos los permisos se conceden como un único conjunto; solo puedes retirarlos revocando la conexión completa en Perfil → Conexiones.</p>
           <p>Los adjuntos y comentarios se compartirán con la aplicación y su asistente. Los archivos descargados y enlaces temporales ya emitidos no se pueden retirar retroactivamente.</p>
           <p className="text-sm text-[var(--color-text-muted)]">El nombre lo declara la aplicación; no acredita que sea de confianza. Revisa la dirección de retorno. Tu contraseña no se comparte con ella.</p>
-          {approvedCallback && <p>La identidad OAuth ya fue autorizada. Estos permisos adicionales requieren tu aceptación; continuar sin ampliarlos conserva únicamente los permisos existentes.</p>}
-          <div className="flex flex-wrap gap-3"><button className="ui-button ui-button--primary" disabled={busy} onClick={() => void decide(true)}>Autorizar conexión</button><button className="ui-button" disabled={busy} onClick={() => void decide(false)}>{approvedCallback ? 'Continuar sin ampliar permisos' : 'Denegar'}</button></div>
+          {approvedCallback && <p>La identidad OAuth ya fue autorizada, pero falta un consentimiento de aplicación válido. Acepta el conjunto completo para conectar o deniega para revocar esta conexión.</p>}
+          <div className="flex flex-wrap gap-3"><button className="ui-button ui-button--primary" disabled={busy} onClick={() => void decide(true)}>Autorizar conexión</button><button className="ui-button" disabled={busy} onClick={() => void decide(false)}>Denegar</button></div>
           <span role="status">{busy ? 'Completando autorización…' : ''}</span>
         </>}
       </>}

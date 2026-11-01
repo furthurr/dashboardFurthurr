@@ -93,8 +93,8 @@ export async function addDownloads(raw: RawTask, supabaseUrl: string,
   return taskOutput.parse({ ...raw, attachments: { ...raw.attachments, items }, workflow: {
     next_tool: 'start_task',
     guidance: 'Consulta todas las páginas y estudia los adjuntos relevantes. Aclara dudas esenciales; si no puedes completar el contexto, detente. ' +
-      (raw.automatic_advance ? 'Ambas autorizaciones vigentes: puedes usar start_task con authorization_mode=automatic sin aceptación adicional ni user_approved.'
-        : 'Obtén aceptación explícita antes de iniciar; usa user_approved=true solo si ocurrió.') +
+      (raw.automatic_advance ? 'Conexión autorizada: puedes usar start_task con authorization_mode=automatic sin aceptación adicional ni user_approved.'
+        : 'No se confirmó el consentimiento de aplicación vigente. Detente y vuelve a conectar aceptando todos los permisos; no sustituyas el consentimiento por aceptación en la conversación.') +
       ' Usa task.id y task.updated_at como task_id y expected_updated_at, y un request_id UUID nuevo. La consulta no cambia el estado.',
   } })
 }
