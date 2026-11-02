@@ -85,11 +85,12 @@ Los esquemas se anuncian al cliente MCP; no hay un segundo JSON Schema generado
 en esta entrega documental.
 
 `WorkflowAccess`, usado solo por el portal: `{ client_id: UUID, permissions:
-WorkflowPermission[] }`, donde permiso es `read_tasks`, `read_attachments`, `start_task`,
-`comment_task` o `review_task`. El listado puede representar grants antiguos de
-lectura por sesión sin conceder permisos de trabajo. Fuente:
-`src/features/auth/mcpWorkflowAccess.ts:3-24`,
-`supabase/migrations/202610290001_mcp_workflow.sql:68-86`.
+WorkflowPermission[], automatic_advance?: boolean }`, donde permiso es `read_tasks`,
+`read_attachments`, `start_task`, `comment_task` o `review_task`. El listado local
+devuelve el conjunto completo y automatización cuando hay consentimiento de aplicación
+vigente; de lo contrario, conjunto vacío y `false`. Grants legacy elegibles se amplían
+en la migración. Fuentes: `src/features/auth/mcpWorkflowAccess.ts:4-15`,
+`supabase/migrations/202610300002_mcp_unified_consent.sql:5-23,47-62`.
 
 ## Contratos de adjunto y operaciones MCP
 
@@ -99,7 +100,7 @@ lectura por sesión sin conceder permisos de trabajo. Fuente:
 | Texto de adjunto | `{ kind: "text", untrusted_content, offset, total_chars, next_offset, ...metadata }`; solo UTF-8 válido; no garantiza una captura inmutable entre fragmentos |
 | Imagen de adjunto | Metadata en bloque de texto y `{ type: "image", data: base64, mimeType }`; PNG/JPEG/GIF/WebP verificadas por firma |
 | Formato no extraído | `{ kind: "unsupported", warning, download_url, expires_at, ...metadata }`; enlace no significa que el asistente haya estudiado el archivo |
-| Entrada de mutación | `task_id`, `request_id` GUID, `expected_updated_at`; flags literales `user_approved: true` o `user_validated: true` para las acciones que lo requieren |
+| Entrada de mutación | `task_id`, `request_id` GUID, `expected_updated_at`; modo manual por defecto con `user_approved: true`/`user_validated: true` según acción; modo local `authorization_mode: "automatic"` sin esos flags y `work_completed: true` para revisión |
 | Resultado de mutación | `{ request_id, replayed, task_id?, status?, updated_at?, comment_id? }`; `status` solo `haciendo` o `en_revision` |
 | Comentario de trabajo | `summary`, `changes`, `clarifications`, `validation`, `observations`, cada uno texto no vacío hasta 12000 caracteres |
 

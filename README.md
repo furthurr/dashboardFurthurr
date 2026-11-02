@@ -48,7 +48,7 @@ El bootstrap de referencia, incluidas tablas, RLS, Storage, vistas, grants y RPC
 
 **Ciclo de vida de tableros:** el selector consulta `list_boards_with_pending_counts`; el administrador puede renombrar, activar y desactivar. Desactivar conserva tareas y membresías, pero retira el acceso a los miembros. La interfaz local también permite eliminar permanentemente un tablero solo si ya está desactivado. Requiere `202610220001_board_access_returning.sql`, `202610220002_board_lifecycle.sql` y `202610260002_delete_inactive_boards.sql` en instalaciones existentes. El registro de aplicación remota de las migraciones `202610220001`/`202610220002` y de sus suites corresponde al 2026-10-22; no acredita la aplicación de `202610260002`.
 
-**Responsables de tareas:** creación y detalle permiten asignar/desasignar varias personas mediante un desplegable por nombre/correo. Los ya asignados desaparecen de las opciones y «Todos» añade a todos los usuarios activos disponibles. Requiere también la migración `202610200001_task_assignments.sql` de la misma guía. Cualquier cuenta activa, incluidos invitados, puede guardar asignaciones en tareas ajenas sin obtener permiso para editar otros campos. La tarea y sus responsables iniciales se crean en una sola transacción. El tablero permite filtrar por personas y precarga esas personas al crear una tarea; con el filtro «Todos» se inicia sin asignados.
+**Responsables de tareas:** creación y detalle permiten asignar/desasignar varias personas mediante un desplegable por nombre/correo. Los ya asignados desaparecen de las opciones y «Todos» añade a todos los usuarios activos disponibles. Requiere también la migración `202610200001_task_assignments.sql` de la misma guía. Cualquier cuenta activa, incluidos invitados, puede guardar asignaciones y editar otros campos de tareas ajenas dentro de un tablero accesible; guardar asignaciones es una acción separada y no concede permiso de eliminación. La tarea y sus responsables iniciales se crean en una sola transacción. El tablero permite filtrar por personas y precarga esas personas al crear una tarea; con el filtro «Todos» se inicia sin asignados.
 
 **Adjuntos de tareas:** la cuenta que subió un archivo, quien creó la tarea o un administrador activo con acceso al tablero puede cambiar el nombre visible o eliminarlo. Renombrar actualiza solo `task_attachments.file_name`, sin mover ni cambiar el objeto de Storage. El borrado confirma la acción y elimina el objeto y su metadata; Storage y PostgreSQL son operaciones separadas. Instalaciones existentes requieren `202610260001_task_attachment_management.sql`.
 
@@ -65,7 +65,7 @@ La app usa `HashRouter` porque GitHub Pages no reescribe rutas SPA. La ruta raí
 - `/dashboardFurthurr/#/board/:boardId` (tablero Kanban; requiere sesión y acceso al tablero)
 - `/dashboardFurthurr/#/users` (requiere administrador activo)
 - `/dashboardFurthurr/#/profile` (perfil propio, requiere cuenta activa)
-- `/dashboardFurthurr/#/profile/connections` (grants OAuth y autorización adicional de lectura MCP en fase 2 local)
+- `/dashboardFurthurr/#/profile/connections` (grants OAuth y permisos de workflow por cliente)
 - `/dashboardFurthurr/#/register` (compatibilidad: redirige a `/users`)
 - `/dashboardFurthurr/#/auth/callback`
 - `/dashboardFurthurr/#/board` (compatibilidad: redirige a `/boards`)
@@ -80,7 +80,7 @@ El workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) despl
 src/
   App.tsx                    Providers y rutas
   main.tsx                   Entrada React
-  features/auth/             Login, sesión y rutas protegidas
+  features/auth/             Login, sesión, rutas protegidas y conexiones MCP
   features/users/            Administración de usuarios y avatares
   features/boards/           Selector, miembros y ciclo de vida de tableros
   features/board/            Tablero, tareas, comentarios y adjuntos
@@ -101,28 +101,32 @@ Antes de implementar funcionalidad, actualiza o crea la especificación correspo
 - [Datos y API](.data/README.md) — operaciones de Supabase, modelos, schema y datos sensibles.
 - [Sistema de diseño](.design/README.md) — fundamentos visuales, componentes y deuda de UI.
 - [Mapa de navegación](.navigator/ai-context.md) — contexto breve; [mapa de módulos](.navigator/module-map.json).
-- [MCP para clientes de desarrollo](mcp/README.md) — selector e instalación OAuth por plataforma; conserva información de fase 1.
-- [Preparar y probar MCP de tareas](docs/prueba-mcp.md) — fase 2 local: `get_task`, permiso explícito por sesión, paginación y adjuntos. Incluye pasos de activación pendientes y resultados que deben verificarse; no acredita despliegue remoto.
+- [MCP para clientes de desarrollo](mcp/README.md) — selector e instalación OAuth por plataforma.
+- [Preparar y probar MCP de tareas](docs/prueba-mcp.md) — identidad, lectura de contexto y workflow de tareas: activación en Supabase, despliegue de la Edge Function y checklist de verificación. Distingue lo verificado de lo pendiente; no acredita E2E en navegador.
 - [Especificaciones](specs/README.md) — requisitos, modelo de datos, permisos, UI/UX y flujo Kanban.
 - [Operación Supabase](supabase/README.md) — orden de migraciones, pruebas SQL y publicación de Edge Functions.
 
 La documentación canónica describe y referencia las fuentes de implementación; `specs/` conserva la intención funcional, el SQL define el schema fuente y el código describe el comportamiento actualmente implementado.
 
-### MCP de tareas: estado de preparación
+### MCP de tareas: estado actual
 
-El árbol local añade `get_task` junto a `whoami`. El ID completo se copia desde
-el icono junto a comentarios o desde el detalle; copiarlo no concede acceso.
-La consulta devuelve título, descripción, estado, prioridad, tablero, responsables,
-comentarios y metadata/enlaces temporales de adjuntos. Primero se requiere
-«Autorizar lectura de tareas» en Conexiones; las sesiones nuevas no heredan ese
-permiso. No permite escritura ni interpreta archivos.
+El servidor MCP remoto expone seis herramientas: `whoami`, `get_task`,
+`read_task_attachment`, `start_task`, `record_task_result` y
+`submit_task_for_review`. La consulta devuelve título, descripción, estado,
+prioridad, tablero, responsables, comentarios y metadata/enlaces temporales de
+adjuntos. El ID completo se copia desde el icono junto a comentarios o desde el
+detalle; copiarlo no concede acceso.
 
-Antes de probar desde el cliente MCP remoto, revisar el estado real de Supabase,
-aplicar únicamente la migración pendiente `202610280003_mcp_task_read.sql`, desplegar
-la función y publicar el portal compatible según [la guía](docs/prueba-mcp.md).
-No se ejecutaron esos pasos en la sincronización documental. No admin requiere
-membresía explícita en tablero activo, aunque el portal admita acceso por asignación.
-Rutas legacy no firmables mantienen metadata con error, no enlace de descarga.
+La implementación **local no desplegada** concede como conjunto lectura de tareas y adjuntos, inicio, publicación de resultados y revisión, incluido avance automático. Solo se retira revocando la conexión completa; no hay control por tarea. La identidad OAuth por sí sola no equivale a consentimiento de aplicación (`email profile` son scopes de identidad). La migración amplía concesiones de aplicación existentes válidas.
+
+El workflow permite iniciar una tarea asignada y accesible, registrar el resultado y enviarla a revisión automáticamente cuando existe resultado vigente y se declara trabajo completado. El modo automático no inventa aprobación humana. «Finalizadas», asignación y reapertura siguen siendo manuales; una tarea en revisión deja de ser accesible por MCP.
+
+Estado verificado el 2026-10-29: `202610290001_mcp_workflow.sql` está aplicada y
+registrada en el proyecto Supabase, la Edge `mcp` está en la versión 4 (aplicación
+`0.3.0`) y el frontend se publicó con `v0.13.0`. Siguen pendientes la verificación
+del consentimiento en navegador y la prueba del flujo completo desde un cliente
+LLM. El procedimiento y el checklist están en [la guía](docs/prueba-mcp.md); los
+contratos, en [`.data/01-endpoints.md`](.data/01-endpoints.md).
 
 ## Autor
 

@@ -80,7 +80,7 @@
 - Se añadió la migración `supabase/migrations/202610200002_shared_task_editing.sql` para instalaciones existentes y se actualizó el bootstrap `supabase-schema.sql`.
 - Se actualizaron las pruebas de cliente y el probe SQL que fijaban la regla anterior.
 
-## Próximo Paso
+## Próximo paso histórico (sesión inicial)
 
 - Configurar secrets en GitHub: `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`
 - Hacer primer deploy a GitHub Pages
@@ -91,3 +91,9 @@
 - El código y las migraciones `202610260001_task_attachment_management.sql`, `202610260002_delete_inactive_boards.sql` y `202610260003_profile_avatars.sql` están presentes en el árbol local; esta anotación no afirma que sus migraciones estén aplicadas en Supabase ni que la SPA esté publicada con esos cambios.
 - La secuencia y los probes de `202610220001`/`202610220002` conservan su verificación remota histórica del 2026-10-22. Las migraciones nuevas y sus suites SQL no se ejecutaron ni verificaron remotamente durante esta actualización documental.
 - Se actualizaron además los READMEs operativos y los índices de arquitectura/datos/diseño/navegación. Las pruebas de producto no se ejecutaron como parte de este cambio documental.
+
+## 2026-10-31 — actualización documental
+
+- Se contrastaron permisos del portal y MCP, selector de tableros, visor de imágenes y consentimiento con código, migraciones y contratos locales. Los detalles actuales figuran en las specs 05, 06 y 12 y en `supabase/README.md`.
+- Evidencia histórica registrada: Pages publicó `0ebb61d` / `v0.13.0`; `202610290001` y Edge MCP v4 / aplicación `0.3.0` se verificaron el 2026-10-29. La implementación local posterior de consentimiento unificado (`202610300002`, aplicación `0.5.0`) no tiene versión remota exacta acreditada.
+- Siguen pendientes la comprobación E2E real de consentimiento y Storage y la conciliación del ledger con los objetos reales antes de cualquier operación remota. Esta actualización documental no ejecutó despliegues ni pruebas de producto o SQL.

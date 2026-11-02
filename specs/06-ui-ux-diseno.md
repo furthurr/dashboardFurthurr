@@ -1,6 +1,6 @@
 # 06 - UI/UX Y Diseño
 
-Última actualización: 2026-10-27
+Última actualización: 2026-10-31
 
 Estado: `borrador`
 
@@ -47,7 +47,8 @@ Objetivo visual:
 ## Selección y acceso a tableros
 
 - Después del login se muestra una pantalla con cards de los tableros accesibles; elegir una card abre ese tablero concreto. «Cambiar tablero» devuelve al selector.
-- El selector distingue carga, error/reintento y cuenta sin tableros. Admin ve todas las cards, puede crear tableros y gestionar miembros; las cuentas no admin solo ven sus membresías.
+- El selector distingue carga, error/reintento y cuenta sin tableros. Admin ve todas las cards, puede crear tableros y gestionar miembros; las cuentas no admin ven tableros activos accesibles por membresía o asignación a una tarea.
+- Los tableros activos con pendientes asignados a la cuenta aparecen en «Tableros con mis tareas pendientes», sin repetirse en «Tableros activos». Las tarjetas muestran el total de pendientes y, en esa sección, los pendientes propios; presentan avatar y primer nombre de miembros y responsables sin duplicados. Ver [spec 12](12-tableros-con-mis-pendientes.md).
 - La creación solicita nombre, muestra duplicados/errores y explica que el tablero nuevo inicia sin miembros.
 - Solo administradores activos ven la sección de tableros desactivados. En cada tablero inactivo pueden reactivarlo o iniciar una eliminación permanente mediante confirmación que identifica el tablero y advierte que no se puede recuperar.
 - Inicialmente «Offline» recibe tareas existentes y miembros activos actuales; «General» inicia vacío. Las nuevas tareas se crean en el tablero que está abierto.
@@ -68,11 +69,11 @@ Cada card debe mostrar como mínimo:
 - Título.
 - Descripción completa, con altura adaptable al contenido y conservando sus saltos de línea.
 - Miniaturas de los adjuntos de imagen; al seleccionarlas, mostrar la imagen ampliada en un diálogo.
+- El diálogo de imagen muestra título de tarea, nombre del archivo como subtítulo y descripción completa o mensaje de ausencia. Si hay varias imágenes, permite navegar únicamente las de la tarea, con controles accesibles deshabilitados en los extremos.
 - Prioridad.
 - Avatares de asignados.
-- Avatar de autor de comentario, cuando está disponible.
-- Indicador de comentarios.
-- Indicador de adjuntos si existen.
+- Acciones de copiar UUID y abrir comentarios; el indicador de comentarios aparece solo cuando el total es mayor que cero.
+- Indicador de adjuntos cuando el conteo está disponible.
 
 ## Detalle De Tarea
 
@@ -87,11 +88,17 @@ Debe mostrar:
 - Anotaciones especiales.
 - Adjuntos.
 - Comentarios.
+- UUID completo seleccionable encima de las pestañas y acción de copia. El éxito se comunica durante 4 segundos; si falla el portapapeles se ofrece copia manual del UUID.
 - El control para añadir adjuntos se presenta como un botón visible «Seleccionar archivo», muestra el nombre elegido e indica el límite de 5 MB.
 - Al elegir un archivo válido se inicia la subida automáticamente, sin un botón adicional de envío; durante la carga se informa su estado y, si falla, se conserva el archivo para reintentar volviéndolo a seleccionar.
 - En la lista de adjuntos, uploader, creador de la tarea o administrador activo con acceso al tablero puede cambiar el nombre mostrado o eliminar el archivo. Renombrar conserva el objeto de Storage; eliminar solicita confirmación con el nombre del archivo y comunica errores/éxito.
 
 El modal de detalle se cierra al hacer clic fuera del panel, igual que al usar el botón de cierre o Escape, salvo mientras una operación esté en curso.
+
+## Consentimiento y conexiones MCP
+
+- La pantalla de consentimiento local muestra la identidad del cliente, los cinco permisos y el avance automático; una autoaprobación de identidad sin consentimiento de aplicación vigente requiere aceptar el conjunto o denegar.
+- Conexiones muestra permisos efectivos y avance automático, y permite revocar la conexión completa. La lectura de contexto y los límites del workflow se describen en [contrato MCP](../.data/01-endpoints.md#mcp-remoto--servidor-dashboardfurthurr). La implementación local no acredita despliegue ni E2E de consentimiento.
 
 ## Alta De Tarea
 

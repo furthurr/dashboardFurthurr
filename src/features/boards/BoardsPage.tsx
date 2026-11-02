@@ -114,6 +114,9 @@ export function getBoardUpdateErrorMessage(cause: unknown): string {
 export function getBoardDeleteErrorMessage(cause: unknown): string {
   const error = cause as { code?: string }
   if (error?.code === '55000') return 'Solo se pueden eliminar tableros desactivados.'
+  if (error?.code === 'PGRST202') {
+    return 'Supabase no encuentra la función para eliminar tableros. Aplica la migración 202610260002_delete_inactive_boards.sql en el proyecto; si ya está aplicada, recarga el esquema de PostgREST.'
+  }
   if (error?.code === 'BOARD_ATTACHMENTS_DELETE_FAILED') {
     return 'No se pudo completar el borrado porque falló la limpieza de adjuntos. El tablero y sus tareas siguen; algunos archivos podrían haberse eliminado. Inténtalo de nuevo.'
   }

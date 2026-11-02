@@ -52,6 +52,7 @@ describe('Selección y gestión de tableros', () => {
     expect(getBoardUpdateErrorMessage({ code: '23505' })).toMatch(/Ya existe un tablero/i)
     expect(getBoardUpdateErrorMessage({ code: 'P0002' })).toMatch(/ya no existe/i)
     expect(getBoardDeleteErrorMessage({ code: '55000' })).toMatch(/desactivados/i)
+    expect(getBoardDeleteErrorMessage({ code: 'PGRST202' })).toMatch(/202610260002_delete_inactive_boards\.sql.*PostgREST/i)
     expect(getBoardDeleteErrorMessage({ code: 'BOARD_ATTACHMENTS_DELETE_FAILED' })).toMatch(/archivos podrían haberse eliminado/i)
     expect(getBoardDeleteErrorMessage({ code: 'BOARD_DELETE_FAILED_AFTER_STORAGE' })).toMatch(/archivos adjuntos ya se eliminaron/i)
   })

@@ -162,6 +162,8 @@ el cliente. Los esquemas de entrada/salida se anuncian en `tools/list`.
 
 ### Iniciar, registrar resultado y enviar a revisión — herramientas workflow
 
+**Alcance:** la tabla siguiente describe `202610300002` / MCP `0.5.0` locales sin despliegue acreditado; la última evidencia remota fechada corresponde al flujo manual `0.3.0`.
+
 Las tres herramientas envían `task_id`, `request_id` UUID y `expected_updated_at`
 de la lectura/operación previa; el request ID sirve para reintentar exactamente el
 mismo payload y la versión evita sobrescribir una tarea que cambió. No existe una
@@ -169,9 +171,9 @@ acción genérica de estado ni una herramienta para `finalizadas`.
 
 | Herramienta | Entrada adicional | Efecto local del servidor | Gate |
 | --- | --- | --- | --- |
-| `start_task` | `user_approved: true`, `context_summary` (1–12000 caracteres) | `backlog`/`por_hacer` → `haciendo`; si ya está `haciendo`, conserva el estado | Consentimiento `start_task`, asignación y etapa permitida |
-| `record_task_result` | `summary`, `changes`, `clarifications`, `validation`, `observations` (cada uno 1–12000) | Inserta comentario de trabajo MCP con nombre de cliente declarado como no verificado, client ID e intervención/request ID; devuelve `comment_id` | `haciendo`, permiso `comment_task` y versión actual |
-| `submit_task_for_review` | `user_validated: true`, `comment_id` | `haciendo` → `en_revision`; requiere comentario resultado existente del mismo usuario/cliente y vigente para la versión actual | Consentimiento `review_task`, declaración de validación y asignación |
+| `start_task` | `context_summary` (1–12000); manual: `user_approved: true`; automático: `authorization_mode: "automatic"`, sin aprobación humana | `backlog`/`por_hacer` → `haciendo`; si ya está `haciendo`, conserva el estado | Conexión con conjunto vigente, asignación, tablero y etapa permitida |
+| `record_task_result` | `summary`, `changes`, `clarifications`, `validation`, `observations` (cada uno 1–12000), y modo opcional | Inserta comentario de trabajo MCP con cliente no verificado, IDs y modo; devuelve `comment_id` | Conjunto vigente, `haciendo` y versión actual |
+| `submit_task_for_review` | `comment_id`; manual: `user_validated: true`; automático: `authorization_mode: "automatic"`, `work_completed: true`, sin validación humana | `haciendo` → `en_revision`; requiere comentario resultado existente del mismo usuario/cliente y vigente para la versión actual | Conjunto vigente, asignación y validación manual real o declaración automática de trabajo completado |
 
 Las banderas `user_approved`/`user_validated` son declaraciones incluidas por el
 cliente MCP; SQL no puede comprobar el diálogo ni que el modelo realmente aclaró
@@ -186,22 +188,17 @@ local. Fuentes: `supabase/functions/mcp/workflow.ts:4-17,106-122`,
 `supabase/functions/mcp/index.ts:145-203`,
 `supabase/migrations/202610290001_mcp_workflow.sql:195-296`.
 
+La respuesta local de `get_task` añade `automatic_advance`, calculado desde el conjunto vigente de la conexión, no desde un opt-in de tarea; un recibo nuevo incluye modo, estado, `updated_at` y `comment_id` cuando
+corresponda. Un replay es mínimo y no acredita versión actual. La guía no garantiza
+que un cliente/modelo la obedezca. Fuente: `supabase/migrations/202610300002_mcp_unified_consent.sql:32-45,79-174`, `supabase/functions/mcp/workflow.ts:4-35`.
+
 ### Consentimiento y concesiones OAuth
 
 - UI Pages: `/oauth/consent?authorization_id=<opaque-id>` muestra cliente, callback,
-  scopes y cuenta; una aceptación concede identidad más los cinco permisos workflow.
-  Si Auth autoaprueba un consentimiento antiguo por scopes, la página aún solicita
-  aceptación explícita para ampliar permisos o permite continuar con identidad sin
-  ampliación. El callback procede solo del `redirect_url` de Auth.
-- Gestión: `/profile/connections` lista identidad y permisos de tareas; permite
-  retirar permisos individualmente/todos sin perder `whoami`, o revocar el grant
-  OAuth completo. El permiso workflow se asocia al consentimiento OAuth activo y su
-  fecha, no a un scope nuevo; sesiones válidas del mismo grant aplican esa concesión.
-- Las concesiones antiguas de lectura por sesión (`mcp_task_read_permissions`) se
-  muestran como permisos efectivos de lectura para compatibilidad, pero no confieren
-  escritura. `mcp_list_workflow_access()` devuelve cliente y arreglo de permisos;
-  `mcp_revoke_workflow_permission()` limita la retirada al perfil activo del portal.
-  Un consentimiento OAuth nuevo no hereda automáticamente la concesión anterior.
+  scopes y cuenta; aceptar concede identidad y los cinco permisos con avance automático.
+  Ante autoaprobación OAuth, solo continúa automáticamente si hay consentimiento de aplicación vigente; si no, solicita aceptación del conjunto o permite denegar revocando la conexión. El callback procede de Auth.
+- Gestión: `/profile/connections` muestra permisos efectivos y `automatic_advance`; solo permite revocar el grant completo. Las RPC legacy para retirar permisos individuales o cambiar automatización pierden ejecución para `authenticated`.
+- La migración amplía grants de aplicación existentes vinculados al consentimiento activo y concesiones de lectura legacy con sesión viva y fecha válida; no convierte identidad OAuth sola en consentimiento de aplicación. Revocar o renovar invalida el consentimiento de aplicación (`supabase/migrations/202610300002_mcp_unified_consent.sql:5-77`).
 - Scopes `email`/`profile` son de identidad, no permisos SQL. El aislamiento real
   usa rol SQL, consentimiento y checks en cada RPC. Fuente: `src/App.tsx:11-16,39-42`,
   `src/features/auth/OAuthConsentPage.tsx:18-106`,

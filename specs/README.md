@@ -26,6 +26,7 @@ SDD significa Specification Driven Development. En este proyecto significa:
 10. [`09-backlog-sdd.md`](./09-backlog-sdd.md)
 11. [`10-decisiones.md`](./10-decisiones.md)
 12. [`11-progreso.md`](./11-progreso.md)
+13. [`12-tableros-con-mis-pendientes.md`](./12-tableros-con-mis-pendientes.md)
 
 ## Estados De Una Spec
 

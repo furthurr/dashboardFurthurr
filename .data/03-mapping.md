@@ -79,7 +79,7 @@ McpIdentity { id, email, full_name, role, client_id }
 Fuente: `supabase/functions/mcp/index.ts:25-38,50-66,129-150`,
 `supabase/migrations/202610280002_mcp_identity.sql:23-74`.
 
-## UUID de tarjeta → MCP contexto y flujo de trabajo (desplegado el 2026-10-29)
+## UUID de tarjeta → MCP contexto y flujo de trabajo (implementación local)
 
 1. `CopyTaskId` copia `Task.id` completo, sin prefijos, desde tarjeta o detalle.
 2. `taskInput` valida UUID/offsets/page size, rechaza campos extra y normaliza el
@@ -95,10 +95,11 @@ Fuente: `supabase/functions/mcp/index.ts:25-38,50-66,129-150`,
    restringe el path al bucket/tarea, firma y descarga solo hasta 5 MiB. Texto y código
    UTF-8 salen en fragmentos; las imágenes PNG/JPEG/GIF/WebP salen como contenido MCP
    visual. Otros formatos conservan URL y advertencia, no se declaran estudiados.
-7. Tras aclaraciones y aceptación, `mcp_work_task` inicia solo `backlog`/`por_hacer`
+7. Tras aclaraciones y, en modo manual, aceptación, `mcp_work_task` inicia solo `backlog`/`por_hacer`
    en `haciendo`; comentario y revisión son acciones separadas. El resultado escribe
    comentario en `comments` y recibo idempotente en `mcp_task_operations`. La revisión
-   solo cambia `haciendo` a `en_revision`, con flag declarado y comentario previo.
+   solo cambia `haciendo` a `en_revision`, con declaración de validación manual o
+   modo automático autorizado y comentario previo. En automático se requiere el conjunto vigente de la conexión y `work_completed=true`, sin opt-in por tarea (`supabase/migrations/202610300002_mcp_unified_consent.sql:91-166`).
    Las versiones obsoletas se rechazan (`PT428`) y Finalizadas no es un destino.
 
 La proyección pública no añade correos de terceros ni transporta el bearer. El

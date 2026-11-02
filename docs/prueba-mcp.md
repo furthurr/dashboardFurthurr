@@ -2,6 +2,48 @@
 
 ## Estado y alcance
 
+### Ampliación local: consentimiento unificado y avance automático MCP
+
+**Implementado y versionado, sin despliegue exacto acreditado:** la migración
+`202610300002_mcp_unified_consent.sql`, el bootstrap, MCP de aplicación `0.5.0` y la UI de consentimiento unificado están incluidos en `59da99331532d6fbc952d2e9735d18ef32a0a19d`. `202610300001` es prerrequisito incremental. Los datos
+remotos históricos de la tabla siguiente corresponden al workflow manual `0.3.0`,
+no demuestran esta ampliación. No se han repetido consultas ni despliegues remotos
+en la sincronización documental anterior.
+
+**Observación parcial registrada en una sesión anterior:** la conexión MCP permitió consultar una tarea asignada con `automatic_advance=true` e iniciarla en modo automático. Esto acredita esas dos operaciones para esa conexión; no identifica la versión remota ni demuestra migraciones concretas, consentimiento en navegador, Storage o el flujo completo hasta revisión. Esta revisión documental no repitió esas operaciones.
+
+Evidencia local informada por la implementación: 202 Vitest, 19 Deno MCP, lint y
+build; SQL en PostgreSQL desechable con Auth/Storage simulados, sobre incremental
+y bootstrap, incluidos revocación, concurrencia e idempotencia. No acredita OAuth,
+Storage, navegador o modelo real de extremo a extremo. Los avisos de tamaño de
+bundle y `__dirname` no impidieron el build.
+
+**Preparación de prueba manual, solo tras autorización explícita de despliegue:**
+
+1. Elegir el entorno y contrastar ledger y objetos; no ejecutar `db push` global,
+   reparar historial a ciegas ni aplicar el bootstrap sobre una BD existente.
+2. Verificar las dependencias y aplicar únicamente migraciones pendientes en orden,
+   incluidas `202610300001` y `202610300002` si faltan, después del workflow anterior. No inferir el estado remoto desde esta guía.
+3. Desplegar la Edge Function MCP completa y verificar `serverInfo.version=0.5.0`;
+   publicar la SPA correspondiente después de SQL y función. Confirmar controles.
+4. Iniciar una sesión nueva de cliente MCP; comprobar las seis herramientas y que
+   el catálogo anuncia los campos automáticos. Autorizar los permisos workflow en
+   navegador; la aceptación incluye todos los permisos y el avance automático.
+5. Usar una tarea de prueba asignada, accesible y en Backlog/Por hacer, con páginas
+   y adjuntos compatibles. En Perfil > Conexiones comprobar permisos efectivos y avance incluido, sin controles individuales ni por tarea.
+6. Con conexión autorizada, pedir trabajo al LLM y verificar estudio del contexto,
+   Haciendo, trabajo y verificaciones reales, comentario de resultado y En revisión;
+   comprobar modo registrado y ausencia de aprobación humana inventada. La guía
+   al modelo no garantiza que obedezca ni prueba que completó el trabajo.
+7. Con tareas de prueba adicionales, probar revocación completa entre operaciones,
+   cambio de versión, pérdida de asignación, revocación/renovación OAuth, errores y
+   reintentos. Ante contexto insuficiente o fallo, el asistente debe detenerse;
+   MCP nunca finaliza, asigna ni reabre.
+
+### Evidencia histórica del despliegue manual — 2026-10-29
+
+Este bloque y los registros históricos de la sección 8 describen la versión manual publicada; sus controles de retirada individual y aceptación obligatoria **no describen la implementación local unificada**. Los checklists posteriores indican expresamente el alcance de la prueba.
+
 Actualización documental del **2026-10-29**. Producto publicado:
 `0ebb61d7465afd240de47c11f2d4671affa1342c` (`v0.13.0`), que incluye el consentimiento
 conjunto y el workflow de tareas. El backend se activó antes de publicar: migración
@@ -12,10 +54,10 @@ conjunto y el workflow de tareas. El backend se activó antes de publicar: migra
 | **IMPLEMENTADO Y PUBLICADO** | Seis herramientas MCP, consentimiento conjunto, permisos retirables; release `v0.13.0` (`0ebb61d`) |
 | **DESPLEGADO** | `202610290001` aplicada/registrada; `mcp` Edge **v4 ACTIVE**, `verify_jwt=false`, aplicación `0.3.0`; [Pages run 40963945319](https://github.com/furthurr/dashboardFurthurr/actions/runs/40963945319) en success con HTML y assets 200 |
 | **VERIFICADO** | SQL remoto (identidad, lectura y workflow) con fixtures revertidos; grants/RLS y ausencia de residuos; `whoami` real; HTTP 401 anónimo con challenge; 203 Vitest, 19 Deno MCP, 12 Deno administración, lint/build y suites SQL locales |
-| **PENDIENTE E2E** | Consentimiento/revocación en navegador, catálogo autenticado renovado con seis herramientas, lectura real de adjuntos por Storage y flujo completo con el cliente LLM |
+| **PENDIENTE E2E EN ESA COMPROBACIÓN** | Consentimiento/revocación en navegador, catálogo autenticado renovado con seis herramientas, lectura real de adjuntos por Storage y flujo completo con el cliente LLM. El catálogo se observó posteriormente; ver sección 8 |
 
 **No declarar «workflow MCP verificado en navegador» ni «E2E aprobado».** El código
-desplegado anuncia `serverInfo.version=0.3.0` en Edge v4; la release del producto es
+desplegado en esa fecha anunciaba `serverInfo.version=0.3.0` en Edge v4; la release del producto era
 `0.13.0`. Las casillas siguientes son un checklist reutilizable de preparación/E2E,
 no una certificación. El registro de lo ejecutado está en la sección 8. **No reejecutar
 `202610280003` ni `202610290001`**: ninguna es idempotente y ambas ya están
@@ -25,7 +67,7 @@ La persona comparte un UUID; el asistente consulta todas las páginas, estudia
 adjuntos compatibles y pregunta dudas. Solo tras aceptación puede iniciar la tarea,
 registrar un comentario de resultado y, si el usuario valida, enviarla a revisión.
 No finaliza tareas, no asigna ni reabre. Las herramientas están desplegadas; el E2E
-completo está pendiente.
+completo estaba pendiente en esa comprobación. Este párrafo describe el flujo manual histórico.
 
 Referencias autoritativas: [contrato y errores](../.data/01-endpoints.md),
 [DTOs](../.data/02-models.md), [schema y discrepancia remota](../.data/04-schema.md),
@@ -41,15 +83,14 @@ local, SQL remoto y E2E real.
    OAuth**, usando la URL indicada en la guía de clientes. En OpenCode, abrir el
    repo y, si solicita autenticación, usar `opencode mcp auth dashboardFurthurr`.
    Inspeccionar cliente/callback y aceptar conscientemente los permisos de la pantalla;
-   no copiar tokens ni claves. La versión remota probada antes sigue siendo fase 2.
+   no copiar tokens ni claves. La fase 2 (`0.2.0`) es anterior al workflow `0.3.0` acreditado.
 2. En la versión local de consentimiento, la autorización inicial concede identidad,
    lectura de tareas/adjuntos, inicio, comentarios y revisión; no hay paso de habilitar
-   permisos en Perfil. Si Auth autoaprueba un grant antiguo, debe aparecer el prompt
-   explícito de ampliación o la opción de continuar solo con lo ya concedido.
+   permisos en Perfil. Si Auth autoaprueba identidad sin consentimiento de aplicación vigente, debe aparecer aceptación del conjunto o denegación; con consentimiento válido continúa.
 3. Reiniciar/reconectar MCP o abrir un chat nuevo para refrescar el catálogo. El
    código local espera seis herramientas; verificar `initialize` y `tools/list` reales.
 4. En Perfil → Conexiones autorizadas (`#/profile/connections`) comprobar el estado
-   de permisos y probar retirar un permiso/todos y revocar grant. No habilitar desde
+   de permisos y probar revocar la conexión completa; no hay controles individuales. No habilitar desde
    esa página. Para local ejecutar `npm run dev` con configuración segura ya preparada y abrir
    `http://localhost:5173/dashboardFurthurr/#/profile/connections`. Confirmar que
    ambos frontends apuntan al entorno acordado; no asumirlo por servir HTML.
@@ -109,14 +150,14 @@ deno test --allow-read --allow-run=docker supabase/tests/mcp_sql_test.ts
 Requieren dependencias instaladas, Deno y Docker en ejecución; no instalar o
 reemplazar dependencias como efecto implícito de documentar. El harness usa imagen
 `postgres:16` en un contenedor desechable sin red, con Auth/Storage simulados.
-`mcp_sql_test.ts` reproduce bootstrap completo e incremental (`202610280002` +
-`202610280003` + `202610290001`), seis probes con fixtures revertidos, más llamadas
+`mcp_sql_test.ts` reproduce bootstrap completo e incremental (incluidas las
+migraciones hasta `202610300002`), probes con fixtures revertidos, más llamadas
 concurrentes para conflicto de versión e idempotencia. El script legado
 `run_mcp_task_read.sh` también ejecuta el subconjunto del flujo de lectura. Ninguna
 de estas pruebas certifica Supabase Auth/Storage reales.
 **Nunca ejecutar `mcp_harness.sql` en un proyecto Supabase.**
 
-Evidencia local de la implementación del workflow (reutilizada, no repetida aquí):
+Evidencia histórica local de la implementación del workflow `0.3.0` (reutilizada, no repetida aquí):
 203 Vitest en 22 archivos, 19 Deno MCP, lint/build, seis probes SQL en ambas rutas
 y dos pruebas concurrentes PASS. PostgreSQL 16/Auth/Storage simulados no validan
 servicios reales. No se hizo E2E OAuth ni descarga real. El build mantiene avisos de
@@ -193,8 +234,8 @@ nuevos ya existen, detenerse y comparar sus definiciones; no reejecutar el archi
 ## 4. Desplegar las piezas compatibles
 
 Solo para el responsable con autorización operativa. El procedimiento siguiente sirve
-para otra instalación o un cambio futuro; en el entorno verificado `202610290001` y
-Edge v4 (`0.3.0`) ya están activos y publicados en `v0.13.0`. No repetir migraciones
+para otra instalación o un cambio futuro; en la comprobación del 2026-10-29 se registraron
+`202610290001` y Edge v4 (`0.3.0`), con portal `v0.13.0`. No repetir migraciones
 registradas; hacer preflight antes de proponer SQL nuevo.
 
 1. Aplicar y comprobar SQL revisado antes de ofrecer el consentimiento de workflow.
@@ -226,19 +267,14 @@ del cliente ya se haya realizado.
 
 ## 5. Prueba mínima de punta a punta
 
-La secuencia siguiente es el checklist E2E pendiente. El backend y la SPA ya están
-activados en el entorno verificado; lo que falta es la prueba con navegador y cliente
-MCP reales, con datos de prueba no sensibles.
+La secuencia siguiente es el checklist E2E pendiente para la implementación local unificada; requiere un entorno donde se hayan desplegado SQL, función y SPA con autorización específica. Usa datos de prueba no sensibles.
 
 ### A. Consentimiento y catálogo
 
 - [ ] Desde una conexión OAuth nueva, revisar cuenta activa, cliente, callback y
   lista de cinco permisos en `#/oauth/consent`; aceptar solo si se reconoce el cliente.
-- [ ] Confirmar que no hay segundo paso de habilitación en Perfil. Perfil → Conexiones
-  debe mostrar identidad/permisos, permitir retirar cada uno, todos, o el grant entero.
-- [ ] Para una conexión OAuth antigua autoaprobada, verificar que no gana permisos
-  ampliados automáticamente: la pantalla debe pedir aceptación adicional o dejar
-  continuar solo con el grant de identidad previo.
+- [ ] Confirmar que no hay segundo paso ni control por tarea. Perfil → Conexiones muestra los permisos efectivos y avance automático y solo permite revocar la conexión completa.
+- [ ] Verificar ampliación de grants de aplicación existentes válidos. Una identidad autoaprobada sin consentimiento de aplicación vigente debe aceptar el conjunto o denegar; una concesión válida puede continuar.
 - [ ] Abrir un chat nuevo/reconectar y comprobar `initialize`/`tools/list` con las
   seis herramientas. Un preset de cliente no prueba que OAuth/tool catalog funcione.
 
@@ -249,7 +285,7 @@ Petición de prueba, usando un ID de tarea asignada a la cuenta:
 > Usa `get_task` con el UUID `<UUID_COPIADO>`. Recorre todas las páginas de comentarios
 > y adjuntos por separado. Estudia cada archivo compatible con `read_task_attachment`.
 > No cuentes una URL como archivo revisado. Pregúntame cualquier duda que falte,
-> resume alcance/criterios de aceptación y espera mi aceptación antes de iniciar.
+> aclara dudas esenciales, resume alcance/criterios de aceptación e inicia automáticamente si la conexión está autorizada.
 
 - [ ] Comprobar `structuredContent` real: campos de tarea/tablero/responsables y
   páginas completas con `next_offset` independiente. No correos de terceros, token
@@ -271,17 +307,15 @@ Petición de prueba, usando un ID de tarea asignada a la cuenta:
 
 ### C. Iniciar, registrar y enviar a revisión
 
-- [ ] Con contexto completo y dudas resueltas, el asistente resume lo entendido y
-  ofrece iniciar. Sin aceptación, no invoca `start_task` ni cambia estado.
-- [ ] Tras aceptación, `backlog`/`por_hacer` pasa a `haciendo`; una tarea que ya está
+- [ ] Con contexto completo y dudas resueltas, el asistente inicia con `authorization_mode=automatic`, sin `user_approved`; no inventa aceptación humana.
+- [ ] Al iniciar, `backlog`/`por_hacer` pasa a `haciendo`; una tarea que ya está
   `haciendo` permanece ahí. `en_revision`/`finalizadas` no se reabre.
 - [ ] Al terminar, `record_task_result` crea un comentario visible en el dashboard,
   con resumen, cambios, aclaraciones nuevas, validaciones realmente ejecutadas,
   observaciones y pendientes, además del cliente MCP/request ID. No secretos ni links.
 - [ ] Reintentar exactamente el mismo `request_id` no crea un segundo comentario;
   reusar el ID con distinto payload o `expected_updated_at` obsoleto se rechaza.
-- [ ] El asistente muestra el resultado; solo después de validación/aceptación del
-  usuario invoca `submit_task_for_review` con el comment ID del resultado. Comprueba
+- [ ] Solo tras completar el trabajo y registrar el resultado vigente, el asistente invoca `submit_task_for_review` con `authorization_mode=automatic`, `work_completed=true` y el comment ID, sin `user_validated`. Comprueba
   `haciendo` → `en_revision` y que ya no puede volver a consultar esa tarea vía MCP.
 - [ ] No hay herramienta MCP de `finalizadas`, asignación o reapertura; finalización
   se realiza manualmente desde el tablero.
@@ -298,21 +332,20 @@ No desactivar la única cuenta admin ni usar tareas privadas de producción.
 | Caso | Resultado esperado |
 | --- | --- |
 | Concesión nueva | Una aprobación explícita concede los permisos listados; scopes `email profile` no son autorización de datos |
-| Consentimiento OAuth anterior autoaprobado | No hay ampliación silenciosa; aceptar permiso extra o continuar con identidad anterior |
+| Consentimiento OAuth anterior autoaprobado | Grant de aplicación previo válido ampliado; identidad sola exige aceptación del conjunto o denegación |
 | Usuario/invitado miembro y asignado a tarea permitida | Consulta permitida |
 | Admin no asignado | Denegado por asignación igual que otros roles |
 | Usuario asignado sin membresía de tablero | Denegado; asignación sola no sustituye membresía para no admin |
 | Usuario con acceso de tablero, no asignado | Mensaje de autoasignación manual; no revela contenido de tarea |
 | `backlog`, `por_hacer`, `haciendo` | Lectura/adjunto habilitados si permiso y asignación siguen vigentes |
 | `en_revision`, `finalizadas` | Sin contexto ni mutaciones; pide cambio manual a `haciendo` |
-| Retirar `read_tasks` o todos los permisos | MCP deja de leer/trabajar; `whoami` y conexión OAuth permanecen |
-| Retirar permiso de comentario/revisión | Solo acción correspondiente denegada; listado refleja retiro |
+| Permisos individuales | No hay controles ni RPC ejecutables por el portal para retirarlos por separado |
 | Revocar grant OAuth | Solicitudes posteriores rechazadas por sesión/grant inválidos |
 | Cuenta inactiva, sesión revocada o expirada | Sin acceso a tarea ni operación |
 | Quitar asignación/membresía o desactivar tablero | Nuevas llamadas se deniegan según el actor/board rule |
 | Inicio con flag falso/sin alcance | Argumento rechazado, tarea no cambia |
 | Resultado en tarea distinta de `haciendo` | Rechazado; no comentario nuevo |
-| Revisión sin flag de validación/comentario MCP actual | Rechazada; no cambia estado |
+| Revisión sin `work_completed=true` en automático, o sin comentario MCP actual | Rechazada; no cambia estado |
 | Solicitud concurrente con `updated_at` antiguo | `PT428`; releer antes de reintentar |
 | Recibo retry igual / request ID con payload diferente | Reintento no duplica; payload distinto se rechaza |
 | Adjuntos externos/legacy no validables o >5 MiB | No descarga path no confiable; muestra error seguro |
@@ -326,9 +359,9 @@ completa. Retirar acceso tampoco recupera datos ya descargados ni invalida URLs 
 
 | Síntoma | Comprobación siguiente |
 | --- | --- |
-| Solo aparece `whoami` o `get_task` | Confirmar entorno/versión Edge y refrescar catálogo; el Edge v3 histórico no incluye las herramientas del código local `0.3.0` |
+| Solo aparece `whoami` o `get_task` | Revisar filtros del preset (Antigravity limita a `whoami`), entorno/versión Edge y catálogo refrescado; Edge v3 histórico es anterior al workflow `0.3.0` |
 | Perfil muestra permisos sin verificar | Revisar que la migración workflow esté aplicada y que frontend y servidor correspondan al mismo entorno |
-| Consentimiento antiguo abre autorización extra | Aceptar ampliación explícita o continuar sin ampliar; no hacer grants manuales en SQL |
+| Identidad autoaprobada sin consentimiento de aplicación | Aceptar el conjunto o denegar; no hacer grants manuales en SQL |
 | «Puede faltar la migración del MCP» | Revisar presencia/contrato de RPCs, grants y schema cache en el proyecto correcto; no repetir migración sin comparar |
 | «No estás asignado» | Asignar la cuenta al registro desde el tablero; ni admin omite el requisito |
 | Tarea inaccesible en En revisión/Finalizadas | Moverla manualmente a Haciendo desde el tablero; el MCP no reabre |
@@ -338,14 +371,13 @@ completa. Retirar acceso tampoco recupera datos ya descargados ni invalida URLs 
 | HTTP 401 al ejecutar OpenCode | Separar fallo de proveedor del modelo, autenticación de su API local y challenge del MCP; un 401 de otra capa no acredita fallo de `get_task` |
 | Vite muestra ENOENT en Tailwind tras cambiar dependencias | Reiniciar el proceso de desarrollo y comprobar carga del CSS; no reinstalar paquetes o alterar lockfiles como primer paso |
 
-Si se necesita detener una prueba, retirar el permiso concreto o todos desde
-Conexiones y parar el cliente. Revocar el grant completo es diferente y quita
-identidad. Rollback SQL/despliegue es operación aparte que debe planear la persona
+Si se necesita detener una prueba, revocar la conexión completa desde Conexiones y parar el cliente. Revocar el grant quita identidad. Rollback SQL/despliegue es operación aparte que debe planear la persona
 operadora; no borrar comentarios de resultado ni retirar masivamente grants reales.
 
 ## 8. Registro de resultados, sin secretos
 
-Registro de la operación del **2026-10-29**, contrastado con la release publicada.
+Registro histórico de la operación de lectura/fase 2 del **2026-10-29**, anterior
+a la activación del workflow documentada más abajo, contrastado con la release publicada.
 No se copiaron identidad, tokens, contenido privado ni enlaces firmados. Esta
 actualización documental no repite pruebas ni consulta nuevamente Supabase.
 
@@ -357,7 +389,7 @@ actualización documental no repite pruebas ni consulta nuevamente Supabase.
 | Deploy Edge | `mcp` v3 ACTIVE; `verify_jwt=false`; la descarga coincidía con el baseline local de fase 2 en la fecha de comprobación, no con el workflow actual. `0.2.0` en ese código; `initialize` autenticado pendiente |
 | Publicación del portal | [Run 40923924908](https://github.com/furthurr/dashboardFurthurr/actions/runs/40923924908), success para `c2677c9`; HTML y nuevos assets JS/CSS con HTTP 200 |
 | Frontend local | Vite sirvió HTML y módulo principal con HTTP 200; no acredita login ni consentimiento local |
-| Cliente e identidad | OpenCode CLI 1.18.34 informó OAuth conectado; `whoami` real funcionó desde el cliente de esta sesión tras despliegue. No se registró versión Desktop ni catálogo fresco completo |
+| Cliente e identidad | OpenCode CLI 1.18.34 informó OAuth conectado; `whoami` real funcionó desde el cliente de la sesión registrada tras despliegue. No se registró versión Desktop ni catálogo fresco completo en esa comprobación |
 | Consentimiento y consulta de tarea | SQL remoto aprobado; consentimiento de navegador y consulta satisfactoria vía `get_task` real pendientes |
 | Personas, páginas y colecciones vacías | Deno local y SQL remoto aprobados, incluidos offsets independientes; comparación por MCP/UI real pendiente |
 | Descarga, caducidad/renovación y legacy | Validador/fallos de firma cubiertos localmente; descarga y caducidad reales no comprobadas |
@@ -366,12 +398,12 @@ actualización documental no repite pruebas ni consulta nuevamente Supabase.
 | Revisión UI móvil/teclado/portapapeles | Pendiente; build/Vitest no sustituyen revisión visual real |
 | Limpieza | Fixtures SQL revertidos; comprobada ausencia de cuentas/clientes/tableros de prueba residuales, recurso canónico conservado y cero permisos de lectura al finalizar la operación |
 | Bloqueos | Ejecución por modelo de OpenCode CLI: HTTP 401; API local de OpenCode autenticada; controlador GUI `orca` no disponible. No se extrajeron credenciales ni se rebajaron controles |
-| Siguiente responsable/paso | `developer` o persona operadora con cliente renovado y cuenta de prueba en navegador: completar secciones 5–6 desde local y Pages, incluidos Storage real y retirada de permisos |
+| Siguiente paso registrado entonces | Probar navegador, Storage real y retirada individual de permisos del flujo histórico; las secciones 5–6 actuales prueban el consentimiento unificado local |
 
 Las guías y la release **no acreditan E2E completo**. Para cerrar el pendiente,
 registrar cliente/versión, resultado de cada caso y limpieza sin datos sensibles.
 
-### Implementación workflow local — evidencia del 2026-10-29, sin activación remota
+### Implementación workflow local — evidencia histórica previa a la activación del 2026-10-29
 
 ### Activación del workflow MCP — 2026-10-29
 
@@ -391,8 +423,22 @@ simulados terminaron revertidos.
 | Identidad | `whoami` real correcto; solicitud anónima HTTP 401 con `WWW-Authenticate` y metadata canónica |
 | Adjuntos | Lector de texto UTF-8 e imágenes PNG/JPEG/GIF/WebP, máximo 5 MiB; otros formatos avisan no extraídos; descarga real con Storage sigue pendiente |
 | Flujo de tarea | Asignación requerida para todos los roles; `backlog`/`por_hacer` → `haciendo`; comentario de resultado; tras validación → `en_revision`; nunca `finalizadas` |
-| E2E | Pendiente: consentimiento/revocación en navegador, catálogo autenticado con seis herramientas y estudio de adjuntos por el cliente LLM |
+| E2E | Pendiente: consentimiento/revocación en navegador, invocación real del catálogo de seis herramientas (el cliente las anuncia desde una sesión nueva) y estudio de adjuntos por el cliente LLM |
 
 Los mensajes e instrucciones del LLM guían conversación, no certifican que el usuario
 aprobó verbalmente ni que los archivos se hayan entendido. Las flags de aprobación
 son declaradas por el cliente; antes de declarar listo hay que comprobar el flujo real.
+
+### Cliente y permisos de workflow — comprobación del 2026-10-29
+
+Resultado histórico para el workflow manual `0.3.0`, sin credenciales extraídas ni controles
+rebajados. Sus instrucciones de permisos no describen el consentimiento unificado local.
+
+| Comprobación | Resultado |
+| --- | --- |
+| Catálogo en una sesión ya abierta | Solo expone `whoami` y `get_task`: el catálogo de herramientas se fija al iniciar la sesión y no se refresca en caliente |
+| Catálogo en una sesión nueva del CLI | `opencode run` con el servidor `dashboardFurthurr` (OAuth autenticado, client_id `ece00c79-dd5c-427e-92d9-50d6782f8a94`) anuncia las **seis** herramientas: `whoami`, `get_task`, `read_task_attachment`, `start_task`, `record_task_result` y `submit_task_for_review`. El servidor publica el catálogo completo |
+| Primera mutación | `start_task` respondió `PT403` («Falta un permiso para esta operación»): el grant OAuth de ese cliente no tiene registrados los permisos de workflow en `mcp_workflow_permissions` |
+| Efectos | Ninguno: la tarea quedó en `backlog`, sin comentarios y con el mismo `updated_at` |
+| Requisito pendiente registrado entonces | Autorizar los cinco permisos de workflow para ese cliente o reconectar y aprobar el consentimiento ampliado; el reintento idempotente exige los mismos datos. No aplicar estas indicaciones al consentimiento unificado sin verificar la versión efectiva |
+| Límites | El diagnóstico del propio CLI mostró el token enmascarado; no se copiaron tokens ni se modificaron políticas, grants o migraciones |

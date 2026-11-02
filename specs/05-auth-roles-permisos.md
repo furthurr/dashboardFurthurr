@@ -2,11 +2,11 @@
 
 Estado: `aprobada`
 
-Última actualización: 2026-10-27
+Última actualización: 2026-10-31
 
 ## Archivo De Referencia
 
-El esquema completo está en [`supabase-schema.sql`](../supabase-schema.sql). Las policies RLS están definidas ahí.
+El bootstrap está en [`supabase-schema.sql`](../supabase-schema.sql); para instalaciones existentes contrastar también las migraciones y el estado real del ledger, según [`supabase/README.md`](../supabase/README.md).
 
 ## Autenticación
 
@@ -39,16 +39,13 @@ Admin:
 
 Usuario:
 
-- Puede ver tareas en tableros donde es miembro.
-- Puede crear tareas en tableros donde es miembro.
-- Puede editar tareas propias o ajenas en tableros donde es miembro.
+- Puede ver y crear tareas y editar tareas propias o ajenas en tableros accesibles.
 - Puede crear comentarios.
 - Puede editar solo sus comentarios.
 
 Invitado:
 
-- Puede ver tareas en tableros donde es miembro.
-- Puede editar tareas propias o ajenas en tableros donde es miembro.
+- Puede ver y editar tareas propias o ajenas en tableros accesibles.
 - No puede crear comentarios.
 - No puede editar comentarios.
 - No puede editar comentarios aunque sean propios, porque no puede crearlos.
@@ -64,26 +61,26 @@ Invitado:
 
 ## Roles: Definición Formal
 
-El alcance de las acciones sobre tareas y sus recursos asociados (asignaciones, comentarios y adjuntos) de esta matriz es **solo dentro de un tablero accesible** por membresía, salvo los administradores activos, que ven todos los tableros. Ser responsable de una tarea no concede acceso a su tablero.
+En el portal local, las acciones sobre tareas y recursos asociados requieren un tablero accesible: para cuentas activas no administradoras, tablero activo y membresía explícita **o al menos una tarea asignada**, de cualquier estado; admin activo accede también a inactivos. Una asignación no crea membresía. MCP aplica reglas distintas, descritas abajo.
 
 | Acción | Admin | Usuario | Invitado |
 |---|---|---|---|
-| Ver tareas | Todos los tableros | Solo miembros | Solo miembros |
+| Ver tareas | Todos los tableros | Tableros accesibles | Tableros accesibles |
 | Crear tareas | Sí | Sí | No |
 | Editar tareas propias | Sí | Sí | Sí |
 | Editar tareas ajenas | Sí | Sí | Sí |
-| Eliminar tareas propias | Sí | Sí | No |
+| Eliminar tareas propias | Sí | Sí | Sí, si es creador |
 | Eliminar tareas ajenas | Sí | No | No |
-| Ver comentarios | En cualquier tablero | Solo miembros | Solo miembros |
+| Ver comentarios | En cualquier tablero | Tableros accesibles | Tableros accesibles |
 | Crear comentarios | Sí | Sí | No |
 | Editar comentarios propios | Sí | Sí | No |
 | Editar comentarios ajenos | Sí | No | No |
 | Eliminar comentarios propios | Sí | Sí | No |
 | Eliminar comentarios ajenos | Sí | No | No |
 | Subir adjuntos | Sí | Sí | No |
-| Ver adjuntos | En cualquier tablero | Solo miembros | Solo miembros |
-| Renombrar adjunto | Si es uploader/creador de tarea/admin | Si es uploader o creador de tarea | No |
-| Eliminar adjunto | Si es uploader/creador de tarea/admin | Si es uploader o creador de tarea | No |
+| Ver adjuntos | En cualquier tablero | Tableros accesibles | Tableros accesibles |
+| Renombrar adjunto | Sí | Si es uploader o creador de tarea | Si es uploader o creador de tarea |
+| Eliminar adjunto | Sí | Si es uploader o creador de tarea | Si es uploader o creador de tarea |
 | Ver avatares | Lectura pública del bucket | Lectura pública del bucket | Lectura pública del bucket |
 | Cambiar avatar propio (cuenta activa) | Sí | Sí | Sí |
 | Cambiar avatar de otra cuenta | Sí, admin activo | No | No |
@@ -95,7 +92,7 @@ El alcance de las acciones sobre tareas y sus recursos asociados (asignaciones, 
 
 - Todo usuario debe seleccionar un tablero después de iniciar sesión; la ruta de un tablero también valida su existencia y acceso.
 - Un administrador activo puede ver todos los tableros, crear tableros y asignar/quitar miembros. Un tablero nuevo comienza sin miembros.
-- Usuario e invitado activos solo ven y abren los tableros a los que están asignados. Cuentas nuevas no reciben membresías automáticamente.
+- Usuario e invitado activos ven y abren tableros activos por membresía o asignación a una tarea. Quitar la última asignación retira esa vía de acceso, salvo membresía; cuentas nuevas no reciben membresías automáticamente.
 - Un administrador activo puede **cambiar el nombre** de cualquier tablero y **desactivarlo o reactivarlo**. El nombre conserva las reglas de 1–120 caracteres y la unicidad sin distinguir mayúsculas, también en tableros desactivados.
 - Los tableros desactivados se muestran en una **sección propia, visible solo para administradores activos**. Sus miembros dejan de verlos y de acceder a sus tareas, incluida la URL directa; el administrador activo conserva el acceso y puede reactivarlos.
 - Desactivar un tablero **no borra** tareas, comentarios, adjuntos ni membresías; al reactivarlo, sus miembros recuperan el acceso.
@@ -103,7 +100,7 @@ El alcance de las acciones sobre tareas y sus recursos asociados (asignaciones, 
 - Un tablero desactivado no se ofrece como destino de traslado de tareas.
 - El selector de tableros muestra el número de **tareas pendientes** de cada tablero visible: la suma de las tareas en `backlog`, `por_hacer` y `haciendo`.
 - Las cuentas activas existentes se añaden inicialmente a `Offline`; `General` queda vacío. Todas las tareas preexistentes se asignan a `Offline` durante la migración.
-- Crear tareas conserva la regla admin/usuario y exige membresía en ese tablero. Cualquier cuenta activa con acceso al tablero puede editar tareas según las reglas existentes.
+- Crear tareas conserva la regla admin/usuario y exige acceso al tablero. Cualquier cuenta activa con acceso al tablero puede editar tareas según las reglas existentes.
 - Trasladar una tarea permite a cualquier cuenta activa con acceso tanto al tablero de origen como al destino; conserva la identidad y relaciones de la tarea. No crea una copia. La tarea deja de ser visible en origen.
 - RLS limita tareas, asignaciones, comentarios, metadatos de adjuntos y objetos de Storage al acceso del tablero. Los enlaces firmados ya emitidos permanecen utilizables hasta expirar; RLS no revoca descargas ya realizadas.
 - Implementación de ciclo de vida: `supabase/migrations/202610210001_boards.sql`, `202610220001_board_access_returning.sql` y `202610220002_board_lifecycle.sql`. `rename_board` y `set_board_active` requieren administrador activo; el selector usa `list_boards_with_pending_counts()`. La aplicación remota y sus suites se verificaron el 2026-10-22 y la SPA de ciclo de vida se publicó con `v0.6.0` ese día (registro histórico).
@@ -155,3 +152,10 @@ El alcance de las acciones sobre tareas y sus recursos asociados (asignaciones, 
 - Las escrituras a Storage se permiten al propietario del primer segmento del path o al administrador activo. La aplicación carga/reemplaza `<profile-id>/avatar` y guarda la URL pública en `profiles.avatar_url`.
 - Todas las cuentas activas pueden modificar su propio avatar; el administrador activo puede cambiar el de cualquier perfil. No almacenar contenido sensible en un avatar porque su objeto es públicamente legible.
 - La migración local `202610260003_profile_avatars.sql` configura límites y policies. No se verificó su aplicación en Supabase remoto durante la actualización documental del 2026-10-27.
+
+## Acceso MCP y consentimiento de aplicación
+
+- El contrato local de `202610300002_mcp_unified_consent.sql` agrupa lectura de tareas y adjuntos, inicio, comentario y envío a revisión con avance automático en el consentimiento de la conexión. No hay opt-in por tarea; Conexiones permite revocar el grant completo. La identidad OAuth por sí sola no concede permisos de aplicación; revocar o renovar invalida el consentimiento de aplicación.
+- MCP exige asignación a la tarea para todos los roles, incluso admin, y limita lectura y acciones a `backlog`, `por_hacer` y `haciendo`. Para no admin también exige membresía explícita en tablero activo: la asignación por sí sola, suficiente para el portal local, no basta para MCP.
+- El flujo puede iniciar en Haciendo, registrar resultado y enviar a En revisión con resultado vigente. No asigna, reabre ni finaliza; las operaciones revalidan acceso y consentimiento. El modo automático no representa aprobación humana y SQL no prueba que el agente haya estudiado el contexto o terminado el trabajo.
+- La última evidencia remota fechada corresponde a `202610290001` y Edge v4 / aplicación MCP `0.3.0`. El consentimiento unificado y aplicación `0.5.0` están en el árbol local; su versión remota exacta no está acreditada. Ver [contrato MCP](../.data/01-endpoints.md#mcp-remoto--servidor-dashboardfurthurr) y [guía de prueba](../docs/prueba-mcp.md).

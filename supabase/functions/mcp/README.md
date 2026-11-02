@@ -1,8 +1,24 @@
-# MCP de Furthurr — fase 1
+# MCP de Furthurr — Edge Function
 
-Servidor remoto Streamable HTTP con una sola herramienta: `whoami`. Reutiliza las
-cuentas de Supabase Auth del portal; las contraseñas se introducen únicamente en
-el navegador. OAuth Server de Supabase está en **beta**.
+El código local anuncia aplicación `0.5.0` y seis herramientas: `whoami`,
+`get_task`, `read_task_attachment`, `start_task`, `record_task_result` y
+`submit_task_for_review`. Usa Streamable HTTP y cuentas de Supabase Auth; la
+implementación local agrupa cinco permisos y avance automático en el consentimiento
+de conexión. Para flujo y límites actuales consulta la [guía de clientes](../../../mcp/README.md)
+y el [contrato](../../../.data/01-endpoints.md).
+
+El último despliegue cuya identidad está acreditada en el registro es del
+2026-10-29: Edge v4, aplicación `0.3.0`, workflow manual. La consulta e inicio
+automáticos observados después no identifican la versión remota exacta ni prueban
+un E2E completo. [Evidencia y pendientes](../../../docs/prueba-mcp.md).
+
+## Referencia histórica: activación de fase 1 (2026-10-28)
+
+Lo siguiente conserva el procedimiento original de identidad, cuando solo existía
+`whoami`. Sus límites de RPC, variables, migraciones y pruebas no son un inventario
+actual ni un procedimiento suficiente para desplegar `0.5.0`. Para una instalación
+actual revisa además la [guía Supabase](../../README.md) y el ledger real. OAuth
+Server de Supabase se describía como beta en esa fase.
 
 ## Límites de seguridad
 
@@ -27,7 +43,7 @@ el navegador. OAuth Server de Supabase está en **beta**.
   el hook; no sobrescribir otro hook sin componer/verificar su comportamiento.
 - Los avatares públicos y los datos/URLs ya descargados no se vuelven privados.
 
-## Activación por entorno (pendiente de validación en Supabase real)
+## Activación por entorno — procedimiento histórico de fase 1
 
 No habilitar OAuth antes de terminar los controles de aislamiento. No ejecutar el
 bootstrap sobre una base existente ni aplicar migraciones previas a ciegas.
@@ -104,7 +120,12 @@ confirmó que recibió su identidad. Después el alias de cliente cambió a
 y revocación end-to-end siguen pendientes de validación. No copies contraseñas ni
 tokens al chat.
 
-## Clientes
+## Clientes — referencia histórica de fase 1
+
+Los presets son orientativos, no acreditan compatibilidad ni OAuth E2E; dependen
+de versión y capacidades del cliente. La guía de clientes enlazada arriba contiene
+el estado y las observaciones posteriores. El preset Antigravity conserva
+`enabledTools: ["whoami"]`; no representa el catálogo completo del servidor.
 
 Todos deben apuntar a `https://PROJECT_REF.supabase.co/functions/v1/mcp`.
 Ningún ejemplo contiene contraseña, bearer fijo o clave administrativa. No se
@@ -140,7 +161,7 @@ Fuentes oficiales consultadas para el diseño:
 - https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp
 - https://github.com/earendil-works/pi/tree/main/packages/coding-agent
 
-## Verificaciones locales
+## Verificaciones locales — comandos históricos de fase 1
 
 ```sh
 npm run test -- --run
@@ -158,4 +179,6 @@ de la migración. Para un PostgreSQL vacío **desechable**, el soporte de prueba
 Auth/Storage antes de cargar el bootstrap. **Nunca ejecutar ese harness en Supabase**.
 Pasar esos probes no valida emisión de tokens, PKCE, DCR ni refresh de Auth real.
 El runner `mcp_sql_test.ts` crea y elimina su propio contenedor sin puertos ni red,
-prueba instalación incremental y bootstrap nuevo, y ejecuta las cuatro suites SQL.
+prueba instalación incremental y bootstrap nuevo. La composición actual de suites
+está en `supabase/tests/mcp_sql_test.ts`; estos comandos históricos no son evidencia
+de ejecución reciente ni certifican el E2E.

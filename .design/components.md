@@ -4,8 +4,7 @@ Catálogo de componentes actuales, no una promesa de API reutilizable fuera de s
 
 ## Actualización focalizada — copia de UUID y workflow MCP, 2026-10-29
 
-Describe el workflow MCP y la copia de UUID, publicados en `v0.13.0` (commit
-`0ebb61d`). No añade tokens ni clases CSS propias; los botones reutilizan
+La copia de UUID y el workflow anterior se publicaron en `v0.13.0` (commit `0ebb61d`); las filas de consentimiento y conexiones siguientes describen la simplificación **local no desplegada** del 2026-10-31. No añade tokens ni clases CSS propias; los botones reutilizan
 `ui-button ui-button--sm`, SVG decorativo de 16 px y estilos de foco existentes. Las
 entradas siguientes prevalecen sobre las descripciones históricas del botón de
 comentarios.
@@ -15,17 +14,13 @@ comentarios.
 | `CopyTaskId` | Botón con solo icono, tooltip y `aria-label` «Copiar ID de {título}». Copia solo UUID completo. Estado `copying` bloquea doble envío; éxito `role=status` por 4 s; fallo `role=alert` muestra UUID seleccionable y opción de copia manual/reintento. No propaga clic/pointer-down al contenedor | `src/features/board/CopyTaskId.tsx:9-50` |
 | Acciones de tarjeta | Copiar ID y comentarios juntos a la derecha, contenedor `ml-auto flex ... gap-2`. Ambos usan el mismo estilo de botón e icono de 16 px; comentarios mantiene badge solo con total >0 y su nombre accesible con singular/plural. Copiar sigue disponible sin asignados ni callback de comentarios | `src/features/board/TaskCard.tsx:102-144`, `src/features/board/TaskCard.test.tsx:36-52` |
 | ID en detalle | Fila de solo lectura por encima de las tres pestañas; UUID completo seleccionable siempre visible e icono de copiar. No depende de permiso de edición y no guarda ni cierra el detalle al copiar | `src/features/board/TaskDetailModal.tsx:165-171`, `src/features/board/CopyTaskId.tsx:35-47` |
-| Consentimiento OAuth | Una aprobación muestra identidad y permisos de lectura, adjuntos, inicio, comentarios y revisión. No añade scopes OAuth. Si Auth reusa una aprobación antigua de identidad, solo amplía permisos tras aceptar explícitamente; puede continuar sin ampliarlos. El retorno usa callback de Auth | `src/features/auth/OAuthConsentPage.tsx:23-79,84-110`, `src/features/auth/mcpWorkflowAccess.ts:17-30` |
-| Conexiones autorizadas | Para cada grant muestra identidad y los cinco permisos como autorizados/no autorizados. Cada permiso puede retirarse, se pueden retirar todos los permisos de tareas o revocar el grant. La retirada conserva identidad; errores de consulta dejan permisos sin verificar pero no bloquean revocar el grant | `src/features/auth/OAuthConnectionsPage.tsx:18-61,64-91` |
-| Límites de workflow mostrados en consentimiento/perfil | Solo tareas asignadas y etapas permitidas; acciones de inicio/revisión requieren aceptación en la conversación. Finalizadas, reasignación y reapertura no se ofrecen. Advierte que adjuntos/contenido se comparten y que enlaces/archivos ya emitidos no se revocan retroactivamente | `src/features/auth/OAuthConsentPage.tsx:100-106`, `src/features/auth/OAuthConnectionsPage.tsx:69-70` |
+| Consentimiento OAuth | Muestra identidad, cinco permisos y avance automático antes de aceptar. Autoaprobación de identidad sin consentimiento de aplicación exige aceptar el conjunto o denegar; el retorno procede de Auth | `src/features/auth/OAuthConsentPage.tsx:24-116` |
+| Conexiones autorizadas | Muestra identidad, permisos efectivos y avance automático; solo ofrece revocar la conexión completa. Si falla la consulta, indica «Sin verificar» y conserva la revocación | `src/features/auth/OAuthConnectionsPage.tsx:18-82` |
+| Límites de workflow mostrados en consentimiento/perfil | Solo tareas asignadas y etapas permitidas; avance automático incluido, revisión con resultado vigente. No finaliza, asigna ni reabre. Advierte de contenido compartido y enlaces/archivos que no se revocan retroactivamente | `src/features/auth/OAuthConsentPage.tsx:106-110`, `src/features/auth/OAuthConnectionsPage.tsx:58-75` |
 
 ### Verificación y pendientes
 
-Se reutilizan 203 pruebas Vitest (22 archivos), 19 Deno MCP y suites SQL locales,
-lint/build correctos de la implementación; esta sincronización no repite comandos.
-17 pruebas DOM OAuth cubren aprobación conjunta, permisos visibles/retirada,
-autoaprobación OAuth antigua y errores de autorización. La UI y la migración se
-publicaron en `v0.13.0` y el backend se activó el 2026-10-29. No hay revisión de
+Se reutiliza la evidencia informada de la implementación local: 202 Vitest, 19 Deno MCP, SQL incremental/bootstrap, lint y build correctos; esta sincronización no repite comandos. Las 15 pruebas DOM OAuth cubren el conjunto, permisos visibles, revocación completa, autoaprobación sin consentimiento y errores. No hay revisión de
 navegador responsive, descarga real, lector de pantalla o contraste, ni E2E del
 consentimiento en navegador. No se declara conformidad WCAG.
 [Guía de test](../docs/prueba-mcp.md) y [contratos de datos](../.data/01-endpoints.md).
@@ -51,7 +46,7 @@ WCAG. El build remoto de Pages pasó, pero ello no equivale a validación visual
 
 ## Actualización focalizada — adjuntos, eliminación de tableros y avatares, 2026-10-26
 
-Describe el árbol local aún sin commit sobre adjuntos, tableros y avatares. `HEAD` es `bbacf5c62a8ab0bf144e602ae3666c4026882f0e` (`v0.9.0` en preparación); esta entrada no afirma que esos cambios estén incluidos en `HEAD` ni publicados.
+Nota histórica: esta revisión describía el árbol local entonces sin commit sobre adjuntos, tableros y avatares; el `HEAD` consultado en aquel momento era `bbacf5c62a8ab0bf144e602ae3666c4026882f0e` (`v0.9.0` en preparación). Esa observación no acredita por sí sola su publicación posterior.
 
 No se añaden tokens, tema ni clases CSS; se reutilizan `ui-list-card`, `ui-field`, `Dialog`, botones existentes y variables visuales. El renombrado de adjuntos solo cambia metadata, no el archivo de Storage.
 
@@ -60,7 +55,7 @@ No se añaden tokens, tema ni clases CSS; se reutilizan `ui-list-card`, `ui-fiel
 | `AttachmentsList` — renombrar | Cada archivo autorizado muestra «Cambiar nombre». La acción sustituye el nombre por un campo precargado y con etiqueta accesible; «Guardar nombre» se deshabilita si está vacío o no cambió, y «Cancelar» abandona la edición. Durante una mutación se bloquean los controles; un fallo conserva el borrador y el detalle anuncia el error | `src/features/board/AttachmentsList.tsx:37-67,85-91`, `src/features/board/TaskDetailModal.tsx:111-114` |
 | `AttachmentsList` — eliminar | El botón contextual «Eliminar» abre la confirmación inline del detalle con el nombre del archivo y aviso de irreversibilidad. La acción espera resultado, comunica éxito/error y mantiene la confirmación ante un fallo | `src/features/board/AttachmentsList.tsx:92-96`, `src/features/board/TaskDetailModal.tsx:150-160,278-287` |
 | Disponibilidad por adjunto | La interfaz muestra ambas acciones al uploader, creador de la tarea o administrador activo; Postgres/Storage y el acceso activo al tablero siguen siendo la autoridad del permiso | `src/features/board/BoardPage.tsx:465-476`, `supabase/migrations/202610260001_task_attachment_management.sql:10-22` |
-| `BoardsPage` — eliminar tablero inactivo | Solo el admin ve «Eliminar tablero» en cards desactivadas. El `Dialog` identifica el tablero y advierte que tareas, comentarios, asignaciones y adjuntos se eliminan sin recuperación; la acción usa `ui-button--danger`, muestra espera y conserva el diálogo ante errores específicos de Storage/RPC | `src/features/boards/BoardsPage.tsx:33-43,64-71,98-110,187-207` |
+| `BoardsPage` — eliminar tablero inactivo | Solo el admin ve «Eliminar tablero» en cards desactivadas. El `Dialog` identifica el tablero y advierte que tareas, comentarios, asignaciones y adjuntos se eliminan sin recuperación; la acción usa `ui-button--danger`, muestra espera y conserva el diálogo ante errores específicos de Storage/RPC. El árbol local sin commit añade orientación para `PGRST202`; no acredita el estado remoto ni sustituye comprobar ledger y objetos antes de aplicar migraciones | `src/features/boards/BoardsPage.tsx:114-119,200-224` |
 | `ProfileAvatar` | Círculo con imagen lazy/async y recorte `object-cover`; si no hay URL o falla la carga muestra icono o inicial. Tamaños `sm`, `md`, `lg`; la variante de administración conserva iniciales como fallback. Reutilizado en cuenta, lista de usuarios, autores de comentarios, tarjetas Kanban y responsables seleccionados. Usa superficie/color existentes y utilities, sin token ni clase propia | `src/shared/ui/ProfileAvatar.tsx:3-45`, `src/features/users/UsersPage.tsx:37-40,148-154`, `src/shared/ui/AccountMenu.tsx:61`, `src/features/board/CommentsList.tsx:28-30`, `src/features/board/TaskCard.tsx:101-112`, `src/features/board/AssigneePicker.tsx:27-34` |
 | `AccountMenu` — avatar propio | El panel de cuenta permite seleccionar una imagen; muestra espera, mensaje `role=status` o error `role=alert`. El selector acepta JPG/PNG/WebP y la ayuda visual declara máximo 2 MB | `src/shared/ui/AccountMenu.tsx:17-41,58-75` |
 | `UsersPage` — avatar administrativo | La fila de cuenta muestra el avatar/las iniciales y expone «Cambiar foto». El diálogo previsualiza archivo/foto existente, informa formatos/tamaño y bloquea el envío mientras guarda | `src/features/users/UsersPage.tsx:37-54,80-99,138-173` |

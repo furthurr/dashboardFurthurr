@@ -19,7 +19,7 @@ no vuelve a aplicar SQL, desplegar ni probar servicios.
 | Edge MCP | **v4 ACTIVE**, `verify_jwt=false`, aplicación `0.3.0`; hashes de los cuatro archivos descargados iguales al repositorio |
 | Pages | [Run 40963945319](https://github.com/furthurr/dashboardFurthurr/actions/runs/40963945319), success para `0ebb61d` (v0.13.0); HTML y assets nuevos responden 200 |
 | SQL remoto | `mcp_task_read.sql`, `mcp_identity.sql` y un probe de workflow: PASS, fixtures revertidos; sin cuentas/clientes/tableros/concesiones residuales |
-| Cliente real | `whoami` correcto tras despliegue; OpenCode CLI 1.18.34 informa OAuth conectado. Catálogo fresco y consulta MCP de tarea aún no acreditados |
+| Cliente real | `whoami` correcto tras despliegue; OpenCode CLI 1.18.34 informó OAuth conectado. En aquella comprobación no se acreditaron catálogo fresco ni consulta de tarea; después se observaron catálogo y consulta/inicio, sin acreditar E2E completo |
 
 No confundir release `0.13.0`, aplicación MCP `0.3.0` y Edge v4. El registro no
 acredita OAuth E2E, consentimiento en navegador, comparación completa MCP/UI ni
@@ -32,8 +32,7 @@ ni se alteraron Vault, roles o seeds. **No debe reaplicarse**: no es idempotente
 
 ### Discrepancia del ledger: conservar, no «reparar» a ciegas
 
-Ledger observado tras la activación: `202610190001`, `202610200001`, `202610200002`,
-Ledger vigente: `202610190001`, `202610200001`, `202610200002`, `202610210001`,
+Ledger observado tras la activación del 2026-10-29: `202610190001`, `202610200001`, `202610200002`, `202610210001`,
 `202610220001`, `202610280002`, `202610280003` y **`202610290001`**.
 El inventario histórico del 2026-10-28 observó objetos de `202610220002`,
 `202610280001` y parte de `202610260003` sin sus entradas, y no encontró la policy
@@ -50,20 +49,19 @@ se ejecutó un push global del directorio del repositorio. Esto describe ejecuci
 realizadas, **no comandos para repetir migraciones**: no son idempotentes y sus objetos
 ya existen.
 
-### Operación y fronteras de fase 2
+### Operación y fronteras históricas de fase 2
 
 - `mcp_identity` conserva identidad/sesión OAuth y puede ejecutar `mcp_get_task`,
   sin grants directos de tareas/Storage ni ejecución de gestión del consentimiento.
   El portal `authenticated` activo puede gestionar sus sesiones, no ejecutar la
   RPC MCP como sustituto del flujo OAuth.
-- Conexiones exige consentimiento adicional para sesiones actuales. Las nuevas no
+- En fase 2, Conexiones exigía consentimiento adicional para sesiones actuales. Las nuevas no
   heredan permisos; retirar lectura conserva `whoami`, y borrar la sesión elimina
   su permiso por cascada. No admin requiere membresía explícita y tablero activo;
   asignación sola no basta. Admin activo con consentimiento puede leer inactivos.
-- Ese resumen describe el consentimiento de lectura por sesión ya comprobado. El
-  workflow activo sustituye el paso de habilitar en Perfil por aceptación conjunta al
-  conectar; el permiso se asocia al grant OAuth. Exige asignación para todos los
-  roles y estados backlog/por_hacer/haciendo.
+- Ese resumen describe el consentimiento de lectura por sesión históricamente comprobado.
+  El workflow `0.3.0` vincula permisos al grant OAuth y exige asignación para todos los
+  roles y estados backlog/por_hacer/haciendo. El contrato local posterior se describe abajo.
 - La firma de 60 s usa credencial exclusivamente servidor después de autorizar
   tarea y validar origen/bucket/path. No se confirmó su funcionamiento con Storage
   real: falta descarga, caducidad y renovación. No mover archivos legacy para
@@ -108,13 +106,20 @@ desplegada con código idéntico al repositorio; SPA publicada en `v0.13.0`. Pen
 E2E de consentimiento/revocación en navegador y estudio de adjuntos con cliente real.
 No conceder permiso por SQL para suplir el consentimiento OAuth del usuario.
 
+### Automatización y consentimiento unificado locales
+
+`202610300001_mcp_automation.sql` sigue a `202610290001`; `202610300002_mcp_unified_consent.sql` requiere `202610300001`. El bootstrap y Edge aplicación `0.5.0` locales implementan consentimiento de aplicación conjunto para cinco permisos y avance automático, sin opt-in por tarea. Se amplían grants de aplicación previos válidos, no identidades OAuth sin consentimiento de aplicación; revocar o renovar invalida ese consentimiento. Conexiones revoca el grant completo. La ejecución automática no equivale a aprobación humana, ni SQL verifica que el agente haya leído el contexto o terminado.
+
+Las versiones remotas exactas de estas migraciones y Edge no están acreditadas por la evidencia fechada anterior. Antes de cualquier operación remota autorizada, contrastar ledger y objetos, en particular el prerrequisito `202610300001`; no inferir pendientes ni aplicar un push global. La consulta e inicio automáticos observados en una sesión no constituyen un E2E completo. Ver [contrato](../.data/01-endpoints.md) y [guía de prueba](../docs/prueba-mcp.md).
+
 ## Instalación existente
 
 La secuencia siguiente es una guía histórica de instalación base, no el conjunto
 pendiente del proyecto ya activado. Contrastar siempre con el estado anterior.
 Después de esa base existen `202610280001_board_assignment_access.sql`,
 `202610280002_mcp_identity.sql`, `202610280003_mcp_task_read.sql` y
-`202610290001_mcp_workflow.sql`; no aplicarlas en bloque para reconciliar el ledger.
+`202610290001_mcp_workflow.sql`, `202610300001_mcp_automation.sql` y
+`202610300002_mcp_unified_consent.sql`; no aplicarlas en bloque para reconciliar el ledger.
 El bootstrap actual también incluye MCP. Revisar sus precondiciones y el estado
 registrado antes de cualquier SQL; ninguna de esas migraciones es idempotente.
 
@@ -162,7 +167,7 @@ Para una instalación nueva, `../supabase-schema.sql` incluye el modelo de table
 
 - `rename_board(p_board_id, p_name)`: solo administrador activo. Recorta el nombre y exige entre 1 y 120 caracteres; el índice único sigue rechazando nombres duplicados (`23505`) y el nombre inválido devuelve `22023`.
 - `set_board_active(p_board_id, p_active)`: solo administrador activo. Desactiva o reactiva un tablero **sin borrar** tareas, comentarios, adjuntos ni membresías.
-- `list_boards_with_pending_counts()`: devuelve `id`, `name`, `is_active`, `created_at` y `pending_count` (tareas en `backlog`, `por_hacer` y `haciendo`). El administrador activo ve todos los tableros, incluidos los desactivados; las demás cuentas solo ven los tableros activos de los que son miembros.
+- `list_boards_with_pending_counts()`: originalmente devolvía `id`, `name`, `is_active`, `created_at` y `pending_count`; `202610280001` añade `my_pending_count` y `people`. Pendientes son `backlog`, `por_hacer` y `haciendo`. El administrador activo ve todos los tableros; las demás cuentas ven tableros activos por membresía o asignación.
 
 Al desactivar un tablero, sus miembros dejan de verlo en el selector y de acceder a sus tareas (RLS), incluida la URL directa; el administrador activo conserva el acceso y puede reactivarlo. La policy de lectura de `boards` ya no llama a ninguna función que lea `boards`, para no reintroducir la recursión que corrigió `202610220001_board_access_returning.sql`; los miembros leen su propia fila de `board_members` mediante la policy «Members read own memberships».
 
@@ -218,7 +223,7 @@ POST autenticado a `admin-users`, vía `supabase.functions.invoke`:
 
 Comprueba con cuentas separadas:
 
-En un entorno de pruebas antes de desplegar, verifica: admin ve Offline y General, usuario/invitado ve solo tableros asignados, asignar una tarea no añade membresía, miembro de ambos tableros traslada una sola tarea conservando sus relaciones, y la cuenta que no pertenece al destino recibe denegación. Al retirar una membresía, nuevas peticiones de tablas/Storage deben quedar denegadas.
+En un entorno de pruebas antes de desplegar, verifica: admin ve Offline y General; usuario/invitado ve tableros activos por membresía o asignación; asignar una tarea concede acceso al tablero sin añadir membresía; y quien tiene acceso a origen y destino traslada una sola tarea conservando sus relaciones. Sin membresía ni asignación, nuevas peticiones de tablas/Storage deben quedar denegadas. MCP para no admin exige además membresía explícita.
 
 Para el ciclo de vida de los tableros: en «Tableros», el administrador ve «Cambiar nombre», «Desactivar» y «Activar»; el tablero desactivado pasa a su propia sección, visible solo para administradores. Comprueba que un miembro deja de ver el tablero desactivado y que su URL directa responde «no tienes acceso»; que «Tareas pendientes» suma `backlog`, `por_hacer` y `haciendo`; y que una cuenta no administradora recibe denegación al invocar `rename_board` o `set_board_active` directamente.
 

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-10-29T01:41:54Z",
-  "source_commit": "267cc910b2f5623f3b9e1ee3d86f3bfebd2c40e",
+  "generated_at": "2026-11-02T01:24:58Z",
+  "source_commit": "6b4f730390ca5d32e00c8efc18d60d0b035da841",
   "root": ".",
   "modules": [
     {
@@ -18,17 +18,17 @@
       "id": "auth",
       "name": "Autenticación",
       "path": "src/features/auth",
-      "responsibility": "Gestiona login, sesión, perfil activo, rutas protegidas, consentimiento OAuth MCP y revocación de conexiones; el registro antiguo redirige a administración.",
+      "responsibility": "Gestiona login, sesión, perfil activo, rutas protegidas, consentimiento OAuth MCP unificado y revocación de conexiones; el registro antiguo redirige a administración.",
       "kind": "feature",
       "tech": ["React", "TypeScript", "Supabase Auth"],
-      "entrypoints": ["src/features/auth/AuthContext.tsx", "src/features/auth/ProtectedRoute.tsx", "src/features/auth/OAuthConsentPage.tsx", "src/features/auth/OAuthConnectionsPage.tsx", "src/features/auth/mcpOAuth.ts"],
+      "entrypoints": ["src/features/auth/AuthContext.tsx", "src/features/auth/ProtectedRoute.tsx", "src/features/auth/OAuthConsentPage.tsx", "src/features/auth/OAuthConnectionsPage.tsx", "src/features/auth/mcpOAuth.ts", "src/features/auth/mcpWorkflowAccess.ts"],
       "depends_on": ["supabase-client", "shared-types"]
     },
     {
       "id": "board",
       "name": "Tablero Kanban",
       "path": "src/features/board",
-      "responsibility": "Presenta tareas, comentarios, adjuntos y ordenamiento en el tablero activo, con acceso rápido al alta, pegado de imágenes, creación/asignaciones RPC y edición compartida dentro del acceso por membresía.",
+      "responsibility": "Presenta tareas, comentarios, adjuntos y ordenamiento en el tablero activo, con acceso rápido al alta, pegado de imágenes, creación/asignaciones RPC y edición compartida dentro del acceso autorizado al tablero.",
       "kind": "feature",
       "tech": ["React", "TypeScript", "TanStack Query", "dnd-kit"],
       "entrypoints": ["src/features/board/BoardPage.tsx"],
@@ -44,7 +44,7 @@
       "tech": ["React", "TypeScript", "TanStack Query", "Supabase PostgREST/RPC"],
       "entrypoints": ["src/features/boards/BoardsPage.tsx", "src/features/boards/BoardRoute.tsx", "src/features/boards/api.ts"],
       "depends_on": ["auth", "board", "supabase-client", "shared-types", "shared-ui", "database-schema"],
-      "notes": "Comparte AssigneePicker/consulta de usuarios con board; el catálogo usa list_boards_with_pending_counts. El borrado limpia objetos Storage antes de delete_inactive_board; las fases no son atómicas. El working tree local añade un mensaje PGRST202 para la RPC ausente en remote; no está incluido en source_commit."
+      "notes": "El borrado limpia Storage antes de delete_inactive_board; las fases no son atómicas. El árbol local sin commit añade un mensaje PGRST202; la ausencia de la RPC en remoto es una observación histórica, no verificada de nuevo."
     },
     {
       "id": "users",
@@ -55,7 +55,7 @@
       "tech": ["React", "TypeScript", "TanStack Query"],
       "entrypoints": ["src/features/users/UsersPage.tsx", "src/features/users/api.ts", "src/features/users/avatarApi.ts"],
       "depends_on": ["auth", "supabase-client", "shared-types", "shared-ui", "admin-users"],
-      "notes": "admin-users es dependencia de uso vía functions.invoke, no un import del servidor. avatarApi carga en Storage y actualiza profiles.avatar_url; los cambios locales de avatar no están incluidos en source_commit ni verificados en remoto."
+      "notes": "admin-users es dependencia vía functions.invoke, no un import del servidor. avatarApi carga en Storage y actualiza profiles.avatar_url; la aplicación de la migración de avatares en remoto no está acreditada."
     },
     {
       "id": "shared-ui",
@@ -66,7 +66,7 @@
       "tech": ["React", "TypeScript"],
       "entrypoints": ["src/shared/ui/Dialog.tsx", "src/shared/ui/Toast.tsx", "src/shared/ui/AccountMenu.tsx", "src/shared/ui/ProfileAvatar.tsx"],
       "depends_on": ["auth"],
-      "notes": "AccountMenu usa Auth y permite cambiar avatar propio; ProfileAvatar reutiliza fallback de icono/iniciales. Estos cambios locales no están incluidos en source_commit."
+      "notes": "AccountMenu usa Auth y permite cambiar avatar propio; ProfileAvatar reutiliza fallback de icono/iniciales."
     },
     {
       "id": "supabase-client",
@@ -102,23 +102,23 @@
       "id": "database-schema",
       "name": "Schema Supabase",
       "path": "supabase-schema.sql",
-      "responsibility": "Mantiene bootstrap Postgres, RLS, Storage, vistas, grants y RPCs de negocio, más rol/tabla/hook/RPC de identidad MCP.",
+      "responsibility": "Mantiene bootstrap Postgres, RLS, Storage, vistas, grants y RPCs de negocio, más rol/tabla/hook/RPC de identidad MCP y las tablas y funciones del workflow MCP.",
       "kind": "other",
       "tech": ["PostgreSQL", "SQL"],
       "entrypoints": ["supabase-schema.sql"],
       "depends_on": [],
-      "notes": "El bootstrap incluye mcp_identity, mcp_oauth_configuration, mcp_access_token_hook, mcp_whoami y aislamiento OAuth. El estado remoto se describe en .data/04-schema.md y supabase/README.md; el ledger no coincide con todas las huellas SQL observadas."
+      "notes": "El bootstrap incluye mcp_identity, mcp_oauth_configuration, mcp_access_token_hook, mcp_whoami, mcp_workflow_permissions, mcp_task_operations y el aislamiento OAuth. El estado remoto se describe en .data/04-schema.md y supabase/README.md; el ledger no coincide con todas las huellas SQL observadas."
     },
     {
       "id": "database-migrations",
       "name": "Migraciones Supabase",
       "path": "supabase/migrations",
-      "responsibility": "Evoluciona instalaciones existentes con estado de cuenta, RPCs, políticas de membresía, ciclo de vida/borrado de tableros y permisos de adjuntos/avatares.",
+      "responsibility": "Evoluciona instalaciones existentes con estado de cuenta, RPCs, políticas de membresía, ciclo de vida/borrado de tableros, permisos de adjuntos/avatares y las tres capas del MCP (identidad, lectura y workflow).",
       "kind": "other",
       "tech": ["PostgreSQL", "SQL"],
-      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql", "supabase/migrations/202610200002_shared_task_editing.sql", "supabase/migrations/202610210001_boards.sql", "supabase/migrations/202610220001_board_access_returning.sql", "supabase/migrations/202610220002_board_lifecycle.sql", "supabase/migrations/202610260001_task_attachment_management.sql", "supabase/migrations/202610260002_delete_inactive_boards.sql", "supabase/migrations/202610260003_profile_avatars.sql", "supabase/migrations/202610280001_board_assignment_access.sql", "supabase/migrations/202610280002_mcp_identity.sql"],
+      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql", "supabase/migrations/202610200002_shared_task_editing.sql", "supabase/migrations/202610210001_boards.sql", "supabase/migrations/202610220001_board_access_returning.sql", "supabase/migrations/202610220002_board_lifecycle.sql", "supabase/migrations/202610260001_task_attachment_management.sql", "supabase/migrations/202610260002_delete_inactive_boards.sql", "supabase/migrations/202610260003_profile_avatars.sql", "supabase/migrations/202610280001_board_assignment_access.sql", "supabase/migrations/202610280002_mcp_identity.sql", "supabase/migrations/202610280003_mcp_task_read.sql", "supabase/migrations/202610290001_mcp_workflow.sql", "supabase/migrations/202610300001_mcp_automation.sql", "supabase/migrations/202610300002_mcp_unified_consent.sql"],
       "depends_on": ["database-schema"],
-      "notes": "La migración 202610280002 está aplicada y registrada en remote; el probe mcp_identity pasó con ROLLBACK. El ledger de producción no registra 202610220002, 202610260001–202610260003 ni 202610280001 aunque algunas huellas de esos objetos existen; reconciliar antes de db push."
+      "notes": "En la comprobación histórica del 2026-10-29 constaban 202610280002, 202610280003 y 202610290001; el ledger divergía respecto de algunas huellas SQL. Contrastar el estado actual antes de aplicar migraciones; no hacer db push a ciegas."
     },
     {
       "id": "admin-users",
@@ -133,14 +133,14 @@
     },
     {
       "id": "mcp-edge",
-      "name": "MCP remoto de identidad",
+      "name": "MCP remoto de identidad, lectura y workflow",
       "path": "supabase/functions/mcp",
-      "responsibility": "Valida tokens OAuth aud-bound y sesión activa; expone únicamente la herramienta whoami vía Streamable HTTP.",
+      "responsibility": "Valida tokens OAuth aud-bound y sesión activa; expone seis herramientas (whoami, get_task, read_task_attachment y el workflow start_task/record_task_result/submit_task_for_review) vía Streamable HTTP.",
       "kind": "service",
       "tech": ["Deno", "TypeScript", "Supabase Edge Functions", "MCP", "OAuth 2.1"],
-      "entrypoints": ["supabase/functions/mcp/index.ts"],
+      "entrypoints": ["supabase/functions/mcp/index.ts", "supabase/functions/mcp/task.ts", "supabase/functions/mcp/workflow.ts"],
       "depends_on": ["database-schema"],
-      "notes": "No usa service_role ni pasa el bearer a APIs de negocio. MCP v2 ACTIVE en el proyecto actual; la autorización usa rol SQL mcp_identity."
+      "notes": "No usa service_role para leer tareas ni comparte el bearer con APIs de negocio; solo firma adjuntos en servidor. MCP Edge v4/app 0.3.0 es evidencia remota del 2026-10-29; app 0.5.0 y consentimiento unificado están en 59da993, sin versión remota exacta acreditada. Mutaciones mediante mcp_work_task."
     },
     {
       "id": "mcp-installation",
@@ -172,7 +172,7 @@
       "tech": ["GitHub Actions", "Node.js", "Vite"],
       "entrypoints": [".github/workflows/deploy.yml"],
       "depends_on": ["web-app"],
-      "notes": "El workflow publica la SPA, no SQL ni Edge Functions. Última publicación verificada: Pages run 40796012117, commit 267cc91, success (2026-10-28)."
+      "notes": "El workflow publica dist, no SQL ni Edge Functions. Última publicación verificada: Pages run 40963945319, commit 0ebb61d (v0.13.0), success (2026-10-29)."
     }
   ]
 }
