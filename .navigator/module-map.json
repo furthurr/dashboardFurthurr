@@ -44,7 +44,7 @@
       "tech": ["React", "TypeScript", "TanStack Query", "Supabase PostgREST/RPC"],
       "entrypoints": ["src/features/boards/BoardsPage.tsx", "src/features/boards/BoardRoute.tsx", "src/features/boards/api.ts"],
       "depends_on": ["auth", "board", "supabase-client", "shared-types", "shared-ui", "database-schema"],
-      "notes": "El borrado limpia Storage antes de delete_inactive_board; las fases no son atómicas. El árbol local sin commit añade un mensaje PGRST202; la ausencia de la RPC en remoto es una observación histórica, no verificada de nuevo."
+      "notes": "El borrado limpia Storage antes de delete_inactive_board; las fases no son atómicas. El mensaje PGRST202 está versionado en 6c5b292; la ausencia de la RPC en remoto es una observación histórica, no verificada de nuevo."
     },
     {
       "id": "users",
