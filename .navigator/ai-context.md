@@ -83,6 +83,7 @@
 - Revisión incremental 2026-11-01 (2026-11-02 UTC): se ajustaron notas de OAuth, error de borrado y evidencia histórica en capas 0–1. No se ha regenerado todo el índice ni atribuido el árbol local a `HEAD`; la marca histórica no acredita vigencia global.
 - Revisión focalizada 2026-11-02: se contrastaron adjuntos y el registro documental del borrado remoto; no se regeneró el mapa ni se acreditó vigencia global.
 - Commit base de implementación: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`.
-- Límites que siguen vigentes: **no hay E2E automatizado con cuentas reales, ni verificación del consentimiento en navegador, ni auditoría de accesibilidad**. Esta sesión consultó e inició una tarea mediante MCP automático, pero no acredita lectura real de adjuntos ni el flujo completo hasta revisión. La verificación funcional de `promote-admin` en producción fue **manual, no automatizada** (confirmada por la persona responsable del proyecto el 2026-10-22).
+- Límites que siguen vigentes: **no hay E2E automatizado con cuentas reales, ni verificación del consentimiento en navegador, ni auditoría de accesibilidad**. Una sesión anterior consultó e inició una tarea mediante MCP automático, pero no acredita lectura real de adjuntos ni el flujo completo hasta revisión. La verificación funcional de `promote-admin` en producción fue **manual, no automatizada** (confirmada por la persona responsable del proyecto el 2026-10-22).
+- Publicación posterior a la release: Pages run `41578579605` terminó correctamente para `f0a4c9a`, commit solo documental; no acredita despliegue de Supabase ni E2E. La revisión de esta nota no regenera el índice global.
 - Navigator root: `.`
 - Capas 0–1 con revisiones focalizadas; símbolos/grafo deshabilitados y `config.yaml` conservado.

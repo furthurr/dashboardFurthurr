@@ -48,12 +48,13 @@ Documentación canónica de lo visual. Léela antes de añadir pantallas, compon
 
 ### MCP — alcance y límites de validación visual
 
-La autorización conjunta y la vista de permisos se publicaron en `v0.13.0`
+En la revisión histórica, la autorización conjunta y la vista de permisos se publicaron en `v0.13.0`
 (commit `0ebb61d`, Pages run `40963945319` en success) junto con `202610290001` y
 Edge `mcp` v4 (`0.3.0`). Evidencia local reutilizada: 17 pruebas DOM OAuth dentro de
 203 Vitest, Deno/SQL local, lint y build correctos. No se hizo revisión responsive,
 contraste ni lector de pantalla en navegador, y el consentimiento real en navegador
 sigue sin verificarse. No se declara conformidad WCAG ni E2E OAuth/Storage.
+La UI posterior de consentimiento unificado está incluida en `59da993` y `v0.14.0`, como se indica en el estado de sincronización; esta evidencia histórica no valida esa UI en navegador.
 [Checklist y estado](../docs/prueba-mcp.md).
 
 ### Evidencia posterior a la revisión estática

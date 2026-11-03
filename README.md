@@ -110,7 +110,7 @@ La documentación canónica describe y referencia las fuentes de implementación
 
 ### MCP de tareas: estado actual
 
-El servidor MCP remoto expone seis herramientas: `whoami`, `get_task`,
+El código MCP versionado expone seis herramientas: `whoami`, `get_task`,
 `read_task_attachment`, `start_task`, `record_task_result` y
 `submit_task_for_review`. La consulta devuelve título, descripción, estado,
 prioridad, tablero, responsables, comentarios y metadata/enlaces temporales de
@@ -122,7 +122,7 @@ La implementación **local, sin versión remota exacta acreditada**, concede com
 El workflow permite iniciar una tarea asignada y accesible, registrar el resultado y enviarla a revisión automáticamente cuando existe resultado vigente y se declara trabajo completado. El modo automático no inventa aprobación humana. «Finalizadas», asignación y reapertura siguen siendo manuales; una tarea en revisión deja de ser accesible por MCP.
 
 Evidencia histórica del 2026-10-29: `202610290001_mcp_workflow.sql` estaba aplicada y
-registrada en Supabase y la Edge `mcp` era versión 4 (aplicación `0.3.0`). La SPA posterior se publicó con `v0.14.0` (`f501082`; [Pages run 41576684027](https://github.com/furthurr/dashboardFurthurr/actions/runs/41576684027), success); Pages no despliega el backend. Siguen pendientes la verificación
+registrada en Supabase y la Edge `mcp` era versión 4 (aplicación `0.3.0`). La SPA posterior se publicó con `v0.14.0` (`f501082`; [Pages run 41576684027](https://github.com/furthurr/dashboardFurthurr/actions/runs/41576684027), success). El [run posterior 41578579605](https://github.com/furthurr/dashboardFurthurr/actions/runs/41578579605) publicó `f0a4c9a`, que solo actualiza documentación. Pages no despliega el backend. Siguen pendientes la verificación
 del consentimiento en navegador y la prueba del flujo completo desde un cliente
 LLM. El procedimiento y el checklist están en [la guía](docs/prueba-mcp.md); los
 contratos, en [`.data/01-endpoints.md`](.data/01-endpoints.md).

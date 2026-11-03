@@ -4,6 +4,8 @@
 
 La release `v0.14.0` apunta a `f501082` y [Pages run 41576684027](https://github.com/furthurr/dashboardFurthurr/actions/runs/41576684027) terminó correctamente para ese commit. Incluye la UI unificada; Pages no despliega SQL ni Edge Functions. No se ha acreditado la versión backend actual ni un E2E completo.
 
+El [run posterior 41578579605](https://github.com/furthurr/dashboardFurthurr/actions/runs/41578579605) terminó correctamente para `f0a4c9a`, commit exclusivamente documental. No aporta evidencia adicional sobre Supabase, navegador autenticado o Storage real.
+
 ### Ampliación local: consentimiento unificado y avance automático MCP
 
 **Implementado y versionado; backend sin versión desplegada exacta acreditada:** la migración

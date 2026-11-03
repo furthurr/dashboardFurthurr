@@ -158,9 +158,9 @@ preflight para confirmar qué migraciones/objetos están realmente presentes y a
 solo la migración pendiente mediante el procedimiento aprobado. No reejecutar la
 migración si los objetos ya existen ni intentar arreglar el ledger con un push global.
 
-Verificación de la activación: suites SQL remotas de identidad, lectura y workflow
+Verificación histórica de la activación del 2026-10-29: suites SQL remotas de identidad, lectura y workflow
 PASS con fixtures revertidos; grants/RLS comprobados; sin residuos; Edge `mcp` v4
-desplegada con código idéntico al repositorio; SPA publicada en `v0.13.0`. Pendiente:
+desplegada con código idéntico al repositorio de aquella comprobación; SPA publicada entonces en `v0.13.0`. Pendiente:
 E2E de consentimiento/revocación en navegador y estudio de adjuntos con cliente real.
 No conceder permiso por SQL para suplir el consentimiento OAuth del usuario.
 
