@@ -46,7 +46,7 @@ El bootstrap de referencia, incluidas tablas, RLS, Storage, vistas, grants y RPC
 
 **Administración de usuarios:** el alta, cambios de contraseña, activación y promoción a administrador pasan por la Edge Function `admin-users`; la función valida la sesión y el rol en servidor. El registro público de Auth debe estar deshabilitado. Las altas administrativas quedan confirmadas y activas sin enviar un enlace por correo. El build de GitHub Pages no despliega funciones ni SQL; consulta [`supabase/README.md`](supabase/README.md) para instalación y operación.
 
-**Ciclo de vida de tableros:** el selector consulta `list_boards_with_pending_counts`; el administrador puede renombrar, activar y desactivar. Desactivar conserva tareas y membresías, pero retira el acceso a los miembros. La interfaz local también permite eliminar permanentemente un tablero solo si ya está desactivado. Requiere `202610220001_board_access_returning.sql`, `202610220002_board_lifecycle.sql` y `202610260002_delete_inactive_boards.sql` en instalaciones existentes. El registro de aplicación remota de las migraciones `202610220001`/`202610220002` y de sus suites corresponde al 2026-10-22; no acredita la aplicación de `202610260002`.
+**Ciclo de vida de tableros:** el selector consulta `list_boards_with_pending_counts`; el administrador puede renombrar, activar y desactivar. Desactivar conserva tareas y membresías, pero retira el acceso a los miembros. La interfaz local también permite eliminar permanentemente un tablero solo si ya está desactivado. Requiere `202610220001_board_access_returning.sql`, `202610220002_board_lifecycle.sql` y `202610260002_delete_inactive_boards.sql` en instalaciones existentes. La aplicación focalizada remota de `202610260002` se registró el 2026-11-02; no se verificaron navegador autenticado ni Storage real. [Detalle y límites](supabase/README.md#corrección-del-borrado-de-tableros--2026-11-02).
 
 **Responsables de tareas:** creación y detalle permiten asignar/desasignar varias personas mediante un desplegable por nombre/correo. Los ya asignados desaparecen de las opciones y «Todos» añade a todos los usuarios activos disponibles. Requiere también la migración `202610200001_task_assignments.sql` de la misma guía. Cualquier cuenta activa, incluidos invitados, puede guardar asignaciones y editar otros campos de tareas ajenas dentro de un tablero accesible; guardar asignaciones es una acción separada y no concede permiso de eliminación. La tarea y sus responsables iniciales se crean en una sola transacción. El tablero permite filtrar por personas y precarga esas personas al crear una tarea; con el filtro «Todos» se inicia sin asignados.
 
@@ -54,7 +54,7 @@ El bootstrap de referencia, incluidas tablas, RLS, Storage, vistas, grants y RPC
 
 **Avatares:** las personas pueden cambiar su propia foto y un administrador puede cambiar la de cualquier cuenta. Se aceptan JPG, PNG y WebP de hasta 2 MiB. El bucket `avatars` es público para lectura; no cargues imágenes sensibles. Instalaciones existentes requieren `202610260003_profile_avatars.sql`.
 
-Las migraciones `202610260001`–`202610260003` están en el árbol local y su aplicación remota no se verificó en esta actualización. Aplica las pendientes en el orden indicado en [`supabase/README.md`](supabase/README.md) antes de usar esos cambios en una base existente.
+Las migraciones `202610260001`–`202610260003` están en el árbol local; la evidencia remota focalizada de `202610260002` no acredita la aplicación de las otras dos. Contrasta ledger y objetos antes de aplicar únicamente lo pendiente, según [`supabase/README.md`](supabase/README.md); no ejecutes un push global a ciegas.
 
 ## Rutas y GitHub Pages
 
@@ -117,7 +117,7 @@ prioridad, tablero, responsables, comentarios y metadata/enlaces temporales de
 adjuntos. El ID completo se copia desde el icono junto a comentarios o desde el
 detalle; copiarlo no concede acceso.
 
-La implementación **local no desplegada** concede como conjunto lectura de tareas y adjuntos, inicio, publicación de resultados y revisión, incluido avance automático. Solo se retira revocando la conexión completa; no hay control por tarea. La identidad OAuth por sí sola no equivale a consentimiento de aplicación (`email profile` son scopes de identidad). La migración amplía concesiones de aplicación existentes válidas.
+La implementación **local, sin versión remota exacta acreditada**, concede como conjunto lectura de tareas y adjuntos, inicio, publicación de resultados y revisión, incluido avance automático. Solo se retira revocando la conexión completa; no hay control por tarea. La identidad OAuth por sí sola no equivale a consentimiento de aplicación (`email profile` son scopes de identidad). La migración amplía concesiones de aplicación existentes válidas.
 
 El workflow permite iniciar una tarea asignada y accesible, registrar el resultado y enviarla a revisión automáticamente cuando existe resultado vigente y se declara trabajo completado. El modo automático no inventa aprobación humana. «Finalizadas», asignación y reapertura siguen siendo manuales; una tarea en revisión deja de ser accesible por MCP.
 

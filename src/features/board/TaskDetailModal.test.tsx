@@ -86,10 +86,11 @@ describe('Gestión de adjuntos', () => {
 
     await user.click(screen.getByRole('button', { name: 'Cambiar nombre de contrato.pdf' }))
     const input = screen.getByRole('textbox', { name: 'Nuevo nombre de contrato.pdf' })
-    expect(input).toHaveValue('contrato.pdf')
+    expect(input).toHaveValue('contrato')
+    expect(screen.getByText('Extensión (no editable): .pdf')).toBeVisible()
     await user.clear(input)
     expect(screen.getByRole('button', { name: 'Guardar nombre' })).toBeDisabled()
-    await user.type(input, 'contrato-firmado.pdf')
+    await user.type(input, 'contrato-firmado')
     await user.click(screen.getByRole('button', { name: 'Guardar nombre' }))
 
     expect(onRenameAttachment).toHaveBeenCalledExactlyOnceWith(attachment.id, 'contrato-firmado.pdf')
@@ -106,12 +107,35 @@ describe('Gestión de adjuntos', () => {
     await user.click(screen.getByRole('button', { name: 'Cambiar nombre de contrato.pdf' }))
     const input = screen.getByRole('textbox', { name: 'Nuevo nombre de contrato.pdf' })
     await user.clear(input)
-    await user.type(input, 'borrador.pdf')
+    await user.type(input, 'borrador')
     await user.click(screen.getByRole('button', { name: 'Guardar nombre' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cambiar el nombre del adjunto')
-    expect(input).toHaveValue('borrador.pdf')
+    expect(input).toHaveValue('borrador')
     expect(onRenameAttachment).toHaveBeenCalledExactlyOnceWith(attachment.id, 'borrador.pdf')
+  })
+
+  it.each([
+    ['archivo.tar.gz', 'archivo.tar', 'nuevo.v2', 'nuevo.v2.gz'],
+    ['README', 'README', 'LEEME', 'LEEME'],
+    ['.gitignore', '.gitignore', '.config', '.config'],
+  ])('conserva la extensión de %s', async (original, baseName, newName, expected) => {
+    const user = userEvent.setup()
+    const onRenameAttachment = vi.fn().mockResolvedValue(undefined)
+    render(<TaskDetailModal {...base} initialTab="attachments" attachments={[{ ...attachment, file_name: original }]}
+      onRenameAttachment={onRenameAttachment} canManageAttachment={() => true} />)
+    await user.click(screen.getByRole('button', { name: `Cambiar nombre de ${original}` }))
+    const input = screen.getByRole('textbox', { name: `Nuevo nombre de ${original}` })
+    expect(input).toHaveValue(baseName)
+    if (original === 'README') {
+      await user.clear(input)
+      await user.type(input, 'nuevo.pdf')
+      expect(screen.getByRole('button', { name: 'Guardar nombre' })).toBeDisabled()
+    }
+    await user.clear(input)
+    await user.type(input, newName)
+    await user.click(screen.getByRole('button', { name: 'Guardar nombre' }))
+    expect(onRenameAttachment).toHaveBeenCalledExactlyOnceWith(attachment.id, expected)
   })
 
   it('confirma la eliminación del documento y no ofrece acciones a quien no tiene permiso', async () => {

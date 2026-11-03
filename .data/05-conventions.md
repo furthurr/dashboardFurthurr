@@ -60,6 +60,7 @@
 - El apagado de un tablero no es una revocación de identidad: solo retira el acceso de sus miembros. El admin activo conserva el acceso, las membresías no se borran y los JWT no se invalidan (`supabase/migrations/202610220002_board_lifecycle.sql:5,27-36`).
 - El borrado permanente es otra operación: solo acepta tableros ya desactivados y elimina primero los objetos de Storage desde cliente; la RPC repite la comprobación de admin/estado y borra las filas relacionales en PostgreSQL. Las dos fases no son atómicas (`src/features/boards/api.ts:101-131`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-21`).
 - El selector local traduce `PGRST202` a una indicación sobre la migración `202610260002` o la recarga del esquema PostgREST (`src/features/boards/BoardsPage.tsx:114-119`). Es un mensaje de UI, no prueba que falte la RPC ni autoriza aplicar SQL: contrastar ledger y objetos remotos antes de operar; Storage pudo haberse limpiado antes del fallo de la RPC.
+- Caso remoto verificado 2026-11-02: faltaban la RPC y su entrada `202610260002`; se aplicó solo esa migración, se registró en la misma transacción y se solicitó recarga de PostgREST. El probe SQL focalizado pasó y revirtió sus fixtures. Esta corrección no elimina el riesgo de fallos entre Storage y SQL ni acredita una llamada HTTP autenticada posterior. [Evidencia y límites](../supabase/README.md#corrección-del-borrado-de-tableros--2026-11-02).
 - Avatares: una cuenta puede cambiar el propio y la UI admin permite cambiar otros; el servidor Storage permite escribir solo al propietario o admin activo. La lectura es pública; el bucket local limita MIME a JPEG/PNG/WebP y tamaño a 2 MiB (`src/features/users/avatarApi.ts:3-35`, `supabase/migrations/202610260003_profile_avatars.sql:5-50`).
 - Las cuentas activas ya existentes se asignan inicialmente a `Offline`; `General` queda vacío. Cuentas nuevas no reciben membresías automáticamente. Un traslado requiere acceso a origen y destino, y el acceso a comments/attachments sigue al tablero actual de la tarea.
 
@@ -93,6 +94,7 @@
 | `22023` / `23514` | El nombre no cumple la regla de 1–120 caracteres sin espacios exteriores |
 | `P0002` | El tablero ya no existe |
 | `55000` | Solo se pueden eliminar tableros desactivados |
+| `PGRST202` al borrar tablero | PostgREST no encuentra la firma RPC esperada; comprobar función, migración y caché antes de actuar |
 | `BOARD_ATTACHMENT_PATH_INVALID` | No se pudo identificar el path de un adjunto; no se inicia el borrado de Storage |
 | `BOARD_ATTACHMENTS_DELETE_FAILED` | Falló la eliminación de objetos de Storage; la RPC no se invoca |
 | `BOARD_DELETE_FAILED_AFTER_STORAGE` | La limpieza de Storage terminó, pero falló el borrado SQL del tablero |

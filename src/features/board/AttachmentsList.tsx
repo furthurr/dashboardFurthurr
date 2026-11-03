@@ -15,6 +15,13 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function splitFileName(name: string) {
+  const dot = name.lastIndexOf('.')
+  return dot > 0 && dot < name.length - 1
+    ? { base: name.slice(0, dot), extension: name.slice(dot) }
+    : { base: name, extension: '' }
+}
+
 export function AttachmentsList({ attachments, onRenameAttachment, onDeleteAttachment, canManageAttachment, disabled = false }: AttachmentsListProps) {
   const id = useId()
   const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null)
@@ -38,6 +45,8 @@ export function AttachmentsList({ attachments, onRenameAttachment, onDeleteAttac
         const isEditing = editingAttachmentId === attachment.id
         const canManage = canManageAttachment?.(attachment) ?? false
         const trimmedFileName = fileName.trim()
+        const { base, extension } = splitFileName(attachment.file_name)
+        const invalidExtension = !extension && Boolean(splitFileName(trimmedFileName).extension)
 
         return <li
           key={attachment.id}
@@ -51,16 +60,19 @@ export function AttachmentsList({ attachments, onRenameAttachment, onDeleteAttac
           <div className="flex-1 min-w-0">
             {isEditing ? <form className="space-y-2" onSubmit={async (event) => {
               event.preventDefault()
-              if (!trimmedFileName || !onRenameAttachment) return
-              const saved = await onRenameAttachment(attachment.id, trimmedFileName)
+              if (!trimmedFileName || invalidExtension || !onRenameAttachment) return
+              const saved = await onRenameAttachment(attachment.id, trimmedFileName + extension)
               if (saved) setEditingAttachmentId(null)
             }}>
               <label htmlFor={`${id}-file-name`} className="sr-only">Nuevo nombre de {attachment.file_name}</label>
               <input id={`${id}-file-name`} className="ui-field" autoFocus required value={fileName}
-                disabled={disabled} onChange={(event) => setFileName(event.target.value)} />
+                disabled={disabled} aria-describedby={`${id}-file-extension`} onChange={(event) => setFileName(event.target.value)} />
+              <p id={`${id}-file-extension`} className="text-xs text-[var(--color-text-muted)]">
+                {extension ? `Extensión (no editable): ${extension}` : 'Archivo sin extensión. No añadas una extensión.'}
+              </p>
               <div className="flex flex-wrap gap-2">
                 <button type="submit" className="ui-button ui-button--primary ui-button--sm"
-                  disabled={disabled || !trimmedFileName || trimmedFileName === attachment.file_name}>Guardar nombre</button>
+                  disabled={disabled || !trimmedFileName || invalidExtension || trimmedFileName === base}>Guardar nombre</button>
                 <button type="button" className="ui-button ui-button--secondary ui-button--sm" disabled={disabled}
                   onClick={() => setEditingAttachmentId(null)}>Cancelar</button>
               </div>
@@ -85,7 +97,7 @@ export function AttachmentsList({ attachments, onRenameAttachment, onDeleteAttac
             {canManage && !isEditing && onRenameAttachment && (
               <button type="button" className="ui-button ui-button--secondary ui-button--sm" disabled={disabled}
                 aria-label={`Cambiar nombre de ${attachment.file_name}`}
-                onClick={() => { setFileName(attachment.file_name); setEditingAttachmentId(attachment.id) }}>
+                onClick={() => { setFileName(base); setEditingAttachmentId(attachment.id) }}>
                 Cambiar nombre
               </button>
             )}

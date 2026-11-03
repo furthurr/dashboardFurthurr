@@ -16,6 +16,35 @@ como aplicadas. No inferir aplicación registrada por presencia de objetos ni ej
 `db push` a ciegas.
 Detalle operativo: [Supabase](../supabase/README.md); [registro de fase 2](../docs/prueba-mcp.md#8-registro-de-resultados-sin-secretos).
 
+## Corrección focalizada del borrado — 2026-11-02
+
+La ausencia de la RPC registrada en el inventario histórico anterior se confirmó
+de nuevo al investigar `PGRST202` y quedó **corregida**: se aplicaron las sentencias
+de `202610260002_delete_inactive_boards.sql` y se registraron versión, nombre y
+sentencias en el ledger en la misma transacción, con guardas contra reaplicación.
+Se solicitó la recarga de PostgREST. No se ejecutaron bootstrap, push global ni
+reconciliación de otras migraciones.
+
+Tras la operación, el ledger contiene `202610190001`, `202610200001`,
+`202610200002`, `202610210001`, `202610220001`, **`202610260002`**,
+`202610280002`, `202610280003`, `202610290001`, `202610300001` y `202610300002`.
+Las entradas `202610300001`/`202610300002` se observaron, pero esta comprobación no
+verificó sus definiciones ni la versión Edge. Las discrepancias restantes siguen
+abiertas: no usar la ausencia del ledger como prueba suficiente para aplicar SQL.
+
+Se verificaron `delete_inactive_board(uuid)` presente, ejecución denegada a `anon`
+y concedida a `authenticated`, además del control interno de administrador activo.
+Un probe remoto focalizado pasó las validaciones de rol/estado/ID y cascadas de
+tablero, membresías, tareas, comentarios, asignaciones y metadata de adjuntos; sus
+fixtures se revirtieron con `ROLLBACK`. La consulta posterior confirmó 8 tableros,
+51 tareas y cero tableros/perfiles de prueba residuales. No se probó Storage real
+ni navegador autenticado y no se ejecutó la suite completa `boards.sql`.
+
+Esta documentación reutiliza la evidencia operativa anterior de la sesión; no
+vuelve a ejecutar SQL. [Procedimiento, regresión de cliente y límites](../supabase/README.md#corrección-del-borrado-de-tableros--2026-11-02).
+
+## Aplicación histórica del workflow — 2026-10-29
+
 `202610290001_mcp_workflow.sql` está **aplicada y registrada**: se aplicó con
 preflight, historial remoto aislado y dry-run que seleccionó solo ese archivo, sin
 roles/seeds ni actualización de Vault. No debe reaplicarse: no es idempotente.

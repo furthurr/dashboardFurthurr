@@ -4,6 +4,57 @@ La SPA sigue alojada en GitHub Pages. La administración privilegiada se ejecuta
 `admin-users`; el servidor remoto MCP se ejecuta en `mcp`. La firma privilegiada
 de adjuntos MCP ocurre solo en Edge, nunca en navegador, presets ni cliente MCP.
 
+## Corrección del borrado de tableros — 2026-11-02
+
+La investigación de `PGRST202` confirmó en el proyecto remoto seleccionado que
+`public.delete_inactive_board(uuid)` no existía y `202610260002` no estaba
+registrada. Sí existían `boards.is_active`, `is_board_admin()` con comprobación de
+administrador activo y las FK compatibles: tareas → tablero con `ON DELETE RESTRICT`
+y relaciones de tareas/membresías con cascada.
+
+Se aplicaron exclusivamente las sentencias de
+[`202610260002_delete_inactive_boards.sql`](migrations/202610260002_delete_inactive_boards.sql)
+mediante Supabase CLI **2.122.0**, `db query --linked --project-ref <project-ref>`,
+con un script temporal fuera del repositorio. Un envoltorio transaccional comprobó
+que no existieran la función ni la entrada de migración, ejecutó la creación y sus
+grants y registró versión, nombre y sentencias en
+`supabase_migrations.schema_migrations` en la misma transacción. No fue una
+reparación del ledger sin DDL, ni un `db push`, ni la ejecución del bootstrap. Se
+emitió `NOTIFY pgrst, 'reload schema'`; acredita la solicitud de recarga, no una
+llamada HTTP autenticada posterior.
+
+**Resultado comprobado tras la aplicación:**
+
+| Comprobación | Resultado |
+| --- | --- |
+| Función y migración | `delete_inactive_board(uuid)` presente; `202610260002` registrada como `delete_inactive_boards` |
+| Grants | `anon` sin ejecución; `authenticated` con ejecución y comprobación interna de administrador activo |
+| Probe SQL remoto focalizado | PASS: administrador activo, rechazo de no admin/admin inactivo, tablero activo (`55000`), ID nulo (`22023`) e inexistente (`P0002`) |
+| Cascadas relacionales | PASS: tablero, membresías, tareas, comentarios, responsables y metadata de adjuntos de prueba eliminados dentro de la transacción |
+| Limpieza de prueba | `ROLLBACK`; cero tableros/perfiles de prueba residuales; se conservaron los 8 tableros y 51 tareas originales |
+| Regresión de cliente | `npx vitest run src/features/boards/api.test.ts src/features/boards/BoardsPage.test.tsx`: **37/37 PASS** en dos archivos |
+
+El primer intento del probe fue rechazado por un path de adjunto inválido; se
+corrigió para incluir el ID de su tarea y se repitió con éxito. Fue un probe
+temporal focalizado, **no** una nueva ejecución de toda `tests/boards.sql`. No se
+modificaron fuentes ni se ejecutaron build/lint; no hubo despliegue de frontend.
+Estos resultados proceden de la operación anterior de esta sesión; la actualización
+documental no repite SQL ni aplica nuevas migraciones.
+
+El ledger consultado en esa operación contiene `202610190001`, `202610200001`,
+`202610200002`, `202610210001`, `202610220001`, **`202610260002`**,
+`202610280002`, `202610280003`, `202610290001`, `202610300001` y `202610300002`.
+La presencia de las dos últimas entradas no verifica sus definiciones remotas ni
+la versión Edge actual. Persisten las discrepancias históricas de otras
+migraciones; no inferir que estén pendientes solo por su ausencia del ledger.
+
+**Límites:** no se verificó el flujo desde navegador con sesión real ni el borrado
+de objetos reales de Storage. La corrección no recupera adjuntos que pudieran
+haberse eliminado en intentos anteriores ni resuelve la falta de atomicidad entre
+Storage y PostgreSQL. La tarea quedó **En revisión**, no finalizada. El resultado
+y las verificaciones están registrados en su comentario MCP
+`dfb35af3-c752-488b-9cd3-c9f8a8cb6346`.
+
 ## Estado operativo MCP — 2026-10-29
 
 Baseline de producto: `c2677c9b9084e3a56b6db36a1783c5d722e82780` (`v0.12.1`),
@@ -39,6 +90,11 @@ El inventario histórico del 2026-10-28 observó objetos de `202610220002`,
 de renombrado `202610260001` ni `delete_inactive_board` de `202610260002`.
 Las activaciones no certifican esas migraciones como aplicadas ni resuelven esa
 discrepancia; no inferir registro de una migración por presencia de objetos.
+
+**Actualización 2026-11-02:** la ausencia de `delete_inactive_board` quedó corregida
+y `202610260002` registrada mediante la operación focalizada descrita arriba. El
+inventario de 2026-10-28 se conserva como histórico; no representa ya el estado de
+esa RPC. No se reconciliaron las demás discrepancias.
 
 Antes de cada activación se comprobaron ledger, objetos y precondiciones reales. Se
 descargó el historial registrado con `migration fetch` a un directorio temporal
@@ -183,11 +239,17 @@ Las cargas nuevas usan path `<task-id>/<UUID>.<ext>`; las antiguas con path plan
 
 La eliminación quita primero el objeto del bucket privado y después su metadata. Son peticiones separadas a Storage y PostgreSQL, no una transacción conjunta. Si falla la segunda etapa, la fila puede permanecer aunque el objeto ya se haya eliminado. La migración no requiere otra Edge Function.
 
-## Borrado permanente de tableros inactivos (migración local `202610260002`)
+## Borrado permanente de tableros inactivos (migración `202610260002` aplicada)
 
 `202610260002_delete_inactive_boards.sql` crea la RPC `delete_inactive_board(p_board_id)`. Requiere administrador activo, tablero existente y `is_active = false`; la función bloquea la fila, elimina sus tareas y luego el tablero. Las relaciones de tarea se eliminan por cascada. El cliente elimina previamente, por lotes, los objetos del bucket `task-attachments`.
 
 Storage y PostgreSQL no comparten transacción. Un fallo de Storage detiene la llamada a la RPC; si la RPC falla después de limpiar Storage, las filas pueden quedar y faltar algunos objetos. La operación es permanente y no hay restauración desde la aplicación.
+
+La migración quedó aplicada y registrada en el proyecto remoto el **2026-11-02**.
+Consulta el [registro de corrección](#corrección-del-borrado-de-tableros--2026-11-02)
+para las comprobaciones y sus límites. No debe reaplicarse: usa `CREATE FUNCTION`
+y no es idempotente. La suite general siguiente se conserva como guía, no como
+evidencia de ejecución durante esta corrección.
 
 La suite `tests/boards.sql` cubre permisos de renombrado de adjuntos y borrado de tableros inactivos. Ejecutarla después de `202610260002` en una base de pruebas; usa fixtures transaccionales con `ROLLBACK`:
 

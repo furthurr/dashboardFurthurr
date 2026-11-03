@@ -1,8 +1,14 @@
 # Deuda técnica de datos/APIs
 
 Hallazgos de contrato y consistencia observados en la capa de datos. Esta
-sincronización focalizada documenta workflow MCP local y evidencia remota previa;
-no consultó remoto, no modifica producto ni es una auditoría de seguridad.
+sincronización focalizada reutiliza evidencia remota previa de esta sesión;
+no repite consultas remotas, no modifica producto ni es una auditoría de seguridad.
+
+Actualización 2026-11-02: aplicada y registrada `202610260002` tras confirmar que
+faltaba `delete_inactive_board(uuid)`. Probe SQL focalizado con `ROLLBACK` y 37/37
+Vitest correctos; sin borrado de tableros reales. **D-09 permanece abierta** y
+**D-11 queda parcialmente mitigada solo para esa migración**. No se reconciliaron
+los demás objetos/entradas. [Evidencia y límites](../supabase/README.md#corrección-del-borrado-de-tableros--2026-11-02).
 
 Revisión de MCP 2026-10-28: el proyecto remoto fue consultado ese mismo día tras
 activar Supabase OAuth y desplegar `mcp`. El probe `supabase/tests/mcp_identity.sql`
@@ -43,7 +49,7 @@ Revisión documental del árbol local 2026-10-26: se incorporan el borrado perma
 | D-04 | **Resuelta y versionada**: las cargas nuevas usan `<taskId>/<UUID>.<ext>`; la policy autoriza por metadata/tarea, contempla paths legacy y cliente comprueba error al borrar. | `src/features/board/attachmentsApi.ts`, `supabase/migrations/202610210001_boards.sql:133-172` | No se reproduce el desacople de path detectado en la versión anterior; falta comprobar el entorno real. | — | Verificar el entorno real; no equivale a auditoría de Storage. |
 | D-09 | Abierta: borrado de tablero ejecuta limpieza de objetos en Storage antes de la RPC PostgreSQL; no hay transacción común ni compensación distribuida. | `src/features/boards/api.ts:101-131`, `supabase/migrations/202610260002_delete_inactive_boards.sql:17-20` | Si la RPC falla tras quitar objetos, quedan metadata/tareas del tablero con adjuntos ya eliminados; si la limpieza de Storage falla parcialmente, puede haber objetos retirados y la RPC no se ejecuta. | Medio | Mantener el flujo idempotente y estudiar reconciliación/reintento explícito o una estrategia de borrado diferido. No afirmar atomicidad. |
 | D-10 | Abierta/mitigada por diseño: OAuth Server beta, DCR y hook global. `202610290001` fue verificada en remoto el 2026-10-29; `202610300002` unifica permisos y avance solo localmente. | `supabase/migrations/202610280002_mcp_identity.sql:23-45`, `202610300002_mcp_unified_consent.sql:5-174` | Nombre DCR no acredita confianza; el cliente autorizado recibe contenido privado y puede ejecutar cambios acotados automáticamente. | Medio | Mantener aislamiento y proyecciones; probar autoaprobación con y sin consentimiento de aplicación, ampliación de grants válidos, asignación/estados y revocación completa en E2E antes de declarar el flujo completo. No ampliar el hook global por accidente. |
-| D-11 | Abierta: el ledger remoto no representa todos los cambios SQL observados en el schema. | `supabase/README.md` (estado remoto consultado 2026-10-28), `supabase/migrations/202610260001_task_attachment_management.sql`, `202610260002_delete_inactive_boards.sql`, `202610260003_profile_avatars.sql`, `202610280001_board_assignment_access.sql` | `supabase_migrations.schema_migrations` contiene `202610190001`–`202610220001` y `202610280002`, pero no `202610220002`, `202610260001`–`202610260003` ni `202610280001`; el schema sí muestra funciones de ciclo de vida/asignación y policies de avatar, pero no la policy 260001 ni la RPC 260002. Un `db push` global podría aplicar SQL cuya operación efectiva no es deducible solo desde el ledger. | Medio | Antes de futuras migraciones, comparar SQL completo/objetos, decidir reconciliación del historial con responsables de Supabase y aplicar sólo una secuencia aprobada; no hacer `db push` a ciegas. |
+| D-11 | Abierta, parcialmente mitigada: el ledger remoto no representa todos los cambios SQL observados en el schema; `202610260002` quedó aplicada y registrada el 2026-11-02. | `supabase/README.md`, `.data/04-schema.md`; migraciones `202610220002`, `202610260001`, `202610260003`, `202610280001` | El ledger consultado el 2026-11-02 incluye ya `202610260002`, además de las entradas MCP hasta `202610300002`, pero sigue sin las cuatro versiones citadas. El inventario histórico observó algunos de sus objetos; su estado completo no se volvió a comprobar. La ausencia de `delete_inactive_board` sí quedó corregida, no la discrepancia global. Un push global podría intentar recrear objetos existentes. | Medio | Comparar ledger y objetos antes de cada operación; no reaplicar `202610260002` ni marcar otras entradas sin comprobar sus DDL. Mantener reconciliación explícita y no hacer `db push` a ciegas. |
 
 ## 🟢 Baja
 

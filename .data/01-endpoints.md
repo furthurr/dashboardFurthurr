@@ -252,7 +252,7 @@ que un cliente/modelo la obedezca. Fuente: `supabase/migrations/202610300002_mcp
 - Auth/validación: solo admin activo (`42501`); ID nulo (`22023`); tablero inexistente (`P0002`); tablero activo (`55000`). La comprobación del cliente no sustituye el control de la RPC.
 - Fallos parciales: Storage y PostgreSQL no son una transacción única. `BOARD_ATTACHMENTS_DELETE_FAILED` detiene el borrado SQL; `BOARD_DELETE_FAILED_AFTER_STORAGE` indica que los objetos ya se quitaron pero la RPC falló. Paths irreconocibles producen `BOARD_ATTACHMENT_PATH_INVALID` antes de limpiar (`src/features/boards/api.ts:88-131`).
 - Caché: tras éxito se quitan consultas de tareas, comentarios, adjuntos y miniaturas, e invalida `['boards']` (`src/features/boards/api.ts:135-145`).
-- Estado remoto: la migración existe localmente; no se verificó su aplicación en Supabase.
+- Estado remoto (2026-11-02): `202610260002` aplicada y registrada, RPC presente y grants comprobados tras confirmar su ausencia como causa de `PGRST202`. Probe SQL focalizado con `ROLLBACK` y 37/37 pruebas de cliente correctos; no verifica navegador autenticado ni borrado de objetos reales de Storage. [Registro operativo](../supabase/README.md#corrección-del-borrado-de-tableros--2026-11-02). No reaplicar esta migración no idempotente.
 - Fuente: `src/features/boards/api.ts:69-145`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-25`.
 
 ### Leer/administrar membresías — `board_members` y RPC `set_board_members`

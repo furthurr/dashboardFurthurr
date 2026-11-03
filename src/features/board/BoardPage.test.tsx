@@ -107,7 +107,7 @@ describe('Integración del tablero', () => {
     await user.click(screen.getByRole('button', { name: 'Cambiar nombre de reporte.pdf' }))
     const nameInput = screen.getByRole('textbox', { name: 'Nuevo nombre de reporte.pdf' })
     await user.clear(nameInput)
-    await user.type(nameInput, 'reporte-final.pdf')
+    await user.type(nameInput, 'reporte-final')
     await user.click(screen.getByRole('button', { name: 'Guardar nombre' }))
     expect(mocks.renameAttachment.mutateAsync).toHaveBeenCalledExactlyOnceWith({
       attachmentId: attachment.id, fileName: 'reporte-final.pdf',
