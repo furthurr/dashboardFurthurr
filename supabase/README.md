@@ -57,6 +57,8 @@ y las verificaciones están registrados en su comentario MCP
 
 ## Estado operativo MCP — 2026-10-29
 
+El estado de esta sección es histórico. La SPA posterior `v0.14.0` (`f501082`) se publicó en [Pages run 41576684027](https://github.com/furthurr/dashboardFurthurr/actions/runs/41576684027), success; ese workflow no despliega SQL ni Edge Functions ni demuestra la versión backend actual.
+
 Baseline de producto: `c2677c9b9084e3a56b6db36a1783c5d722e82780` (`v0.12.1`),
 correcciones en `a6adb89`; fase 2 implementada en `9ecc905`. Proyecto identificado
 mediante CLI autenticada: **`furthurr'sDashboard`**, ref `uujxatuuktccwkvavksr`.

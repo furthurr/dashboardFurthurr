@@ -21,7 +21,7 @@ y bearer OAuth individual, con `role=mcp_identity`. El lector de adjuntos firma 
 descarga con un cliente separado que usa `SUPABASE_SERVICE_ROLE_KEY` solo en runtime
 Edge tras RPC autorizada y validar task/bucket/path. La lectura está limitada a
 5 MiB y formatos documentados; el rol OAuth no recibe acceso directo a Storage.
-La migración workflow y código actual son locales y no se acreditan desplegados.
+El workflow `202610290001` fue desplegado históricamente; la versión exacta remota del código y consentimiento unificado posteriores no está acreditada.
 Fuente: `supabase/functions/mcp/index.ts:67-104`, `supabase/functions/mcp/workflow.ts:28-103`.
 
 | Variable/ajuste | Uso | Restricción |
@@ -40,9 +40,7 @@ sin un plan aparte de rotación de claves. DCR está activado para los clientes 
 
 ## Build/deploy observado
 
-- Baseline de producto: `0ebb61d7465afd240de47c11f2d4671affa1342c` / `v0.13.0`
-  (workflow MCP). La release anterior contrastada fue `c2677c9` / `v0.12.1`.
-  Actualización del 2026-10-29 con verificación de Supabase y del despliegue.
+- Pages: [run 41576684027](https://github.com/furthurr/dashboardFurthurr/actions/runs/41576684027) terminó correctamente para `f501082` / `v0.14.0`. El backend no se verificó de nuevo. Las observaciones siguientes son históricas del 2026-10-29 salvo indicación distinta.
 - Fase 2 activada en el proyecto acordado: solo `202610280003` aplicada/registrada;
   `mcp` **Edge v3 ACTIVE**, `verify_jwt=false`, código remoto coincidente con el
   baseline anterior (`index.ts`, `task.ts`, `deno.json`).
@@ -66,12 +64,12 @@ sin un plan aparte de rotación de claves. DCR está activado para los clientes 
 - El repositorio por sí solo no acredita los valores configurados de GitHub ni qué proyecto usa cada entorno. La operación verificó el proyecto remoto mediante herramientas autenticadas; no inspeccionó secretos ni demostró login local. Antes de E2E confirmar el mismo proyecto en ambos frontends sin leer/copiar credenciales.
 - El build de Pages no despliega Edge Functions, migraciones ni ajustes de Auth. Para una instalación existente revisa la secuencia completa en `supabase/README.md` y el estado registrado en Supabase antes de aplicar cualquier migración. En el proyecto remoto consultado el 2026-10-28 el ledger y los objetos del schema no coinciden para varias migraciones previas; no aplicar la lista local en bloque ni volver a ejecutar el bootstrap.
 - `supabase/config.toml` declara `auth.enable_signup = false`, `functions.admin-users.verify_jwt = false` y `functions.mcp.verify_jwt = false`. Esta última sólo permite el discovery/challenge en gateway; la Edge Function comprueba cada bearer. OAuth Server, DCR y el custom access-token hook fueron habilitados en el proyecto actual el 2026-10-28; el `config diff` posterior no dejó cambios declarados.
-- Ledger consultado tras la activación del workflow: `202610190001`, `202610200001`,
+- Ledger histórico consultado tras la activación del workflow: `202610190001`, `202610200001`,
   `202610200002`, `202610210001`, `202610220001`, `202610280002`, `202610280003` y
   `202610290001`. Persisten discrepancias históricas de objetos frente al ledger; ver
   [schema](04-schema.md) y `supabase/README.md`. No reaplicar históricos ni marcar
   entradas como atajo. Las tres suites MCP remotas (identidad, lectura y workflow)
-  pasaron con `ROLLBACK`; no validan Storage real ni OAuth de navegador.
+  pasaron con `ROLLBACK`; no validan Storage real ni OAuth de navegador. Para el ledger posterior y la corrección focalizada de `202610260002`, ver [schema](04-schema.md).
 - Histórico de fase 1 (2026-10-28): `mcp` v2 y `admin-users` v6 ACTIVE, Pages `267cc91` / run `40796012117`. La operación del día 29 sustituyó MCP por v3; no redesplegó administración ni cambió hooks/Auth globales.
 
 ### Local, Pages y clientes MCP: límites comprobados

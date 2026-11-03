@@ -4,7 +4,7 @@ Catálogo de componentes actuales, no una promesa de API reutilizable fuera de s
 
 ## Actualización focalizada — copia de UUID y workflow MCP, 2026-10-29
 
-La copia de UUID y el workflow anterior se publicaron en `v0.13.0` (commit `0ebb61d`); las filas de consentimiento y conexiones siguientes describen la simplificación **local no desplegada** del 2026-10-31. No añade tokens ni clases CSS propias; los botones reutilizan
+La copia de UUID y el workflow anterior se publicaron en `v0.13.0` (commit `0ebb61d`); las filas de consentimiento y conexiones describen la simplificación incluida en `59da993` y publicada en Pages con `v0.14.0` (`f501082`). Esto no acredita el backend ni el consentimiento real en navegador. No añade tokens ni clases CSS propias; los botones reutilizan
 `ui-button ui-button--sm`, SVG decorativo de 16 px y estilos de foco existentes. Las
 entradas siguientes prevalecen sobre las descripciones históricas del botón de
 comentarios.
@@ -52,7 +52,7 @@ No se añaden tokens, tema ni clases CSS; se reutilizan `ui-list-card`, `ui-fiel
 
 | Componente/patrón | Propósito, estados y comportamiento | Fuente |
 | --- | --- | --- |
-| `AttachmentsList` — renombrar | Cada archivo autorizado muestra «Cambiar nombre». En el árbol local sin commit se edita la base y se muestra la última extensión como no editable, asociada al campo mediante `aria-describedby`; si no hay extensión se impide añadir una. «Guardar nombre» se deshabilita si está vacío, no cambió o incumple esa restricción; «Cancelar» abandona la edición. Durante una mutación se bloquean los controles; un fallo conserva el borrador y el detalle anuncia el error. No se ha acreditado despliegue ni revisión visual de este cambio | `src/features/board/AttachmentsList.tsx:18-102`, `src/features/board/TaskDetailModal.tsx` |
+| `AttachmentsList` — renombrar | Cada archivo autorizado muestra «Cambiar nombre». Se edita la base y se muestra la última extensión como no editable, asociada al campo mediante `aria-describedby`; si no hay extensión se impide añadir una. «Guardar nombre» se deshabilita si está vacío, no cambió o incumple esa restricción; «Cancelar» abandona la edición. Durante una mutación se bloquean los controles; un fallo conserva el borrador y el detalle anuncia el error. Incluido en `ba13bfe` y Pages `v0.14.0`; revisión visual pendiente | `src/features/board/AttachmentsList.tsx:18-102`, `src/features/board/TaskDetailModal.tsx` |
 | `AttachmentsList` — eliminar | El botón contextual «Eliminar» abre la confirmación inline del detalle con el nombre del archivo y aviso de irreversibilidad. La acción espera resultado, comunica éxito/error y mantiene la confirmación ante un fallo | `src/features/board/AttachmentsList.tsx:92-96`, `src/features/board/TaskDetailModal.tsx:150-160,278-287` |
 | Disponibilidad por adjunto | La interfaz muestra ambas acciones al uploader, creador de la tarea o administrador activo; Postgres/Storage y el acceso activo al tablero siguen siendo la autoridad del permiso | `src/features/board/BoardPage.tsx:465-476`, `supabase/migrations/202610260001_task_attachment_management.sql:10-22` |
 | `BoardsPage` — eliminar tablero inactivo | Solo el admin ve «Eliminar tablero» en cards desactivadas. El `Dialog` identifica el tablero y advierte que tareas, comentarios, asignaciones y adjuntos se eliminan sin recuperación; la acción usa `ui-button--danger`, muestra espera y conserva el diálogo ante errores específicos de Storage/RPC. La orientación para `PGRST202` está versionada en `6c5b292`; no acredita el estado remoto ni sustituye comprobar ledger y objetos antes de aplicar migraciones | `src/features/boards/BoardsPage.tsx:114-119,200-224` |
@@ -62,7 +62,7 @@ No se añaden tokens, tema ni clases CSS; se reutilizan `ui-list-card`, `ui-fiel
 
 ### Verificación y límites
 
-La evidencia previa al cambio de tableros/avatares para la gestión de adjuntos registró 157 pruebas Vitest en 16 archivos, build y lint correctos; no valida por sí sola las ampliaciones añadidas después. En esta sincronización documental no se ejecutaron pruebas, build, lint ni suite SQL, no se aplicaron migraciones remotas y no se hizo revisión visual en navegador, prueba con lector de pantalla o auditoría de contraste. La UI actual no se presenta como publicada.
+La evidencia previa al cambio de tableros/avatares para la gestión de adjuntos registró 157 pruebas Vitest en 16 archivos, build y lint correctos; no valida por sí sola las ampliaciones añadidas después. En aquella sincronización documental no se ejecutaron pruebas, build, lint ni suite SQL, no se aplicaron migraciones remotas y no se hizo revisión visual en navegador, prueba con lector de pantalla o auditoría de contraste. La publicación posterior de la SPA no sustituye esas pruebas.
 
 ## Actualización focalizada — visor de imágenes y descripción de tarea, 2026-10-23
 

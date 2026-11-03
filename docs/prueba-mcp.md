@@ -2,9 +2,11 @@
 
 ## Estado y alcance
 
+La release `v0.14.0` apunta a `f501082` y [Pages run 41576684027](https://github.com/furthurr/dashboardFurthurr/actions/runs/41576684027) terminó correctamente para ese commit. Incluye la UI unificada; Pages no despliega SQL ni Edge Functions. No se ha acreditado la versión backend actual ni un E2E completo.
+
 ### Ampliación local: consentimiento unificado y avance automático MCP
 
-**Implementado y versionado, sin despliegue exacto acreditado:** la migración
+**Implementado y versionado; backend sin versión desplegada exacta acreditada:** la migración
 `202610300002_mcp_unified_consent.sql`, el bootstrap, MCP de aplicación `0.5.0` y la UI de consentimiento unificado están incluidos en `59da99331532d6fbc952d2e9735d18ef32a0a19d`. `202610300001` es prerrequisito incremental. Los datos
 remotos históricos de la tabla siguiente corresponden al workflow manual `0.3.0`,
 no demuestran esta ampliación. No se han repetido consultas ni despliegues remotos

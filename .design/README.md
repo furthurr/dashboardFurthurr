@@ -6,11 +6,11 @@ Documentación canónica de lo visual. Léela antes de añadir pantallas, compon
 
 - Tecnología detectada: React + TypeScript, Tailwind CSS v4 y CSS custom properties.
 - Commit base revisado: `eb25418de42c045d6be32a3091f8bb3f36b24ba0` (2026-10-21), contiene el selector y los componentes de tableros documentados aquí.
-- Baseline Git consultado para esta revisión focalizada: `6c5b2929b3887fcb4d6e9d236a818abbde86ac9a`; las correcciones actuales quedan pendientes de commit. El producto visual publicado históricamente es `0ebb61d7465afd240de47c11f2d4671affa1342c` (`v0.13.0`); no se acredita el despliegue posterior. `.sdd/` y el lockfile raíz quedan fuera de esta revisión.
+- Baseline Git de esta revisión focalizada: `f5010827ecd159274ae0805df3b0c40c4c8b9831` / `v0.14.0`; [Pages run 41576684027](https://github.com/furthurr/dashboardFurthurr/actions/runs/41576684027) terminó correctamente. No equivale a una validación visual ni a un inventario global nuevo.
 - Sincronización histórica focalizada del 2026-10-29: la UI publicada en `v0.13.0` ofrecía retirada individual/todos de permisos. Ese comportamiento fue sustituido por el consentimiento unificado descrito abajo; no representa la UI actual. La revisión visual en navegador de aquella versión sigue pendiente. Ver [componentes](components.md).
-- Actualización focalizada 2026-10-31: UI de consentimiento MCP unificado incluida en `59da99331532d6fbc952d2e9735d18ef32a0a19d`, sin publicación de esa UI acreditada. La evidencia DOM no es validación visual, de lector de pantalla ni E2E OAuth.
-- Revisión incremental 2026-11-01: el mensaje `PGRST202` de `BoardsPage` está versionado en `6c5b292`, sin publicación acreditada. No se ejecutaron pruebas ni revisión visual en esta revisión.
-- Revisión focalizada 2026-11-02: el editor de nombres de adjuntos conserva la extensión en el árbol local sin commit; no se acredita su despliegue ni validación visual. El baseline global sigue siendo el indicado arriba.
+- Actualización focalizada 2026-10-31: UI de consentimiento MCP unificado incluida en `59da993` y en Pages `v0.14.0`. La evidencia DOM no es validación visual, de lector de pantalla ni E2E OAuth.
+- Revisión incremental 2026-11-01: el mensaje `PGRST202` de `BoardsPage` está versionado en `6c5b292` e incluido en Pages `v0.14.0`. No se ejecutaron pruebas ni revisión visual en aquella revisión.
+- El editor de nombres conserva la extensión desde `ba13bfe`, incluido en Pages `v0.14.0`; no se acredita validación visual. El inventario global no se regeneró.
 - Los botones de copiar y comentarios usan `ui-button ui-button--sm` e iconos de 16 px; quedan agrupados a la derecha con `gap-2`, no separados por la fila de avatares (`src/features/board/TaskCard.tsx:102-144`, `src/features/board/CopyTaskId.tsx:33-50`).
 - La revisión cubre los avatares de `AccountMenu`, `UsersPage` y el componente `ProfileAvatar`; no es un inventario completo del flujo visual de `ProfilePage`.
 - Historial de despliegue: la UI de ciclo de vida de tableros se publicó con `v0.6.0` el 2026-10-22 (workflow «Deploy to GitHub Pages», run `39860177282`, `headSha=21a44df`). No usar esa evidencia histórica como publicación de los cambios locales actuales.
@@ -44,7 +44,7 @@ Documentación canónica de lo visual. Léela antes de añadir pantallas, compon
 - **Componentes:** login conserva `auth-*`; administración reutiliza `board-header`, `ui-feedback`, `Dialog` y formularios compartidos; selector consume `ui-field`, `ui-list-card`, `ui-button`, `ui-badge`, bordes/radios existentes y checkbox nativo. No se introdujeron tokens, tema ni tipografía nuevos en esta feature (`src/features/users/UsersPage.tsx:18-65`, `:105-132`, `src/features/board/AssigneePicker.tsx:26-50`).
 - **Estandarización y límites:** persisten utilities locales/SVG y la deuda ya registrada. Las comprobaciones visuales previas no equivalen a una auditoría de contraste ni uso con lector de pantalla; no se ejecutó otra auditoría durante esta sincronización.
 - **Evidencia anterior (2026-10-23):** la suite ejecutó 140 pruebas Vitest en 16 archivos; `npm run build`, TypeScript y `npm run lint` correctos. Incluye cobertura DOM del visor y del botón de comentarios. No se hizo comprobación visual en navegador del visor, prueba con lector de pantalla ni auditoría WCAG. Ver [componentes](components.md).
-- **Evidencia anterior de gestión de adjuntos (2026-10-26):** se registraron 157 pruebas Vitest en 16 archivos, build y lint correctos antes de los cambios locales posteriores de tableros y avatares. Esa evidencia no valida esas ampliaciones. En esta sincronización no se ejecutaron pruebas/build/lint ni revisión visual, lector de pantalla o auditoría WCAG; no se afirma despliegue de estos cambios.
+- **Evidencia anterior de gestión de adjuntos (2026-10-26):** se registraron 157 pruebas Vitest en 16 archivos, build y lint correctos antes de los cambios posteriores de tableros y avatares. Esa evidencia no valida esas ampliaciones. Aquella sincronización no ejecutó pruebas/build/lint ni revisión visual, lector de pantalla o auditoría WCAG.
 
 ### MCP — alcance y límites de validación visual
 
@@ -58,7 +58,7 @@ sigue sin verificarse. No se declara conformidad WCAG ni E2E OAuth/Storage.
 
 ### Evidencia posterior a la revisión estática
 
-La entrega UI ejecutó 33 pruebas correctas, build y lint, y comprobó Chromium a 360/768/1440 px con datos simulados: sin overflow del documento y con scroll del Kanban y diálogos dentro del viewport. Se revisaron capturas y se verificó movimiento reducido. Contrastes calculados puntuales: primario 6,29:1 y texto secundario/superficie elevada 7,47:1. No constituye auditoría completa WCAG ni prueba con lector de pantalla. La fuente externa estuvo bloqueada y las capturas usan fallback. Evidencia, comandos y limitaciones en [la spec de entrega](../.sdd/specs/mejora-integral-ui/spec.md#4-verificación-y-cierre); el baseline Git vigente es `v0.6.0` / `21a44df` y ya no está pendiente.
+La entrega UI ejecutó 33 pruebas correctas, build y lint, y comprobó Chromium a 360/768/1440 px con datos simulados: sin overflow del documento y con scroll del Kanban y diálogos dentro del viewport. Se revisaron capturas y se verificó movimiento reducido. Contrastes calculados puntuales: primario 6,29:1 y texto secundario/superficie elevada 7,47:1. No constituye auditoría completa WCAG ni prueba con lector de pantalla. La fuente externa estuvo bloqueada y las capturas usan fallback. Evidencia, comandos y limitaciones en [la spec de entrega](../.sdd/specs/mejora-integral-ui/spec.md#4-verificación-y-cierre); el baseline histórico de esa entrega es `v0.6.0` / `21a44df`.
 
 ### Historial de contexto previo al rediseño
 

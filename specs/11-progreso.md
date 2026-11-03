@@ -95,5 +95,9 @@
 ## 2026-10-31 — actualización documental
 
 - Se contrastaron permisos del portal y MCP, selector de tableros, visor de imágenes y consentimiento con código, migraciones y contratos locales. Los detalles actuales figuran en las specs 05, 06 y 12 y en `supabase/README.md`.
-- Evidencia histórica registrada: Pages publicó `0ebb61d` / `v0.13.0`; `202610290001` y Edge MCP v4 / aplicación `0.3.0` se verificaron el 2026-10-29. La implementación local posterior de consentimiento unificado (`202610300002`, aplicación `0.5.0`) no tiene versión remota exacta acreditada.
+- Evidencia histórica: Pages publicó `0ebb61d` / `v0.13.0`; `202610290001` y Edge MCP v4 / aplicación `0.3.0` se verificaron el 2026-10-29. La implementación posterior de consentimiento unificado (`202610300002`, aplicación `0.5.0`) no tiene versión backend remota exacta acreditada.
 - Siguen pendientes la comprobación E2E real de consentimiento y Storage y la conciliación del ledger con los objetos reales antes de cualquier operación remota. Esta actualización documental no ejecutó despliegues ni pruebas de producto o SQL.
+
+## Publicación posterior — 2026-11-03 UTC
+
+- Pages publicó `f501082` / `v0.14.0` (run `41576684027`, success), incluida la UI unificada. Esto no acredita la versión backend ni el E2E.

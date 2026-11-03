@@ -11,7 +11,11 @@ usuario autoriza con su cuenta habitual del portal.
 > acreditada por las observaciones posteriores. La autorización comparte contenido
 > privado con el cliente y su LLM; no publiques identidades, tareas ni adjuntos.
 
-## Estado comprobado — 2026-10-29
+## Publicación y evidencia remota
+
+La SPA `v0.14.0` (`f501082`) se publicó mediante [Pages run 41576684027](https://github.com/furthurr/dashboardFurthurr/actions/runs/41576684027), con conclusión success. Pages no despliega migraciones ni Edge Functions y no acredita E2E.
+
+### Estado histórico — 2026-10-29
 
 Producto publicado en `0ebb61d7465afd240de47c11f2d4671affa1342c` / `v0.13.0`.
 Migración `202610290001` aplicada y registrada; `mcp` Edge **v4 ACTIVE** con
