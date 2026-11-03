@@ -1,5 +1,23 @@
 # Changelog
 
+## [v0.14.0] - 2026-11-02
+
+### Funcionalidades
+
+- Unificar el consentimiento MCP de lectura, adjuntos y workflow con avance automático; la revocación retira la conexión completa y el modo automático no declara aprobación humana.
+- Permitir iniciar tareas asignadas, registrar resultados y enviar a revisión en modo automático, manteniendo controles de acceso, versión e idempotencia.
+
+### Correcciones
+
+- Conservar la última extensión al renombrar adjuntos en la interfaz y cubrir archivos con y sin extensión.
+- Aclarar el error `PGRST202` al borrar tableros y documentar la corrección focalizada de la RPC aplicada anteriormente.
+
+### Verificación y límites
+
+- Aprobar build, lint y 205 pruebas Vitest; 12 pruebas Deno de administración, 14 del servidor MCP y la comprobación de equivalencia del bootstrap.
+- Aprobar pruebas SQL en PostgreSQL desechable con Auth y Storage simulados, en modos incremental y bootstrap, incluidas concurrencia, idempotencia y revocación.
+- El push a Pages no despliega migraciones ni funciones Supabase. No se acredita la versión remota exacta de MCP ni el E2E completo de consentimiento, navegador y Storage real; persisten discrepancias históricas del ledger y el riesgo de falta de atomicidad entre Storage y SQL.
+
 ## [v0.13.0] - 2026-10-29
 
 ### Funcionalidades
