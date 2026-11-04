@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.15.0] - 2026-11-04
+
+### Funcionalidades
+
+- Soporte de temas duales: **Oscuro · Noche** (por defecto) y **Claro · Estudio**, con paletas de tokens CSS refinadas.
+- Selector accesible de tema de apariencia en la pantalla de Perfil (`ProfilePage.tsx`).
+- Persistencia de la preferencia de tema en la cuenta de usuario mediante `public.profiles.theme_preference` y sincronización en tiempo real vía `AuthContext`.
+- Migración Postgres `202611040001_profile_theme.sql` y actualización del esquema base `supabase-schema.sql`.
+
+### Verificación
+
+- 211 pruebas Vitest superadas (23 suites de pruebas).
+- Linter sin errores ni advertencias y build validado.
+
 ## [v0.14.1] - 2026-11-04
 
 ### Correcciones
