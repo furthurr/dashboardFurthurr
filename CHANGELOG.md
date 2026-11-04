@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.14.1] - 2026-11-04
+
+### Correcciones
+
+- Eliminar el rebote y parpadeo visual al mover tarjetas en el tablero (tanto mediante controles de flecha como arrastrando con drag and drop). Se preserva el estado optimista hasta recibir los datos actualizados del servidor y se sincroniza inmediatamente la caché de React Query.
+
+### Verificación
+
+- 211 pruebas Vitest superadas (23 archivos de prueba).
+- Verificación estática con ESLint (0 errores) y compilación de producción con Vite (`npm run build`).
+
 ## [v0.14.0] - 2026-11-02
 
 ### Funcionalidades
