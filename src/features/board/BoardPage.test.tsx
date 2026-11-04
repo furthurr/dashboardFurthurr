@@ -478,6 +478,34 @@ describe('Integración del tablero', () => {
     expect(screen.getByRole('status', { name: 'Estado del tablero' })).toHaveTextContent(/tarea movida/i)
   })
 
+  it('mantiene la posición optimista al completar la mutación hasta que el servidor devuelva la consulta actualizada', async () => {
+    let resolve!: () => void
+    mocks.status.mutateAsync.mockReturnValueOnce(new Promise<void>((done) => { resolve = done }))
+    const user = userEvent.setup()
+    const view = renderBoard()
+
+    // En backlog inicialmente
+    expect(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }).closest('section')).toHaveAttribute('data-column-id', 'backlog')
+
+    // Mover a la derecha (por hacer)
+    await user.click(screen.getByRole('button', { name: 'Mover a la lista siguiente' }))
+    expect(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }).closest('section')).toHaveAttribute('data-column-id', 'por_hacer')
+
+    // Cuando la mutación resuelve pero la query aún no ha cambiado sus datos
+    await act(async () => resolve())
+
+    // No debe rebotar a backlog
+    expect(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }).closest('section')).toHaveAttribute('data-column-id', 'por_hacer')
+
+    // Cuando el servidor devuelve las tareas actualizadas
+    const updatedTask = { ...task, status: 'por_hacer' as const }
+    mocks.tasks.mockReturnValue({ data: [updatedTask], isLoading: false, error: null, refetch: mocks.refetch })
+    view.rerender(<MemoryRouter><BoardPage boardId="offline" boardName="Offline" boards={[]} /></MemoryRouter>)
+
+    // Sigue en por_hacer de forma estable
+    expect(screen.getByRole('button', { name: `Abrir tarea: ${task.title}` }).closest('section')).toHaveAttribute('data-column-id', 'por_hacer')
+  })
+
   it('ofrece reintentar la consulta fallida', async () => {
     mocks.tasks.mockReturnValue({ data: [], isLoading: false, error: new Error('privado'), refetch: mocks.refetch })
     const user = userEvent.setup()

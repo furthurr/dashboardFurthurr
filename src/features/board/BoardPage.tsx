@@ -46,6 +46,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
   const updateTaskPositions = useUpdateTaskPositions()
   const [activeTask, setActiveTask] = useState<TaskWithAssignees | null>(null)
   const [optimisticTasks, setOptimisticTasks] = useState<TaskWithAssignees[] | null>(null)
+  const [prevTasks, setPrevTasks] = useState(tasks)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [initialDetailTab, setInitialDetailTab] = useState<'details' | 'comments'>('details')
@@ -117,6 +118,13 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
     )
   }
 
+  if (prevTasks !== tasks) {
+    setPrevTasks(tasks)
+    if (optimisticTasks !== null) {
+      setOptimisticTasks(null)
+    }
+  }
+
   const displayTasks = optimisticTasks ?? tasks
   const visibleTasks = filterUserIds.length === 0 ? displayTasks
     : displayTasks.filter((task) => task.assignees.some((person) => filterUserIds.includes(person.id)))
@@ -145,9 +153,9 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
       await action()
       setNotice('Tarea movida correctamente.')
     } catch {
+      setOptimisticTasks(null)
       setMoveError('No se pudo mover la tarea. Inténtalo de nuevo.')
     } finally {
-      setOptimisticTasks(null)
       pendingRef.current = false
       setMovementPending(false)
     }
@@ -257,7 +265,18 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
         return originalTask?.position !== position
       })
 
-    if (updates.length > 0) void performMovement(() => updateTaskPositions.mutateAsync(updates))
+    if (updates.length > 0) {
+      setOptimisticTasks((prev) => {
+        const currentTasks = prev ?? displayTasks
+        const positionMap = new Map(updates.map((u) => [u.taskId, u.position]))
+        return currentTasks.map((t) => {
+          const newPos = positionMap.get(t.id)
+          return newPos !== undefined ? { ...t, position: newPos } : t
+        })
+      })
+
+      void performMovement(() => updateTaskPositions.mutateAsync(updates))
+    }
   }
 
   async function handleCreateTask(data: {

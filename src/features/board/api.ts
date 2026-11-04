@@ -92,7 +92,10 @@ export function useUpdateTaskStatus() {
 
       if (error) throw error
     },
-    onSuccess: () => {
+    onSuccess: (_data, { taskId, status, position }) => {
+      queryClient.setQueriesData<TaskWithAssignees[]>({ queryKey: ['tasks'] }, (tasks) =>
+        tasks?.map((task) => (task.id === taskId ? { ...task, status, position } : task))
+      )
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       queryClient.invalidateQueries({ queryKey: ['boards'] })
     },
@@ -227,7 +230,14 @@ export function useUpdateTaskPositions() {
         })
       )
     },
-    onSuccess: () => {
+    onSuccess: (_data, updates) => {
+      const positionMap = new Map(updates.map((u) => [u.taskId, u.position]))
+      queryClient.setQueriesData<TaskWithAssignees[]>({ queryKey: ['tasks'] }, (tasks) =>
+        tasks?.map((task) => {
+          const newPos = positionMap.get(task.id)
+          return newPos !== undefined ? { ...task, position: newPos } : task
+        })
+      )
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
