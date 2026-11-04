@@ -2,6 +2,15 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
+## Actualización — selector de temas Noche y Estudio, 2026-11-04
+
+Permite alternar entre los temas Noche (oscuro, por defecto) y Estudio (claro) desde la página de perfil (`ProfilePage.tsx`), con persistencia en Supabase y aplicación instantánea vía atributo `data-theme` en el elemento raíz del documento.
+
+| Componente/patrón | Propósito, estados y comportamiento | Fuente |
+| --- | --- | --- |
+| Selector de tema en perfil | Radio buttons agrupados en `fieldset` con leyenda accesible (`ui-label`), selección activa con `checked`, estados de carga (`aria-busy`), confirmación «Tema guardado.» y banner de error ante fallos de red/persistencia | `src/features/auth/ProfilePage.tsx:44-59` |
+| Sincronización en `AuthProvider` | Hook global que aplica `document.documentElement.dataset.theme = 'light' \| 'dark'` en base a la sesión y actualiza optimistamente el perfil | `src/features/auth/AuthContext.tsx:31-48,119-135` |
+
 ## Actualización focalizada — copia de UUID y workflow MCP, 2026-10-29
 
 La copia de UUID y el workflow anterior se publicaron en `v0.13.0` (commit `0ebb61d`); las filas de consentimiento y conexiones describen la simplificación incluida en `59da993` y publicada en Pages con `v0.14.0` (`f501082`). Esto no acredita el backend ni el consentimiento real en navegador. No añade tokens ni clases CSS propias; los botones reutilizan

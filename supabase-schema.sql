@@ -24,6 +24,7 @@ create table public.profiles (
     email text not null,
     avatar_url text,
     nickname text,
+    theme_preference text not null default 'dark' check (theme_preference in ('dark', 'light')),
     role user_role not null default 'invitado',
     is_active boolean not null default true,
     created_at timestamp with time zone default now(),
@@ -502,7 +503,7 @@ revoke all on function public.is_active_account() from public;
 grant execute on function public.is_active_account() to authenticated, anon;
 
 revoke update on public.profiles from authenticated, anon;
-grant update (full_name, avatar_url, nickname) on public.profiles to authenticated;
+grant update (full_name, avatar_url, nickname, theme_preference) on public.profiles to authenticated;
 drop policy "Profiles are publicly readable" on public.profiles;
 create policy "Account profile visibility" on public.profiles for select to authenticated
   using (id = auth.uid() or public.is_active_account());

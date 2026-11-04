@@ -378,6 +378,14 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 - Errores: propaga errores de Storage/Postgres; si el `UPDATE` no devuelve una fila, el cliente informa que no se guardó el perfil. El objeto puede haberse cargado antes del error de metadata; no hay transacción entre ambos servicios.
 - Fuente: `src/features/users/avatarApi.ts:3-35`, `supabase/migrations/202610260003_profile_avatars.sql:5-50`.
 
+### Preferencia de tema — `profiles.update(theme_preference)`
+
+- Propósito: persistir el tema de apariencia elegido por el usuario (`dark` / Noche u `light` / Estudio) para sincronizarlo entre sesiones y dispositivos.
+- Request: `{ theme_preference: 'dark' | 'light' }` filtrando por `id = auth.uid()`.
+- Autorización: cuenta autenticada activa actualizando su propio perfil. Column privilege concedido en `202611040001_profile_theme.sql:6`.
+- Comportamiento cliente: actualización optimista en el estado de autenticación (`dataset.theme`), revertida si la llamada falla; confirmación y error accesibles en la UI de perfil.
+- Fuente: `src/features/auth/AuthContext.tsx`, `src/features/auth/ProfilePage.tsx`, `supabase/migrations/202611040001_profile_theme.sql`.
+
 ### Subir adjunto — bucket `task-attachments`
 
 - Secuencia observada: path `<taskId>/<UUID>.<extensión segura>`; `storage.upload`; genera `getPublicUrl` para persistir la referencia de metadata. El bucket es privado; la interfaz obtiene URL firmada al consultar el archivo.

@@ -4,12 +4,15 @@ import { useAuth } from './AuthContext'
 import { supabase } from '@/lib/supabase'
 
 export function ProfilePage() {
-  const { user, profile, refreshProfile } = useAuth()
+  const { user, profile, refreshProfile, setTheme } = useAuth()
   const [fullName, setFullName] = useState(profile?.full_name ?? '')
   const [password, setPassword] = useState('')
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [themeBusy, setThemeBusy] = useState(false)
+  const [themeMessage, setThemeMessage] = useState('')
+  const [themeError, setThemeError] = useState('')
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -36,6 +39,23 @@ export function ProfilePage() {
   return <main className="board-shell min-h-screen">
     <header className="board-header"><div><p className="text-xs text-[var(--color-text-muted)]">Dashboard Furthurr</p><h1>Mi perfil</h1><p className="text-sm text-[var(--color-text-muted)]">Actualiza tu nombre y contraseña.</p></div><Link to="/board" className="ui-button">Volver al tablero</Link></header>
     <section className="mx-auto max-w-xl px-4 py-8 sm:px-8">
+      <fieldset className="ui-feedback mb-5" disabled={themeBusy} aria-busy={themeBusy}>
+        <legend className="ui-label">Tema de apariencia</legend>
+        <p className="mb-3 text-sm text-[var(--color-text-muted)]">Tu elección se guarda en tu cuenta y se aplica en tus dispositivos.</p>
+        <div className="flex flex-wrap gap-4">
+          {([{ value: 'dark', label: 'Oscuro · Noche' }, { value: 'light', label: 'Claro · Estudio' }] as const).map((option) => <label key={option.value} className="flex items-center gap-2">
+            <input type="radio" name="theme" value={option.value} checked={(profile?.theme_preference ?? 'dark') === option.value} onChange={async () => {
+              setThemeBusy(true); setThemeError(''); setThemeMessage('')
+              try { await setTheme(option.value); setThemeMessage('Tema guardado.') }
+              catch { setThemeError('No se pudo guardar el tema. Inténtalo de nuevo.') }
+              finally { setThemeBusy(false) }
+            }} />{option.label}
+          </label>)}
+        </div>
+        {themeBusy && <p role="status">Guardando tema…</p>}
+        {themeMessage && <p role="status">{themeMessage}</p>}
+        {themeError && <p role="alert" className="ui-feedback ui-feedback--error mt-3">{themeError}</p>}
+      </fieldset>
       <form className="ui-feedback space-y-5" onSubmit={submit} aria-busy={busy}>
         {notice && <p role="status">{notice}</p>}{error && <p role="alert" className="ui-feedback--error">{error}</p>}
         <div><label className="ui-label" htmlFor="profile-name">Nombre de usuario</label><input id="profile-name" className="ui-field" value={fullName} onChange={(event) => setFullName(event.target.value)} required maxLength={120} /></div>

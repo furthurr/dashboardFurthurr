@@ -4,6 +4,16 @@ La SPA sigue alojada en GitHub Pages. La administración privilegiada se ejecuta
 `admin-users`; el servidor remoto MCP se ejecuta en `mcp`. La firma privilegiada
 de adjuntos MCP ocurre solo en Edge, nunca en navegador, presets ni cliente MCP.
 
+## Preferencia de tema en perfiles — 2026-11-04
+
+Se aplicó la migración `202611040001_profile_theme.sql` sobre el proyecto remoto
+`furthurr'sDashboard` (`uujxatuuktccwkvavksr`) mediante `supabase db query --remote=...`:
+- Columna añadida: `public.profiles.theme_preference text not null default 'dark' check (theme_preference in ('dark', 'light'))`.
+- Privilegios: `grant update (theme_preference) on public.profiles to authenticated`.
+- Registro atómico en `supabase_migrations.schema_migrations` como versión `202611040001`.
+- Recarga de PostgREST ejecutada vía `notify pgrst, 'reload schema'`.
+- Comprobación: 7 cuentas existentes conservaron el valor `dark`, verificación de tipos/restricciones en `information_schema` y 210/210 pruebas de cliente superadas.
+
 ## Corrección del borrado de tableros — 2026-11-02
 
 La investigación de `PGRST202` confirmó en el proyecto remoto seleccionado que

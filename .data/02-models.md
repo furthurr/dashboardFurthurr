@@ -36,9 +36,10 @@ Correspondencia: `public.profiles`; extiende la identidad de `auth.users`.
 | `nickname` | `string \| null` | Sí | Puede identificar | Alias |
 | `role` | `UserRole` | No | Autorización | Por defecto `invitado` en SQL |
 | `is_active` | `boolean` | No | Estado de acceso | Default `true`; cambio administrativo, no equivale a borrado ni revocación JWT |
+| `theme_preference` | `'dark' \| 'light'` | No en SQL (`default 'dark'`), opcional en TS | Preferencia UI | Añadido en `202611040001_profile_theme.sql`; guarda `dark` (Noche) o `light` (Estudio) |
 | `created_at`, `updated_at` | `string` | TS requeridos; SQL permite null y asigna `now()` por defecto | No | Metadato |
 
-Fuente: `src/types/index.ts:7-17`, `supabase/migrations/202610190001_user_administration.sql:4-16`. El default de columna de rol es `invitado`; el trigger de alta y la función administrativa asignan `usuario` en el flujo actual.
+Fuente: `src/types/index.ts:7-18`, `supabase/migrations/202610190001_user_administration.sql:4-16`, `supabase/migrations/202611040001_profile_theme.sql:1-6`. El default de columna de rol es `invitado`; el trigger de alta y la función administrativa asignan `usuario` en el flujo actual.
 
 ## `McpIdentity` — respuesta de `whoami`
 

@@ -1,23 +1,38 @@
 # Colores
 
-## Estado vigente — rediseño local, 2026-10-16
+## Estado vigente — soporte dual Noche / Estudio, 2026-11-04
 
-Fuente de verdad: `src/index.css:4-30`. Solo tema oscuro (`color-scheme: dark`); no se midió contraste ni se validó el renderizado.
+Fuente de verdad: `src/index.css:4-53`. El tema por defecto es **Oscuro · Noche** (`:root` con `color-scheme: dark`) y el alternativo es **Claro · Estudio** (`:root[data-theme='light']` con `color-scheme: light`), seleccionable desde el perfil de usuario.
 
-| Token CSS (`--color-…`) | Hex | Uso en el rediseño |
+### Tema Oscuro · Noche (`:root`)
+
+| Token CSS (`--color-…`) | Hex | Uso |
 | --- | --- | --- |
-| `primary` / `primary-hover` / `on-primary` | `#4f46e5` / `#4338ca` / `#ffffff` | Acción primaria sólida; hover y texto sobre primario |
-| `secondary` / `accent` | `#818cf8` / `#6ee7b7` | Borde de tab activo/hover primario; acento declarado |
-| `background` / `surface` | `#101116` / `#181a22` | Página/campos; paneles, columnas y listas |
-| `surface-elevated` / `surface-hover` | `#21242f` / `#2b2f3d` | Pie de diálogo, tab activo, controles; hover/avatar |
-| `border` / `border-strong` | `#383d4e` / `#656d85` | Divisores/superficies; contornos de controles y diálogo |
-| `text` / `text-muted` | `#f3f4fa` / `#adb4c8` | Texto principal/secundario y placeholder |
-| `link` / `focus` | `#b0b8ff` / `#b0b8ff` | Enlaces y outline global |
-| `danger` / `danger-surface` / `danger-border` | `#fda4af` / `#351e2a` / `#864353` | Error, acción destructiva y confirmación |
-| `success` / `success-surface` | `#6ee7b7` / `#16352e` | Feedback de éxito |
-| `warning` | `#fcd58a` | Notas especiales |
-| `priority-urgent` / `priority-high` | `#fda4af` / `#fdba74` | Prioridades urgente/alta |
-| `priority-normal` / `priority-low` | `#a5b4fc` / `#6ee7b7` | Prioridades normal/baja |
+| `primary` / `primary-hover` / `on-primary` | `#b8d78c` / `#cbe6a3` / `#1c2a1c` | Acción primaria sólida con texto contrastado oscuro |
+| `secondary` / `accent` | `#b8d78c` / `#b8d78c` | Enlaces, acentos y tabs |
+| `background` / `surface` | `#161c1d` / `#1d2524` | Fondo de aplicación y superficies primarias |
+| `surface-elevated` / `surface-hover` | `#252d2d` / `#34413c` | Cards del tablero, diálogo, controles elevados e interacción hover |
+| `border` / `border-strong` | `#394542` / `#798d80` | Separadores de columnas/tarjetas y contornos acentuados |
+| `text` / `text-muted` | `#eff3eb` / `#b5c2b8` | Texto principal y texto secundario/placeholder |
+| `link` / `focus` | `#c5e9ad` / `#c5e9ad` | Enlaces y anillos de foco accesibles |
+| `danger` / `danger-surface` / `danger-border` | `#fda4af` / `#351e2a` / `#864353` | Errores y acciones destructivas |
+| `success` / `success-surface` | `#6ee7b7` / `#16352e` | Feedback de confirmación |
+
+### Tema Claro · Estudio (`:root[data-theme='light']`)
+
+| Token CSS (`--color-…`) | Hex | Uso |
+| --- | --- | --- |
+| `primary` / `primary-hover` / `on-primary` | `#9b3b29` / `#772b1d` / `#ffffff` | Acción primaria cálida terracota con texto blanco |
+| `secondary` / `accent` | `#9b3b29` / `#803a2b` | Acentos editoriales cálidos |
+| `background` / `surface` | `#f4eee6` / `#fffaf3` | Fondo pergamino cálido y tarjetas marfil |
+| `surface-elevated` / `surface-hover` | `#eee4d9` / `#e6d9cc` | Paneles elevados y hover suave |
+| `border` / `border-strong` | `#d4c5b6` / `#998478` | Delimitadores y bordes de columna |
+| `text` / `text-muted` | `#382d2b` / `#6f5d56` | Tipografía principal sepia oscuro y secundario |
+| `link` / `focus` | `#853a29` / `#883c2a` | Enlaces y foco visible contrastado |
+| `danger` / `danger-surface` / `danger-border` | `#982d36` / `#fbe7e4` / `#b96a6b` | Alertas y errores en tono rubí suave |
+| `success` / `success-surface` | `#235c42` / `#e0f0e3` | Mensajes de éxito en verde bosque |
+| `priority-urgent` / `priority-high` | `#9b2b38` / `#8f4511` | Prioridades urgentes/altas adaptadas |
+| `priority-normal` / `priority-low` | `#68487e` / `#286445` | Prioridades normales/bajas adaptadas |
 
 - Consumo compartido: botones/campos/feedback/enlaces en `src/index.css:75-135`; estados hover solo bajo `@media (hover: hover)` en `src/index.css:171-178`. `primary-hover` ya tiene consumo explícito.
 - Prioridades: `PRIORITY_COLORS` referencia variables, no hex locales (`src/features/board/constants.ts:11-16`); la card muestra además «Prioridad …», sin depender solo del color (`src/features/board/TaskCard.tsx:58-63`).

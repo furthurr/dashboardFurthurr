@@ -1,4 +1,5 @@
 export type UserRole = 'admin' | 'usuario' | 'invitado'
+export type ThemePreference = 'dark' | 'light'
 
 export type TaskStatus = 'backlog' | 'por_hacer' | 'haciendo' | 'en_revision' | 'finalizadas'
 
@@ -10,6 +11,7 @@ export interface Profile {
   email: string
   avatar_url: string | null
   nickname: string | null
+  theme_preference?: ThemePreference
   role: UserRole
   is_active: boolean
   created_at: string
