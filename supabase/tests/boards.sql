@@ -1,4 +1,4 @@
--- Privileged connection after 202610260002_delete_inactive_boards.sql. No fixtures persist.
+-- Privileged connection after 202611060001_inactive_board_readonly.sql. No fixtures persist.
 begin;
 select set_config('app.board_admin', gen_random_uuid()::text, true);
 select set_config('app.board_user', gen_random_uuid()::text, true);
@@ -69,7 +69,9 @@ begin
   exception when unique_violation then null; end;
 end $$;
 
--- Board lifecycle: the admin sees deactivated boards, renames them and counts
+-- Seed while active, then test the admin's read-only inactive access and counts.
+select public.set_board_active(current_setting('app.board_archived')::uuid, true);
+-- Board lifecycle: the admin sees deactivated boards, renames active ones and counts
 -- their pending tasks; members lose access while the board stays deactivated.
 select set_config('app.archived_task', public.create_task_with_assignees(current_setting('app.board_archived')::uuid,
   'Archived task', null, 'backlog', 'normal', array[current_setting('app.board_outsider')::uuid])->>'id', true);
@@ -80,6 +82,7 @@ values(current_setting('app.archived_task')::uuid, current_setting('app.board_ad
   'https://example.test/storage/v1/object/public/task-attachments/' || current_setting('app.archived_task') || '/board-delete.txt', 1, 'text/plain');
 insert into storage.objects(bucket_id, name)
 values('task-attachments', current_setting('app.archived_task') || '/board-delete.txt');
+select public.set_board_active(current_setting('app.board_archived')::uuid, false);
 do $$
 begin
   if (select count(*) from public.list_boards_with_pending_counts() where id = current_setting('app.board_archived')::uuid) <> 1 then
@@ -115,7 +118,7 @@ begin
   begin
     perform public.delete_inactive_board(current_setting('app.board_source')::uuid);
     raise exception 'Active board deletion was accepted';
-  exception when object_not_in_prerequisite_state then null; end;
+  exception when insufficient_privilege then null; end;
 end $$;
 
 -- Simulate a flat-path attachment predating the migration; do not rewrite it.
@@ -278,9 +281,11 @@ end $$;
 reset role;
 
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('app.board_admin'), 'role', 'authenticated')::text, true);
-set local role authenticated;
+-- Whole-board deletion now uses service-only prepare/finish with Storage API in between.
+select public.prepare_board_deletion(current_setting('app.board_archived')::uuid, current_setting('app.board_admin')::uuid);
+delete from storage.objects where name = current_setting('app.archived_task') || '/board-delete.txt';
 do $$ begin
-  perform public.delete_inactive_board(current_setting('app.board_archived')::uuid);
+  perform public.finish_board_deletion(current_setting('app.board_archived')::uuid, current_setting('app.board_admin')::uuid);
   if exists(select 1 from public.boards where id = current_setting('app.board_archived')::uuid)
     or exists(select 1 from public.board_members where board_id = current_setting('app.board_archived')::uuid)
     or exists(select 1 from public.tasks where id = current_setting('app.archived_task')::uuid)

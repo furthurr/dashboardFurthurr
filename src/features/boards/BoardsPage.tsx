@@ -42,8 +42,8 @@ export function BoardsPage() {
             </>}
     </section>
     {creating && <CreateBoardDialog onClose={() => setCreating(false)} />}
-    {managing && admin && <MembersDialog board={managing} onClose={() => setManaging(null)} />}
-    {renaming && admin && <RenameBoardDialog board={renaming} onClose={() => setRenaming(null)} />}
+    {managing && admin && boards.data?.some((board) => board.id === managing.id && board.is_active) && <MembersDialog board={managing} onClose={() => setManaging(null)} />}
+    {renaming && admin && boards.data?.some((board) => board.id === renaming.id && board.is_active) && <RenameBoardDialog board={renaming} onClose={() => setRenaming(null)} />}
     {toggling && admin && <ToggleBoardDialog board={toggling} onClose={() => setToggling(null)} />}
     {deleting && admin && !deleting.is_active && <DeleteBoardDialog board={deleting} onClose={() => setDeleting(null)} />}
   </main>
@@ -78,8 +78,8 @@ function BoardSection({ title, description, boards, admin, onManage, onRename, o
             })}
           </ul>
           {admin && <div className="flex flex-wrap gap-2">
-            <button className="ui-button ui-button--sm" aria-label={`Gestionar miembros de ${board.name}`} onClick={() => onManage(board)}>Gestionar miembros</button>
-            <button className="ui-button ui-button--sm" aria-label={`Cambiar nombre de ${board.name}`} onClick={() => onRename(board)}>Cambiar nombre</button>
+            {board.is_active && <button className="ui-button ui-button--sm" aria-label={`Gestionar miembros de ${board.name}`} onClick={() => onManage(board)}>Gestionar miembros</button>}
+            {board.is_active && <button className="ui-button ui-button--sm" aria-label={`Cambiar nombre de ${board.name}`} onClick={() => onRename(board)}>Cambiar nombre</button>}
             <button className={board.is_active ? 'ui-button ui-button--sm ui-button--danger' : 'ui-button ui-button--sm'}
               aria-label={`${board.is_active ? 'Desactivar' : 'Activar'} ${board.name}`} onClick={() => onToggle(board)}>{board.is_active ? 'Desactivar' : 'Activar'}</button>
             {!board.is_active && <button className="ui-button ui-button--sm ui-button--danger"
@@ -108,23 +108,16 @@ export function getCreateBoardErrorMessage(cause: unknown): string {
 }
 
 export function getBoardUpdateErrorMessage(cause: unknown): string {
+  if ((cause as { code?: string })?.code === '55000') return 'El tablero está desactivado o tiene un borrado pendiente. Reactívalo antes de editarlo; si el borrado ya comenzó, reintenta «Eliminar tablero».'
   return describeBoardError(cause, 'No se pudo actualizar el tablero')
 }
 
 export function getBoardDeleteErrorMessage(cause: unknown): string {
+  if ((cause as { code?: string })?.code === 'BOARD_DELETE_SERVICE_ERROR' && cause instanceof Error) return cause.message
   const error = cause as { code?: string }
   if (error?.code === '55000') return 'Solo se pueden eliminar tableros desactivados.'
   if (error?.code === 'PGRST202') {
-    return 'Supabase no encuentra la función para eliminar tableros. Aplica la migración 202610260002_delete_inactive_boards.sql en el proyecto; si ya está aplicada, recarga el esquema de PostgREST.'
-  }
-  if (error?.code === 'BOARD_ATTACHMENTS_DELETE_FAILED') {
-    return 'No se pudo completar el borrado porque falló la limpieza de adjuntos. El tablero y sus tareas siguen; algunos archivos podrían haberse eliminado. Inténtalo de nuevo.'
-  }
-  if (error?.code === 'BOARD_ATTACHMENT_PATH_INVALID') {
-    return 'No se pudo identificar la ruta de uno de los archivos adjuntos. El tablero y sus tareas no se eliminaron.'
-  }
-  if (error?.code === 'BOARD_DELETE_FAILED_AFTER_STORAGE') {
-    return 'No se pudo eliminar el tablero en la base de datos. El tablero y sus tareas siguen, pero sus archivos adjuntos ya se eliminaron.'
+    return 'Comprueba la migración 202611060001_inactive_board_readonly.sql, la recarga de PostgREST y el despliegue de board-delete. No utilices el borrado directo anterior.'
   }
   return describeBoardError(cause, 'No se pudo eliminar el tablero')
 }

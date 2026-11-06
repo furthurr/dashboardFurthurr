@@ -11,10 +11,12 @@ Solo servidor Edge, nunca en el build Vite:
 
 | Variable | Uso | Configuración |
 | --- | --- | --- |
-| `SUPABASE_URL` | Proyecto que usa `admin-users` | Entorno de funciones Supabase; `<project-url>` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Administración; MCP la usa solo en Edge para firmar/descargar adjuntos ya autorizados y validados | Secreto del entorno servidor; `<server-secret>`, nunca `VITE_*`, cliente MCP ni documentación de valores |
+| `SUPABASE_URL` | Proyecto que usa `admin-users` y `board-delete` | Entorno de funciones Supabase; `<project-url>` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Administración; borrado de tableros; MCP la usa solo en Edge para firmar/descargar adjuntos ya autorizados y validados | Secreto del entorno servidor; `<server-secret>`, nunca `VITE_*`, cliente MCP ni documentación de valores |
 
-Fuente: `supabase/functions/admin-users/index.ts:20-23`. Los placeholders no representan valores desplegados.
+Fuente: `supabase/functions/admin-users/index.ts:20-23`, `supabase/functions/board-delete/index.ts:19-21`. Los placeholders no representan valores desplegados.
+
+`board-delete` usa la credencial de servicio **solo en servidor** para ejecutar las RPCs `prepare_board_deletion` / `finish_board_deletion` (concedidas solo a `service_role`) y para eliminar objetos del bucket `task-attachments`. La identidad del actor se deriva del bearer verificado por `auth.getUser`, nunca del cuerpo de la petición (`supabase/functions/board-delete/index.ts:16-54`).
 
 MCP consulta identidad/tareas/adjuntos y mutaciones acotadas con `SUPABASE_ANON_KEY`
 y bearer OAuth individual, con `role=mcp_identity`. El lector de adjuntos firma y
@@ -40,6 +42,7 @@ sin un plan aparte de rotación de claves. DCR está activado para los clientes 
 
 ## Build/deploy observado
 
+- **Estado 2026-11-06 (publicado en `v0.16.0`, sin desplegar en Supabase):** la migración `202611060001_inactive_board_readonly.sql` y la Edge Function `board-delete` están versionadas, pero **no están aplicadas ni desplegadas en remoto**. `supabase/config.toml` declara `[functions.board-delete]` con `verify_jwt = false`: la comprobación del bearer la hace el propio handler. El push a `main` publica la SPA en GitHub Pages, pero Pages no despliega SQL ni funciones: hasta que la función esté desplegada, el borrado de tableros desde la SPA publicada sigue usando el flujo antiguo; aplicar la migración sin desplegar la Edge deja el borrado cerrado de forma explícita. Coordinar los tres pasos en una ventana de mantenimiento ([guía](../docs/tableros-solo-lectura.md)).
 - Pages: [run 41576684027](https://github.com/furthurr/dashboardFurthurr/actions/runs/41576684027) terminó correctamente para `f501082` / `v0.14.0`. El backend no se verificó de nuevo. Las observaciones siguientes son históricas del 2026-10-29 salvo indicación distinta.
 - Fase 2 activada en el proyecto acordado: solo `202610280003` aplicada/registrada;
   `mcp` **Edge v3 ACTIVE**, `verify_jwt=false`, código remoto coincidente con el
@@ -100,3 +103,26 @@ sin un plan aparte de rotación de claves. DCR está activado para los clientes 
 - No añadir valores reales a este documento, a `.data/` ni a ejemplos versionados.
 - No leer ni copiar el contenido de `.env.local`.
 - Los nombres son coherentes con la inicialización real del cliente y el workflow; no usar `VITE_SUPABASE_KEY` (`src/lib/supabase.ts:3-10`).
+
+## Arranque local protegido — 2026-11-06
+
+Vite da prioridad a las variables de entorno heredadas del shell sobre la
+configuración local del proyecto (`.env.local`). Para que el desarrollo local use
+siempre la configuración local, `npm run dev` ya no invoca `vite` directamente: ejecuta
+`scripts/dev.mjs`, que elimina `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`
+del entorno **del proceso hijo** antes de cargar la CLI de Vite.
+
+| Aspecto | Comportamiento observado |
+| --- | --- |
+| Script | `npm run dev` → `node scripts/dev.mjs` (`package.json:6-9`) |
+| Limpieza | `clearInheritedSupabase(environment)` borra ambas claves del objeto de entorno y devuelve si había configuración heredada (`scripts/dev-environment.mjs:1-9`) |
+| Trazabilidad | Si había variables heredadas, se informa por `console.info` **sin mostrar sus valores** (`scripts/dev.mjs:6-8`) |
+| Alcance | No modifica el entorno del shell padre ni el de otros procesos |
+| Ejecución de Vite | Se importa la CLI instalada de Vite en el mismo proceso, conservando flags, señales y códigos de salida (`scripts/dev.mjs:10-14`) |
+| Pruebas | `npm run test:dev-env` (`node --test scripts/test-dev-environment.mjs`), 4/4 correctas |
+| Lint | `eslint.config.js` incluye un bloque para `scripts/**/*.mjs` con `js.configs.recommended` y globals de Node |
+
+Este mecanismo **no** cambia la configuración de CI ni de Pages: el workflow de
+despliegue sigue pasando las variables desde sus secretos. Tampoco sustituye a
+`.env.local`: si el archivo local no existe, la aplicación fallará al inicializar el
+cliente, que es el comportamiento esperado (`src/lib/supabase.ts:3-10`).

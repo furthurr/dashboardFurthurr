@@ -11,6 +11,7 @@ Documentación canónica de arquitectura. Lee este archivo antes de cambiar lím
 - Actualización focalizada: consentimiento unificado MCP contrastado con el árbol local el 2026-10-31, incluido en `59da99331532d6fbc952d2e9735d18ef32a0a19d`. `202610300001` es prerrequisito incremental de `202610300002`. Una sesión anterior observó lectura e inicio automáticos; no identifica la versión remota ni acredita flujo E2E completo.
 - Revisión incremental 2026-11-01: el cambio de `BoardsPage` versionado en `6c5b292` añade orientación ante `PGRST202`, sin cambiar límites ni diagrama; está incluido en Pages `v0.14.0`.
 - Revisión focalizada 2026-11-02: la operación remota registrada en [schema de datos](../.data/04-schema.md#corrección-focalizada-del-borrado--2026-11-02) aplicó `202610260002`; no se repitió la consulta remota en esta revisión. El editor de nombres versionado en `ba13bfe` no altera límites arquitectónicos.
+- **Actualización focalizada 2026-11-06 (publicada en `v0.16.0`):** tableros desactivados en **solo lectura** garantizada en servidor y borrado permanente **solo en servidor** mediante la Edge Function `board-delete`. La migración `202611060001_inactive_board_readonly.sql` **no está aplicada en remoto** y `board-delete` **no está desplegada**; el push a `main` publica la SPA en GitHub Pages, pero Pages no despliega SQL ni Edge Functions, así que el entorno desplegado conserva el comportamiento anterior. Decisión: [ADR 0007](decisions/0007-borrado-tablero-solo-servidor.md).
 - Última evidencia remota registrada (no repetida aquí): `202610290001_mcp_workflow.sql` aplicada y registrada, `mcp` Edge **v4 ACTIVE** (aplicación `0.3.0`, `verify_jwt=false`) y Pages run `40963945319` con `0ebb61d` (`v0.13.0`). El ledger remoto sigue divergiendo para migraciones históricas; ver [schema de datos](../.data/04-schema.md). La preparación y los pendientes están en [la guía de prueba](../docs/prueba-mcp.md).
 - Commit base de implementación y primera sincronización: `eb25418de42c045d6be32a3091f8bb3f36b24ba0`.
 - Las verificaciones remotas fechadas de 2026-10-21/22 y la publicación `v0.6.0` se conservan como historial; no prueban el estado remoto de los cambios locales actuales.
@@ -27,7 +28,8 @@ Documentación canónica de arquitectura. Lee este archivo antes de cambiar lím
 - **Datos y permisos:** cada tarea tiene un tablero. El portal local permite acceso por membresía **o asignación** en un tablero activo, además del acceso de admin activo (`supabase/migrations/202610280001_board_assignment_access.sql:4-42`). El MCP es deliberadamente más estricto: no admin requiere membresía explícita y tablero activo; la asignación sola no basta (`supabase/migrations/202610280003_mcp_task_read.sql:78-88`). No sustituir la comprobación MCP por el helper más amplio del portal. RLS del portal y comprobaciones `SECURITY DEFINER` de MCP son fronteras distintas.
 - **Perfil y avatar:** `profiles.avatar_url` referencia una imagen pública del bucket `avatars`; el cliente valida JPG/PNG/WebP hasta 2 MB, carga al path `<profile-id>/avatar` y actualiza el perfil (`src/features/users/avatarApi.ts:3-35`, `supabase/migrations/202610260003_profile_avatars.sql:5-10`). El bucket es público. En remoto se comprobaron las dos policies de escritura de avatar; la migration `202610260003` no consta en el ledger remoto, así que no se afirma que se haya aplicado como migration.
 - **Ciclo de vida en la base de datos:** `boards.is_active` activa/desactiva un tablero sin borrar contenido ni membresías. Tres RPCs `SECURITY DEFINER` con `search_path = ''` lo sostienen: `list_boards_with_pending_counts` (catálogo visible con conteo de pendientes), `rename_board` y `set_board_active` (solo admin). La policy de lectura de `boards` no invoca funciones que lean `boards`, para no reintroducir la recursión que corrigió `202610220001_board_access_returning.sql` (`supabase/migrations/202610220002_board_lifecycle.sql:7-90`).
-- **Borrado permanente:** el selector permite al admin eliminar solo un tablero desactivado; el cliente limpia sus objetos del bucket de adjuntos por lotes y después invoca `delete_inactive_board`, que vuelve a comprobar admin/estado y elimina tareas y tablero en una transacción. Storage y Postgres no forman una transacción común (`src/features/boards/api.ts:69-145`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-25`). La RPC faltaba en la consulta del 2026-10-28; la operación registrada el 2026-11-02 aplicó la migración focalizada. No se verificaron navegador autenticado ni Storage real. La UI de `6c5b292` traduce `PGRST202` y está incluida en Pages `v0.14.0`.
+- **Borrado permanente:** el selector permite al admin eliminar solo un tablero desactivado. Desde la revisión local del 2026-11-06 el borrado es **exclusivamente de servidor**: la SPA invoca la Edge Function `board-delete`, que verifica la sesión del portal, rechaza sesiones OAuth, exige admin activo y coordina `prepare_board_deletion` / `finish_board_deletion` (service-only) con la eliminación de objetos en Storage. El cliente ya no enumera rutas ni borra objetos, y `delete_inactive_board` queda revocada. Storage y Postgres siguen sin transacción común; el reintento administrativo completa la operación. La RPC `delete_inactive_board` faltaba en la consulta del 2026-10-28 y la operación registrada el 2026-11-02 aplicó la migración focalizada `202610260002`; esa vía queda **retirada** por la nueva migración local. No se verificaron navegador autenticado ni Storage real. [ADR 0007](decisions/0007-borrado-tablero-solo-servidor.md).
+- **Tableros desactivados en solo lectura (local, 2026-11-06):** `boards.is_active = false` deja el tablero y sus tareas, comentarios, responsables y adjuntos en solo lectura **para todos los roles, incluido el administrador activo**. La garantía vive en policies restrictivas de Postgres/Storage (`lock_writable_board`, `lock_writable_task`, `lock_writable_task_object`) y en guardas de las RPCs `SECURITY DEFINER` que revalidan `lock_writable_*` antes de delegar en las validaciones originales. La interfaz solo refleja esa regla: oculta alta, arrastre, movimiento, edición, comentarios y adjuntos, y muestra un aviso de solo lectura. La regla es la frontera efectiva; un cliente que omita React recibe el mismo rechazo (`55000`).
 - **Regla de dependencias observada:** las páginas de feature pueden usar sus hooks/API locales, tipos compartidos y el cliente en `src/lib/`; la inicialización y el routing viven en `App.tsx` (`src/App.tsx:1-40`, `src/features/board/api.ts:1-21`). No asumir una separación por capas que el código actual no implementa.
 - **Fuentes de verdad:** `specs/` contiene la intención funcional y las decisiones de producto (`AGENTS.md:33-40`); `supabase-schema.sql` es el schema SQL de referencia según `AGENTS.md:68-70`; el código actual describe el comportamiento implementado. Las carpetas `.data/` y `.design/` documentan sus respectivos dominios sin reemplazar esas fuentes.
 
@@ -42,6 +44,9 @@ flowchart LR
   browser <-->|Auth, PostgREST y Storage| supabase[(Supabase<br/>Auth + PostgreSQL + Storage)]
   browser -->|JWT verificado + acciones administrativas| edge[Supabase Edge Function<br/>admin-users]
   edge -->|API administrativa y perfiles| supabase
+  browser -->|bearer de sesión + boardId| boarddel[Supabase Edge Function<br/>board-delete]
+  boarddel -->|prepara manifiesto y borra objetos| supabase
+  boarddel -->|elimina objetos en lotes de 100| files[(Storage privado<br/>task-attachments)]
   browser -->|RPC autenticado| rpc[Funciones Postgres<br/>tableros, ciclo de vida, borrado, tareas y asignaciones]
   rpc -->|transacción y permisos explícitos| supabase
   browser -->|Storage público + actualización avatar_url| avatars[(Bucket avatars)]
@@ -99,7 +104,9 @@ flowchart LR
 | Políticas de edición compartida | Permisos por columna en `tasks` y policy de `UPDATE` para todo autenticado activo | `supabase/migrations/202610200002_shared_task_editing.sql:1-19` |
 | Políticas de tableros | Membresías, aislamiento RLS de datos/Storage y RPCs para creación, traslado y gestión de miembros | `supabase/migrations/202610210001_boards.sql` |
 | Ciclo de vida de tableros | Columna `boards.is_active`, RPCs `rename_board`/`set_board_active`/`list_boards_with_pending_counts` y policies reescritas sin recursión RLS | `supabase/migrations/202610220001_board_access_returning.sql`, `supabase/migrations/202610220002_board_lifecycle.sql` |
-| Borrado de tablero inactivo | El cliente elimina primero adjuntos de Storage y llama a RPC admin que vuelve a validar estado inactivo y borra tareas/tablero con cascadas relacionales | `src/features/boards/api.ts:69-145`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-25` |
+| Borrado de tablero inactivo | **Solo en servidor** (local, 2026-11-06): la SPA invoca la Edge Function `board-delete`, que valida sesión del portal y admin activo, prepara un manifiesto en `board_deletion_jobs`, borra objetos de Storage y confirma el borrado relacional. `delete_inactive_board` queda revocada | `supabase/functions/board-delete/index.ts:1-63`, `supabase/migrations/202611060001_inactive_board_readonly.sql:124-170`, `src/features/boards/api.ts` |
+| Solo lectura de tableros inactivos | Policies restrictivas de escritura en `tasks`, `task_assignees`, `comments`, `task_attachments` y `storage.objects`, más guardas `lock_writable_*` en las RPCs de escritura; aplica también al admin activo | `supabase/migrations/202611060001_inactive_board_readonly.sql:13-111`, `src/features/board/BoardPage.tsx` |
+| Arranque local protegido | `scripts/dev.mjs` elimina las variables Supabase heredadas antes de cargar Vite, para que la configuración local del proyecto sea la efectiva; `npm run test:dev-env` cubre el comportamiento | `scripts/dev.mjs:1-14`, `scripts/dev-environment.mjs:1-9`, `package.json:6-9` |
 
 TanStack Query está configurado en `src/App.tsx` con `staleTime` de cinco minutos y un reintento (`src/App.tsx:10-17`); las queries de tareas, comentarios y adjuntos se definen junto a la feature correspondiente (`src/features/board/api.ts:24-29`, `src/features/board/commentsApi.ts:19-24`, `src/features/board/attachmentsApi.ts:16-22`). El tablero permite mover tareas con dnd-kit y dispone de sensor de teclado (`src/features/board/BoardPage.tsx:56-65`, `src/features/board/BoardPage.tsx:97-147`).
 
@@ -148,13 +155,16 @@ TanStack Query está configurado en `src/App.tsx` con `staleTime` de cinco minut
 3. Renombrar y activar/desactivar se ejecutan como RPC `SECURITY DEFINER` que vuelven a comprobar el rol admin en servidor: `rename_board` recorta y valida 1–120 caracteres; `set_board_active` alterna `is_active` sin borrar tareas, comentarios, adjuntos ni membresías (`supabase/migrations/202610220002_board_lifecycle.sql:38-66`).
 4. El efecto sobre el acceso no depende de la UI: `can_access_board` exige tablero activo para los miembros, y la policy restrictiva por tablero se apoya en ella. Un tablero desactivado deja de ser visible y accesible para sus miembros, también por URL directa, mientras el admin activo conserva el acceso y puede reactivarlo (`supabase/migrations/202610220002_board_lifecycle.sql:26-36`).
 5. Un tablero desactivado tampoco es destino válido de un traslado: la interfaz filtra por `is_active` y la RPC de traslado vuelve a comprobar el acceso al destino (`src/features/board/BoardPage.tsx:411`).
+6. **Solo lectura (local, 2026-11-06).** Con `is_active = false` el tablero queda en solo lectura para todos los roles, incluido el admin activo. Postgres lo impone con policies restrictivas de escritura sobre `tasks`, `task_assignees`, `comments`, `task_attachments` y `storage.objects`, y con guardas `lock_writable_*` en las RPCs de escritura; la interfaz solo refleja la regla y muestra el aviso «Tablero desactivado: solo lectura. Actívalo para realizar cambios.» (`supabase/migrations/202611060001_inactive_board_readonly.sql:13-111`, `src/features/board/BoardPage.tsx`).
 
-### Borrado permanente de tableros desactivados
+### Borrado permanente de tableros desactivados (solo en servidor, local 2026-11-06)
 
 1. Solo el administrador activo ve la acción de eliminar; el diálogo advierte que tablero, tareas, comentarios, asignaciones y adjuntos no se pueden recuperar (`src/features/boards/BoardsPage.tsx:33-43,64-71,187-207`).
-2. El cliente vuelve a leer `is_active` y se detiene antes de tocar Storage si el tablero está activo. Después pagina tareas/adjuntos, deriva y deduplica paths y elimina los objetos en lotes de 100 (`src/features/boards/api.ts:69-120`).
-3. La RPC `delete_inactive_board` vuelve a comprobar admin activo, ID y estado del tablero bajo bloqueo de fila; elimina las tareas y luego el tablero. Las relaciones de tarea se eliminan por cascada; la FK de tarea a tablero es `RESTRICT` (`supabase/migrations/202610260002_delete_inactive_boards.sql:5-25`).
-4. La limpieza de Storage y la transacción SQL son operaciones separadas: un error de Storage detiene la RPC, pero una falla posterior de Postgres puede dejar los objetos ya borrados con metadata/tareas conservadas. La UI informa ese caso y permite reintentar; no hay atomicidad distribuida (`src/features/boards/api.ts:110-131`, `src/features/boards/BoardsPage.tsx:98-110`).
+2. La SPA ya **no enumera tareas ni adjuntos** ni borra objetos: envía `{ boardId }` a la Edge Function `board-delete` mediante `supabase.functions.invoke` y no existe fallback a Storage ni a RPC (`src/features/boards/api.ts`).
+3. `board-delete` exige un bearer `Bearer` válido, verifica la identidad con `auth.getUser`, **rechaza sesiones OAuth** (`client_id` presente o `role != authenticated`) y exige perfil `admin` activo antes de tocar nada (`supabase/functions/board-delete/index.ts:16-32`).
+4. La Edge llama a `prepare_board_deletion` (service-only), que bloquea la fila del tablero, exige que esté inactivo y guarda en `board_deletion_jobs` el manifiesto de rutas del bucket fijo `task-attachments`; después borra esos objetos en lotes de 100 y llama a `finish_board_deletion`, que comprueba que no queden objetos del manifiesto y elimina tareas y tablero (`supabase/migrations/202611060001_inactive_board_readonly.sql:124-166`).
+5. No hay atomicidad distribuida: si falla la limpieza, el tablero permanece visible para el admin, inactivo y con sus metadatos, algunos archivos pueden haber desaparecido y la **reactivación queda bloqueada** por el trigger `board_deletion_pending`. Reintentar «Eliminar tablero» reutiliza el manifiesto y completa la operación; otro admin activo también puede reintentar. No hay worker automático (`supabase/migrations/202611060001_inactive_board_readonly.sql:113-122`, `supabase/functions/board-delete/README.md`).
+6. `delete_inactive_board` queda revocada para `public`, `anon` y `authenticated`: no hay vía cliente de borrado (`supabase/migrations/202611060001_inactive_board_readonly.sql:169-170`).
 
 ### Gestión de avatares
 
@@ -172,7 +182,7 @@ La creación usa `create_task_with_assignees(p_board_id, ...)`: deriva propietar
 
 ## 5. Despliegue y operación
 
-El workflow `.github/workflows/deploy.yml` compila la SPA en GitHub Actions y publica `dist` en Pages (`.github/workflows/deploy.yml:17-53`). Para trabajo local, `npm run dev` inicia Vite, `npm run build` ejecuta TypeScript y Vite, `npm run lint` ejecuta ESLint y `npm run preview` sirve el build local (`package.json:6-10`). La configuración de Pages y el prefijo de URL están acoplados al `base` de Vite y al `HashRouter` (`vite.config.ts:6-13`, `src/App.tsx:1-37`).
+El workflow `.github/workflows/deploy.yml` compila la SPA en GitHub Actions y publica `dist` en Pages (`.github/workflows/deploy.yml:17-53`). Para trabajo local, `npm run dev` inicia Vite a través de `scripts/dev.mjs` (elimina las variables Supabase heredadas antes de cargar la CLI de Vite), `npm run build` ejecuta TypeScript y Vite, `npm run lint` ejecuta ESLint, `npm run preview` sirve el build local y `npm run test:dev-env` verifica la protección del arranque (`package.json:6-11`). La configuración de Pages y el prefijo de URL están acoplados al `base` de Vite y al `HashRouter` (`vite.config.ts:6-13`, `src/App.tsx:1-37`).
 
 Ese workflow **no despliega SQL ni Edge Functions**. En instalaciones existentes se aplican migraciones pendientes y se configuran Auth/funciones por separado, según [la guía operativa](../supabase/README.md); nunca reejecutar el bootstrap sobre una base existente.
 
@@ -211,6 +221,9 @@ El ciclo de vida de tableros añadió `202610220001_board_access_returning.sql` 
 - El ciclo de vida de tableros sigue el mismo patrón: la visibilidad de los controles (secciones, botones) es solo una ayuda de interfaz; la autorización efectiva la aplican la RPC `SECURITY DEFINER` y las policies de Postgres. Un cliente que omita la capa React obtiene el mismo rechazo (`42501`) y la misma pérdida de acceso al tablero desactivado (`supabase/migrations/202610220002_board_lifecycle.sql:15-24,44,60`).
 - `task-attachments` es privado y los enlaces firmados expiran; enlaces ya emitidos o datos descargados no se revocan retroactivamente mediante RLS.
 - El borrado permanente de un tablero cruza Storage y Postgres sin transacción distribuida. Si falla una fase, los objetos pueden quedar parcialmente eliminados mientras el tablero siga en base; la UI diferencia fallos de limpieza y fallos posteriores de la RPC (`src/features/boards/api.ts:110-131`).
+- **Solo lectura de tableros inactivos (publicada en `v0.16.0`, 2026-11-06):** la regla se aplica en Postgres/Storage, no en la interfaz. Un cliente que omita la capa React recibe el mismo rechazo (`55000`) en las RPCs de escritura y en las policies restrictivas. El admin activo tampoco puede escribir en un tablero desactivado: desactivar es un estado de solo lectura para todos. La migración no está aplicada en remoto, por lo que esta frontera **no existe todavía en el entorno desplegado**.
+- **Borrado solo en servidor (local, 2026-11-06):** `board-delete` no está desplegada y `delete_inactive_board` sigue revocada solo en el árbol local. Hasta que la migración y la Edge estén activas en el entorno real, el borrado desde la SPA publicada sigue usando el flujo antiguo; aplicar la migración sin desplegar la Edge deja el borrado cerrado de forma explícita. Coordinar migración, despliegue de la función y publicación de la SPA en una ventana de mantenimiento.
+- **Arranque local protegido:** `npm run dev` ejecuta `scripts/dev.mjs`, que elimina `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` del entorno heredado antes de cargar Vite, porque Vite da prioridad a las variables heredadas sobre la configuración local del proyecto. El script no registra valores ni modifica el entorno del shell padre; `npm run test:dev-env` cubre el comportamiento (`scripts/dev.mjs:1-14`, `scripts/dev-environment.mjs:1-9`).
 - El bucket `avatars` es público: las policies de la migración local restringen escrituras, pero las imágenes cargadas son de lectura pública. No almacenar contenido sensible en avatares (`supabase/migrations/202610260003_profile_avatars.sql:5-10`).
 - El ledger de migraciones del Supabase actual no coincide con todos los objetos inspeccionados en el schema. No ejecutar una sincronización masiva basándose solo en los nombres de migración: verificar diffs de cada objeto y documentar/reconciliar antes de aplicar cambios.
 - Lectura MCP: permisos más estrictos que el acceso por asignación del portal; enlaces legacy no firmables y paginación por offset sin snapshot entre llamadas. La firma introduce una credencial privilegiada solo servidor, cuya integración real requiere prueba en Supabase; no hay auditoría de seguridad nueva en esta sincronización.
@@ -224,6 +237,24 @@ El ciclo de vida de tableros añadió `202610220001_board_access_returning.sql` 
 - **Resuelto**: la equivalencia de código no sustituía una prueba funcional, y esa prueba se ejecutó el 2026-10-22 en producción con una sesión real de administrador: la persona responsable del proyecto confirmó que **promover una cuenta a administrador desde «Usuarios» funciona correctamente** (botón «Hacer administrador»), tras el redespliegue verificado de `admin-users` en versión 4 con código idéntico al del repo (`supabase/functions/admin-users/index.ts:68`). Sin sesión, la función responde 401 con su propio mensaje (`supabase/functions/admin-users/index.ts:18`). Persisten los límites de esa evidencia: la comprobación fue **manual**, no automatizada, y no hay E2E automatizado con cuentas reales ni auditoría de accesibilidad.
 
 ## Evidencia de implementación y límites de esta revisión
+
+### Solo lectura y borrado solo en servidor — evidencia local, 2026-11-06
+
+Cambios publicados en `v0.16.0` sobre el baseline `acf85d7` / `v0.15.0`. La
+implementación registró 215 pruebas Vitest, 18 pruebas Deno de Edge (6 de
+`board-delete` y 12 de `admin-users`), 19 pruebas Deno MCP, 2 comprobaciones de
+paridad bootstrap, `npm run test:dev-env` (4/4), lint, build y `git diff --check`
+correctos. El harness SQL con PostgreSQL 16 desechable y Auth/Storage simulados pasó
+las suites en incremental y bootstrap, incluida la concurrencia de creación y
+desactivación. Los mocks de Edge **no son un E2E real** de Auth, OAuth ni Storage.
+
+**No acreditado:** la migración `202611060001_inactive_board_readonly.sql` no está
+aplicada en remoto, `board-delete` no está desplegada y no hay verificación en
+navegador autenticado. La tarea MCP asociada
+(`0906a24f-3a74-4026-bcec-8e3a0ed55962`) quedó en `en_revision` con
+`record_task_result` (`comment_id` `a4b5b102-d5f2-4e69-87e9-ce78d8eccfad`) y
+`submit_task_for_review` (`request_id` `50a64657-3bdc-44bd-b9c5-4cf561ed5f95`);
+no se ha finalizado ni reabierto.
 
 ### Workflow MCP — evidencia reutilizada de implementación (2026-10-29)
 
@@ -262,6 +293,7 @@ Límites de esa evidencia: la verificación local usa un harness propio con Auth
 - [ADR 0004: MCP remoto OAuth limitado a identidad](decisions/0004-mcp-oauth-identidad.md)
 - [ADR 0005: lectura MCP con consentimiento por sesión](decisions/0005-mcp-lectura-tareas.md)
 - [ADR 0006: workflow MCP con permisos conjuntos e idempotencia](decisions/0006-mcp-workflow-tareas.md)
+- [ADR 0007: tableros desactivados en solo lectura y borrado solo en servidor](decisions/0007-borrado-tablero-solo-servidor.md)
 
 ## Índice de documentación relacionada
 

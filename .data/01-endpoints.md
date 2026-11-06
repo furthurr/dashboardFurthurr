@@ -1,6 +1,6 @@
 # Catálogo de operaciones de datos
 
-No se encontró OpenAPI. El contrato observado combina SDK de Supabase, una Edge Function administrativa, RPCs Postgres y el resource server MCP Streamable HTTP. Se documentan nombres, parámetros y respuestas sin valores de proyecto. RLS/grants o comprobaciones servidor explícitas controlan cada operación.
+No se encontró OpenAPI. El contrato observado combina SDK de Supabase, dos Edge Functions administrativas (`admin-users` y `board-delete`), RPCs Postgres y el resource server MCP Streamable HTTP. Se documentan nombres, parámetros y respuestas sin valores de proyecto. RLS/grants o comprobaciones servidor explícitas controlan cada operación.
 
 ## Autenticación
 
@@ -233,6 +233,7 @@ que un cliente/modelo la obedezca. Fuente: `supabase/migrations/202610300002_mcp
 - Auth: solo admin activo; en caso contrario la RPC lanza `42501` (`supabase/migrations/202610220002_board_lifecycle.sql:40-54`).
 - Validación: nombre recortado de 1–120 caracteres (`22023`), tablero inexistente (`P0002`). El índice único `lower(name)` reporta el duplicado como violación de unicidad (`23505`).
 - La RPC no cambia `is_active` ni toca tareas, comentarios, adjuntos o membresías.
+- **Solo lectura (local, 2026-11-06):** la función pública es un envoltorio que bloquea la fila del tablero y exige `lock_writable_board` antes de delegar en `rename_board_writable_internal`; sobre un tablero inactivo responde `55000`. La validación original (trim, longitud, unicidad) se conserva intacta en la función interna (`supabase/migrations/202611060001_inactive_board_readonly.sql:65,72-80`).
 - Fuente: `src/features/boards/api.ts:36-47`, `supabase/migrations/202610220002_board_lifecycle.sql:38-54`.
 
 ### Activar/desactivar tablero — RPC `set_board_active`
@@ -242,24 +243,53 @@ que un cliente/modelo la obedezca. Fuente: `supabase/migrations/202610300002_mcp
 - Auth: solo admin activo (`42501`); tablero inexistente (`P0002`), argumentos nulos (`22023`).
 - Semántica: desactiva o reactiva la fila `boards.is_active`. No borra tareas, comentarios, adjuntos ni membresías; la reactivación devuelve el acceso a los miembros que conservaban su membresía (`supabase/migrations/202610220002_board_lifecycle.sql:56-66`).
 - Efecto colateral autorizado en RLS: mientras el tablero está desactivado, sus miembros pierden la lectura del tablero y el acceso a sus tareas (también por URL directa); el admin activo conserva el acceso.
+- **Solo lectura (local, 2026-11-06):** con la migración `202611060001` aplicada, un tablero desactivado no admite ninguna escritura, tampoco del admin activo. La **reactivación** sigue siendo la operación que devuelve el tablero a estado editable, pero queda bloqueada con `55000` si existe un borrado pendiente registrado en `board_deletion_jobs` (`supabase/migrations/202611060001_inactive_board_readonly.sql:113-122`).
 - Fuente: `src/features/boards/api.ts:49-60`, `supabase/migrations/202610220002_board_lifecycle.sql:56-66`.
 
-### Eliminar tablero desactivado — Storage + RPC `delete_inactive_board`
+### Eliminar tablero desactivado — Edge Function `board-delete`
 
-- Propósito: borrar permanentemente un tablero previamente desactivado y sus tareas, comentarios, responsables y metadata de adjuntos.
-- Request del cliente: `{ p_board_id: uuid }` a `supabase.rpc('delete_inactive_board', ...)`. Antes de llamar a la RPC, `deleteInactiveBoard` confirma que el tablero existe y está desactivado; pagina las tareas/adjuntos, deriva y deduplica paths y elimina objetos de `task-attachments` por lotes de hasta 100 (`src/features/boards/api.ts:69-123`).
-- Response SQL: `void`. La RPC vuelve a comprobar admin activo, ID y estado bajo bloqueo de fila; elimina tareas y después el tablero. Los datos relacionales se eliminan por cascadas (`supabase/migrations/202610260002_delete_inactive_boards.sql:5-25`).
-- Auth/validación: solo admin activo (`42501`); ID nulo (`22023`); tablero inexistente (`P0002`); tablero activo (`55000`). La comprobación del cliente no sustituye el control de la RPC.
-- Fallos parciales: Storage y PostgreSQL no son una transacción única. `BOARD_ATTACHMENTS_DELETE_FAILED` detiene el borrado SQL; `BOARD_DELETE_FAILED_AFTER_STORAGE` indica que los objetos ya se quitaron pero la RPC falló. Paths irreconocibles producen `BOARD_ATTACHMENT_PATH_INVALID` antes de limpiar (`src/features/boards/api.ts:88-131`).
-- Caché: tras éxito se quitan consultas de tareas, comentarios, adjuntos y miniaturas, e invalida `['boards']` (`src/features/boards/api.ts:135-145`).
-- Estado remoto (2026-11-02): `202610260002` aplicada y registrada, RPC presente y grants comprobados tras confirmar su ausencia como causa de `PGRST202`. Probe SQL focalizado con `ROLLBACK` y 37/37 pruebas de cliente correctos; no verifica navegador autenticado ni borrado de objetos reales de Storage. [Registro operativo](../supabase/README.md#corrección-del-borrado-de-tableros--2026-11-02). No reaplicar esta migración no idempotente.
-- Fuente: `src/features/boards/api.ts:69-145`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-25`.
+> **Estado local, 2026-11-06 (sin desplegar):** este contrato sustituye al borrado
+> cliente con Storage + RPC `delete_inactive_board`. La Edge Function **no está
+> desplegada** y la migración `202611060001_inactive_board_readonly.sql` **no está
+> aplicada en remoto**. El árbol local ya no ofrece ninguna otra vía de borrado.
+
+- Propósito: borrar permanentemente un tablero previamente desactivado y sus tareas, comentarios, responsables, metadata de adjuntos y objetos de Storage.
+- Request del cliente: `supabase.functions.invoke('board-delete', { body: { boardId } })`. El cuerpo solo admite un `boardId` UUID; **no** acepta rutas de archivos, identidades del actor ni flags de operación (`src/features/boards/api.ts`, `supabase/functions/board-delete/index.ts:33-38`).
+- Response correcta: `200` con `{ success: true }`. El cliente exige `data.success === true`; cualquier otra respuesta se trata como error (`src/features/boards/api.ts`).
+- Auth: bearer `Bearer` obligatorio. La función llama a `auth.getUser` con ese token, **rechaza sesiones OAuth** (`client_id` presente o `role != authenticated`) y exige perfil `admin` activo. No acepta la identidad del actor desde el cliente (`supabase/functions/board-delete/index.ts:16-32`).
+- Errores: `{ error: string }` con `Cache-Control: no-store`. `400` identificador inválido; `401` sesión ausente o inválida; `403` sesión OAuth o falta de admin activo; `404` tablero inexistente (`P0002`); `409` tablero activo (`55000`); `500` fallo de preparación o manifiesto inválido; `503` limpieza de Storage o confirmación pendientes. El cliente lee `error.context` como `Response` y usa un mensaje de conexión seguro como fallback (`src/features/boards/api.ts`, `supabase/functions/board-delete/index.ts:41-59`).
+- Secuencia interna: `prepare_board_deletion` (service-only) bloquea la fila del tablero, exige que esté inactivo y guarda el manifiesto de rutas en `board_deletion_jobs`; la Edge borra esos objetos en lotes de 100 mediante la API de Storage; `finish_board_deletion` (service-only) comprueba que no queden objetos del manifiesto y elimina tareas y tablero (`supabase/migrations/202611060001_inactive_board_readonly.sql:124-166`).
+- Fallos parciales: no hay transacción distribuida ni rollback de archivos ya borrados. Ante un fallo el tablero permanece visible para el admin, inactivo y con sus metadatos; la **reactivación queda bloqueada** mientras exista el trabajo pendiente. Reintentar «Eliminar tablero» reutiliza el manifiesto y completa la operación; otro admin activo también puede reintentar. No hay worker automático (`supabase/migrations/202611060001_inactive_board_readonly.sql:113-122`, `supabase/functions/board-delete/README.md`).
+- Caché: tras éxito se quitan consultas de tareas, comentarios, adjuntos y miniaturas, e invalida `['boards']` (`src/features/boards/api.ts`).
+- **Sin fallback cliente.** `delete_inactive_board(uuid)` queda revocada para `public`, `anon` y `authenticated`; el cliente no enumera rutas ni borra objetos por su cuenta (`supabase/migrations/202611060001_inactive_board_readonly.sql:169-170`).
+- Fuente: `supabase/functions/board-delete/index.ts:1-63`, `supabase/functions/board-delete/README.md`, `supabase/migrations/202611060001_inactive_board_readonly.sql:124-170`, `src/features/boards/api.ts`.
+
+### RPC de servicio — `prepare_board_deletion` / `finish_board_deletion`
+
+- Propósito: coordinar el borrado completo de un tablero desde el servidor. No son operaciones de cliente.
+- Request: `{ p_board_id: uuid, p_actor_id: uuid }`. El actor lo determina la Edge Function a partir del bearer verificado, no el cliente.
+- Response: `prepare_board_deletion` devuelve `text[]` con las rutas del manifiesto; `finish_board_deletion` devuelve `void`.
+- Auth: `SECURITY DEFINER` con `search_path = ''`, ejecución **solo para `service_role`**; revocadas a `public`, `anon` y `authenticated`. Ambas revalidan que el actor sea un `admin` activo (`42501`).
+- Validación: `prepare_board_deletion` exige tablero existente (`P0002`) e inactivo (`55000`); `finish_board_deletion` exige tablero inactivo (`55000`), trabajo preparado (`55000`) y ausencia de objetos del manifiesto en `task-attachments` (`55000`).
+- Manifiesto: `board_deletion_jobs` guarda `board_id` (PK, FK a `boards` con cascada), `paths text[]` y `created_at`. Los nombres se seleccionan del bucket fijo `task-attachments`, nunca de rutas aportadas por el cliente; se resuelven tanto los paths con prefijo de tarea como los adjuntos históricos planos.
+- Fuente: `supabase/migrations/202611060001_inactive_board_readonly.sql:5-11,124-168`.
+
+### Escrituras en tableros desactivados — guardas `lock_writable_*`
+
+- Propósito: impedir cualquier escritura sobre un tablero con `is_active = false`, **también para el administrador activo**.
+- Objetos: `lock_writable_board(uuid)`, `lock_writable_task(uuid)` y `lock_writable_task_object(text)`. Son `SECURITY DEFINER` con `search_path = ''` y se ejecutan desde policies restrictivas y desde RPCs de escritura.
+- Comportamiento: `lock_writable_board` exige `can_access_board` y que la fila del tablero esté activa; `lock_writable_task` resuelve el tablero de la tarea; `lock_writable_task_object` resuelve el tablero a partir del nombre del objeto en Storage, contemplando paths con prefijo de tarea y adjuntos históricos planos.
+- Policies restrictivas afectadas: `INSERT`/`UPDATE`/`DELETE` sobre `tasks`, `task_assignees`, `comments`, `task_attachments` y `storage.objects` (bucket `task-attachments`).
+- RPCs de escritura revalidadas: `rename_board`, `set_board_members`, `set_task_assignees`, `create_task_with_assignees` y `move_task_to_board`. Las validaciones originales se conservan en funciones `*_writable_internal` sin permisos de ejecución para el cliente; los envoltorios nuevos comprueban admin/acceso y `lock_writable_*` antes de delegar.
+- Errores: `55000` («Board is not writable») cuando el tablero está inactivo o tiene un borrado pendiente; `42501` por rol o acceso insuficiente; `P0002` si el tablero o la tarea no existen.
+- Fuente: `supabase/migrations/202611060001_inactive_board_readonly.sql:13-111`.
 
 ### Leer/administrar membresías — `board_members` y RPC `set_board_members`
 
 - Las lecturas de miembros se paginan en rangos de 500. El admin puede leer la tabla completa de membresías y sustituirlas mediante `{ p_board_id, p_profile_ids }`.
 - Cada miembro autenticado puede además leer **su propia fila** de membresía mediante la policy «Members read own memberships» (`profile_id = auth.uid()`), que no expone las membresías ajenas (`supabase/migrations/202610220002_board_lifecycle.sql:7-10`).
 - Se admiten perfiles existentes y activos; los miembros inactivos ya asignados se pueden conservar o retirar, pero no agregar de nuevo. La lista completa se reemplaza atómicamente.
+- **Solo lectura (local, 2026-11-06):** la función pública exige `lock_writable_board` y delega en `set_board_members_writable_internal`; sobre un tablero desactivado responde `55000` (`supabase/migrations/202611060001_inactive_board_readonly.sql:81-88`).
 - Fuente: `src/features/boards/api.ts:62-91`, `supabase/migrations/202610210001_boards.sql:63-80`, `supabase/migrations/202610220002_board_lifecycle.sql:9-10`.
 
 ### Leer perfil — `profiles.select`
@@ -287,11 +317,14 @@ que un cliente/modelo la obedezca. Fuente: `supabase/migrations/202610300002_mcp
 
 La firma incremental actual incluye `p_board_id` y exige acceso al tablero además del rol activo `admin`/`usuario`; posición se calcula dentro del tablero y estado (`supabase/migrations/202610210001_boards.sql:94-112`).
 
+**Solo lectura (local, 2026-11-06):** la función pública exige `lock_writable_board` y delega en `create_task_writable_internal`; sobre un tablero desactivado responde `55000` (`supabase/migrations/202611060001_inactive_board_readonly.sql:95-100`).
+
 ### Trasladar una tarea — RPC `move_task_to_board`
 
 - Request: `{ p_task_id, p_board_id }`; operación transaccional, no inserta una segunda tarea.
 - Auth: cuenta activa con acceso al tablero actual y al de destino. Conserva estado, prioridad, descripción y relaciones; calcula posición al final de la columna correspondiente del destino. RLS impide la mutación directa de `board_id`.
 - Destino inactivo: `can_access_board` exige tablero activo para los miembros, de modo que un tablero desactivado no es un destino válido. La interfaz refuerza el filtro y solo ofrece tableros activos distintos del actual (`src/features/board/BoardPage.tsx:411`).
+- **Solo lectura (local, 2026-11-06):** la función pública bloquea la tarea y ambos tableros en orden de id para evitar deadlocks por transferencias opuestas, y exige `lock_writable_task` y `lock_writable_board`; sobre un tablero inactivo responde `55000` (`supabase/migrations/202611060001_inactive_board_readonly.sql:101-109`).
 - Fuente: `src/features/boards/api.ts:93-110`, `supabase/migrations/202610210001_boards.sql:114-131`, `supabase/migrations/202610220002_board_lifecycle.sql:27-36`.
 
 ### Reemplazar responsables — RPC `set_task_assignees`
@@ -302,6 +335,7 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 - Validación: destinos existentes y activos; permite conservar un destino inactivo si ya estaba asignado. Bloquea tarea y perfiles objetivo durante la transacción. Prevalece el último conjunto guardado, sin detección de conflicto de borradores.
 - Permisos: no modifica título, descripción, propietario, estado ni prioridad. Escritura directa cliente en `task_assignees` revocada. La edición de esos campos de la tarea se rige por su propia policy y sus permisos por columna, no por esta RPC.
 - Errores SQL: `42501` cuenta no autorizada; `22023` lista/destino inválido; `P0002` tarea inexistente. El SDK los propaga; la UI conserva el borrador y presenta un mensaje seguro.
+- **Solo lectura (local, 2026-11-06):** la función pública exige `lock_writable_task` y delega en `set_task_assignees_writable_internal`; sobre un tablero desactivado responde `55000` (`supabase/migrations/202611060001_inactive_board_readonly.sql:89-94`).
 - Fuente: `src/features/board/api.ts:106-123`, `supabase/migrations/202610200001_task_assignments.sql:5-45`.
 
 ### Usuarios asignables — `profiles.select`
@@ -319,6 +353,7 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 - Columnas escribibles: solo `title`, `description`, `status`, `priority` y `position`. `created_by` no es escribible desde el cliente.
 - Response: no se consume fila; la query `tasks` se invalida al completar.
 - Errores: si la migración `202610200002_shared_task_editing.sql` no está aplicada en el proyecto, la base de datos rechaza la escritura con un error de RLS; la UI conserva el borrador y muestra un mensaje seguro.
+- **Solo lectura (local, 2026-11-06):** la policy restrictiva «Active board update» sobre `tasks` exige `lock_writable_board`; una actualización sobre un tablero desactivado se rechaza aunque la cuenta tenga acceso y permisos de columna (`supabase/migrations/202611060001_inactive_board_readonly.sql:47`).
 - Fuente: `src/features/board/api.ts:125-153`, `supabase/migrations/202610200002_shared_task_editing.sql:1-19`.
 
 ### Cambiar estado/posición — `tasks.update`
@@ -399,8 +434,19 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 - Secuencia observada: deriva el path de `file_url`, comprueba el resultado de `Storage.remove` y después elimina la fila por `id`, solicitando el `id` borrado.
 - Auth: quien subió el adjunto, quien creó su tarea o un admin activo, siempre con cuenta activa y acceso al tablero; RLS/Storage vuelven a aplicar la autorización en servidor.
 - Errores: propaga fallos de Storage/Postgres y considera fallido el borrado si no se devuelve una fila. Storage y Postgres son llamadas separadas, no una única transacción.
+- Solo lectura: sobre un tablero desactivado la escritura se rechaza en servidor; ver [guardas de escritura](#solo-lectura-de-tableros-desactivados--guardas-de-escritura).
 - Caché: invalida `['attachments']` y `['task-image-previews']` al completar.
 - Fuente: `src/features/board/attachmentsApi.ts:55-71,194-204`, `src/lib/storage.ts:1-10`, `supabase-schema.sql:327-340`, `supabase/migrations/202610210001_boards.sql:152-159`.
+
+### Solo lectura de tableros desactivados — guardas de escritura
+
+- Propósito: impedir cualquier escritura sobre un tablero con `is_active = false`, **también para el administrador activo**.
+- Objetos: `lock_writable_board(uuid)`, `lock_writable_task(uuid)` y `lock_writable_task_object(text)`. Son `SECURITY DEFINER` con `search_path = ''` y se invocan desde policies restrictivas y desde RPCs de escritura.
+- Comportamiento: `lock_writable_board` exige `can_access_board` y que la fila del tablero esté activa; `lock_writable_task` resuelve el tablero de la tarea; `lock_writable_task_object` resuelve el tablero a partir del nombre del objeto en Storage, contemplando paths con prefijo de tarea y adjuntos históricos planos.
+- Policies restrictivas afectadas: `INSERT`/`UPDATE`/`DELETE` sobre `tasks`, `task_assignees`, `comments`, `task_attachments` y `storage.objects` (bucket `task-attachments`).
+- RPCs de escritura revalidadas: `rename_board`, `set_board_members`, `set_task_assignees`, `create_task_with_assignees` y `move_task_to_board`. Las validaciones originales se conservan en funciones `*_writable_internal` sin permisos de ejecución para el cliente; los envoltorios nuevos comprueban admin/acceso y `lock_writable_*` antes de delegar.
+- Errores: `55000` («Board is not writable») cuando el tablero está inactivo o tiene un borrado pendiente; `42501` por rol o acceso insuficiente; `P0002` si el tablero o la tarea no existen.
+- Fuente: `supabase/migrations/202611060001_inactive_board_readonly.sql:13-111`.
 
 ### Miniaturas — URLs firmadas de `task-attachments`
 
@@ -423,9 +469,20 @@ Cliente: `supabase.functions.invoke('admin-users', { body })`, POST con bearer d
 
 Validación servidor: nombre recortado 1–120 caracteres; email validado, recortado y en minúsculas para alta; contraseña 8–128 caracteres más política de Auth; `userId` UUID. Solo un administrador activo puede ejecutar acciones; `promote-admin` acepta cualquier cuenta no administradora, activa o inactiva, y fija el rol en servidor, sin aceptar `role` ni `is_active` como valores del cliente. Propiedades extra se ignoran. Respuesta de error `{ error: string }`: 400 payload/operación o cuenta objetivo no actualizable, 401 sesión, 403 rol/estado, 405 método, 500 fallo interno/compensación/listado. `Cache-Control: no-store`; OPTIONS soportado. El cliente intenta leer el error JSON de `FunctionsHttpError.context` y usa fallback seguro en fallos de red/gateway (`supabase/functions/admin-users/validation.ts:8-34`, `supabase/functions/admin-users/index.ts:24-32,68-80`, `src/features/users/api.ts:11-24`).
 
+## Edge Function — `board-delete`
+
+Cliente: `supabase.functions.invoke('board-delete', { body: { boardId } })`, POST con bearer de sesión del portal. La función verifica `auth.getUser`, rechaza sesiones OAuth y exige perfil `admin` activo antes de tocar datos; usa la credencial de servicio solo en servidor para las RPCs `service_role` y la API de Storage. `verify_jwt = false` en `supabase/config.toml`: la comprobación del bearer la hace el propio handler (`supabase/functions/board-delete/index.ts:12-61`, `supabase/config.toml`).
+
+| Entrada | Validación | Respuesta |
+| --- | --- | --- |
+| `boardId` | UUID string obligatorio | `200 { success: true }` tras completar el borrado |
+
+Errores `{ error: string }`: `400` identificador inválido; `401` sesión ausente o inválida; `403` sesión OAuth o admin no activo; `404` tablero inexistente; `409` tablero activo; `500` fallo de preparación o manifiesto inválido; `503` limpieza de Storage o confirmación pendientes. `Cache-Control: no-store`; `OPTIONS` soportado; `405` para métodos distintos de POST. El contrato completo está en [Eliminar tablero desactivado](#eliminar-tablero-desactivado--edge-function-board-delete).
+
 ## Límites del catálogo
 
 - Las rutas HTTP internas de Supabase, límites de tamaño configurados en el servicio, respuestas exactas de Auth y estado de despliegue del proyecto Supabase no son verificables desde este repositorio.
 - Administración usa páginas de 50 y usuarios asignables lotes de 500. Tareas/comentarios/adjuntos continúan sin paginación explícita. El catálogo no certifica rate limits ni configuración remota actual; conserva la evidencia previa de despliegue descrita en el README de este dominio.
 - Historial remoto verificado hasta 2026-10-22: `202610220001`/`202610220002` y las tres suites SQL se aplicaron/pasaron en ese entorno; la SPA de ciclo de vida se publicó como `v0.6.0` (run `39860177282`). Esta evidencia no cubre el estado remoto actual ni las migraciones `202610260001`–`202610260003`, cuya aplicación no se verificó en esta sincronización.
 - Estado local 2026-10-26: el código y las tres migraciones están presentes en el árbol de trabajo; no se ejecutaron suites SQL local/remota ni se consultó el proyecto Supabase remoto. La documentación del proyecto señala `v0.8.1` (run `40004615822`) como última publicación registrada, sin consulta remota durante esta operación.
+- **Estado 2026-11-06 (publicado en `v0.16.0`, sin desplegar en Supabase):** la migración `202611060001_inactive_board_readonly.sql` y la Edge Function `board-delete` están versionadas, pero **no están aplicadas ni desplegadas en remoto**. Los contratos de solo lectura y de borrado solo-servidor describen el código publicado; no acreditan el comportamiento del entorno desplegado, que conserva el flujo anterior hasta aplicar la migración y desplegar la Edge. La verificación local (215 Vitest, 18 Deno de Edge, 19 Deno MCP, SQL en PostgreSQL 16 desechable con Auth/Storage simulados, lint y build) no es un E2E de Auth, OAuth ni Storage real.

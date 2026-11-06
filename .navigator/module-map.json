@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-11-02T01:24:58Z",
+  "generated_at": "2026-11-06T00:00:00Z",
   "source_commit": "6b4f730390ca5d32e00c8efc18d60d0b035da841",
   "root": ".",
   "modules": [
@@ -28,12 +28,12 @@
       "id": "board",
       "name": "Tablero Kanban",
       "path": "src/features/board",
-      "responsibility": "Presenta tareas, comentarios, adjuntos y ordenamiento en el tablero activo, con acceso rápido al alta, pegado de imágenes, creación/asignaciones RPC y edición compartida dentro del acceso autorizado al tablero.",
+      "responsibility": "Presenta tareas, comentarios, adjuntos y ordenamiento en el tablero activo, con acceso rápido al alta, pegado de imágenes, creación/asignaciones RPC y edición compartida dentro del acceso autorizado al tablero. Un tablero desactivado se monta en modo solo lectura.",
       "kind": "feature",
       "tech": ["React", "TypeScript", "TanStack Query", "dnd-kit"],
       "entrypoints": ["src/features/board/BoardPage.tsx"],
       "depends_on": ["auth", "boards", "supabase-client", "shared-types", "shared-ui", "database-schema"],
-      "notes": "database-schema representa el contrato RPC consumido, no un import TypeScript. Los destinos de traslado se limitan a tableros activos."
+      "notes": "database-schema representa el contrato RPC consumido, no un import TypeScript. Los destinos de traslado se limitan a tableros activos. La prop readOnly refleja el guard de servidor, no lo sustituye."
     },
     {
       "id": "boards",
@@ -43,8 +43,8 @@
       "kind": "feature",
       "tech": ["React", "TypeScript", "TanStack Query", "Supabase PostgREST/RPC"],
       "entrypoints": ["src/features/boards/BoardsPage.tsx", "src/features/boards/BoardRoute.tsx", "src/features/boards/api.ts"],
-      "depends_on": ["auth", "board", "supabase-client", "shared-types", "shared-ui", "database-schema"],
-      "notes": "El borrado limpia Storage antes de delete_inactive_board; las fases no son atómicas. El mensaje PGRST202 está versionado en 6c5b292; la ausencia de la RPC en remoto es una observación histórica, no verificada de nuevo."
+      "depends_on": ["auth", "board", "supabase-client", "shared-types", "shared-ui", "database-schema", "board-delete"],
+      "notes": "El borrado se delega íntegramente en la Edge Function board-delete; el cliente no enumera rutas ni borra objetos y no hay fallback a Storage o RPC. «Gestionar miembros» y «Cambiar nombre» solo se ofrecen en tableros activos."
     },
     {
       "id": "users",
@@ -99,6 +99,17 @@
       "depends_on": []
     },
     {
+      "id": "dev-scripts",
+      "name": "Arranque local protegido",
+      "path": "scripts",
+      "responsibility": "Ejecuta el servidor de desarrollo eliminando las variables Supabase heredadas del entorno del proceso hijo antes de cargar Vite, para que la configuración local del proyecto sea la efectiva.",
+      "kind": "other",
+      "tech": ["Node.js", "JavaScript ESM"],
+      "entrypoints": ["scripts/dev.mjs", "scripts/dev-environment.mjs", "scripts/test-dev-environment.mjs"],
+      "depends_on": [],
+      "notes": "npm run dev apunta a scripts/dev.mjs; npm run test:dev-env verifica el comportamiento con node --test. No registra valores de entorno ni modifica el shell padre."
+    },
+    {
       "id": "database-schema",
       "name": "Schema Supabase",
       "path": "supabase-schema.sql",
@@ -107,18 +118,29 @@
       "tech": ["PostgreSQL", "SQL"],
       "entrypoints": ["supabase-schema.sql"],
       "depends_on": [],
-      "notes": "El bootstrap incluye mcp_identity, mcp_oauth_configuration, mcp_access_token_hook, mcp_whoami, mcp_workflow_permissions, mcp_task_operations y el aislamiento OAuth. El estado remoto se describe en .data/04-schema.md y supabase/README.md; el ledger no coincide con todas las huellas SQL observadas."
+      "notes": "El bootstrap incluye mcp_identity, mcp_oauth_configuration, mcp_access_token_hook, mcp_whoami, mcp_workflow_permissions, mcp_task_operations y el aislamiento OAuth. Desde 2026-11-06 incluye también el guard de solo lectura de tableros inactivos, board_deletion_jobs y las RPCs de borrado solo-servidor. El estado remoto se describe en .data/04-schema.md y supabase/README.md; el ledger no coincide con todas las huellas SQL observadas."
     },
     {
       "id": "database-migrations",
       "name": "Migraciones Supabase",
       "path": "supabase/migrations",
-      "responsibility": "Evoluciona instalaciones existentes con estado de cuenta, RPCs, políticas de membresía, ciclo de vida/borrado de tableros, permisos de adjuntos/avatares y las tres capas del MCP (identidad, lectura y workflow).",
+      "responsibility": "Evoluciona instalaciones existentes con estado de cuenta, RPCs, políticas de membresía, ciclo de vida/borrado de tableros, permisos de adjuntos/avatares, las tres capas del MCP (identidad, lectura y workflow) y el guard de solo lectura con borrado solo-servidor.",
       "kind": "other",
       "tech": ["PostgreSQL", "SQL"],
-      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql", "supabase/migrations/202610200002_shared_task_editing.sql", "supabase/migrations/202610210001_boards.sql", "supabase/migrations/202610220001_board_access_returning.sql", "supabase/migrations/202610220002_board_lifecycle.sql", "supabase/migrations/202610260001_task_attachment_management.sql", "supabase/migrations/202610260002_delete_inactive_boards.sql", "supabase/migrations/202610260003_profile_avatars.sql", "supabase/migrations/202610280001_board_assignment_access.sql", "supabase/migrations/202610280002_mcp_identity.sql", "supabase/migrations/202610280003_mcp_task_read.sql", "supabase/migrations/202610290001_mcp_workflow.sql", "supabase/migrations/202610300001_mcp_automation.sql", "supabase/migrations/202610300002_mcp_unified_consent.sql"],
+      "entrypoints": ["supabase/migrations/202610190001_user_administration.sql", "supabase/migrations/202610200001_task_assignments.sql", "supabase/migrations/202610200002_shared_task_editing.sql", "supabase/migrations/202610210001_boards.sql", "supabase/migrations/202610220001_board_access_returning.sql", "supabase/migrations/202610220002_board_lifecycle.sql", "supabase/migrations/202610260001_task_attachment_management.sql", "supabase/migrations/202610260002_delete_inactive_boards.sql", "supabase/migrations/202610260003_profile_avatars.sql", "supabase/migrations/202610280001_board_assignment_access.sql", "supabase/migrations/202610280002_mcp_identity.sql", "supabase/migrations/202610280003_mcp_task_read.sql", "supabase/migrations/202610290001_mcp_workflow.sql", "supabase/migrations/202610300001_mcp_automation.sql", "supabase/migrations/202610300002_mcp_unified_consent.sql", "supabase/migrations/202611060001_inactive_board_readonly.sql"],
       "depends_on": ["database-schema"],
-      "notes": "En la comprobación histórica del 2026-10-29 constaban 202610280002, 202610280003 y 202610290001; el ledger divergía respecto de algunas huellas SQL. Contrastar el estado actual antes de aplicar migraciones; no hacer db push a ciegas."
+      "notes": "En la comprobación histórica del 2026-10-29 constaban 202610280002, 202610280003 y 202610290001; el ledger divergía respecto de algunas huellas SQL. 202611060001 está publicada en v0.16.0 y NO está aplicada en remoto: no es idempotente y no debe reaplicarse. Contrastar el estado actual antes de aplicar migraciones; no hacer db push a ciegas."
+    },
+    {
+      "id": "board-delete",
+      "name": "Función de borrado de tableros",
+      "path": "supabase/functions/board-delete",
+      "responsibility": "Borra de forma completa un tablero desactivado: verifica la sesión del portal, rechaza sesiones OAuth, exige administrador activo, prepara un manifiesto de rutas y coordina la eliminación de objetos de Storage con el borrado relacional.",
+      "kind": "service",
+      "tech": ["Deno", "TypeScript", "Supabase Edge Functions", "Supabase Auth", "Supabase Storage"],
+      "entrypoints": ["supabase/functions/board-delete/index.ts"],
+      "depends_on": ["database-schema"],
+      "notes": "Única vía de borrado: delete_inactive_board queda revocada y el cliente no tiene fallback. verify_jwt=false en supabase/config.toml; el handler verifica el bearer. NO desplegada en remoto a fecha 2026-11-06."
     },
     {
       "id": "admin-users",
@@ -172,7 +194,7 @@
       "tech": ["GitHub Actions", "Node.js", "Vite"],
       "entrypoints": [".github/workflows/deploy.yml"],
       "depends_on": ["web-app"],
-      "notes": "El workflow publica dist, no SQL ni Edge Functions. Última publicación verificada: Pages run 40963945319, commit 0ebb61d (v0.13.0), success (2026-10-29)."
+      "notes": "El workflow publica dist, no SQL ni Edge Functions. Última publicación verificada: Pages run 40963945319, commit 0ebb61d (v0.13.0), success (2026-10-29). La SPA compatible con 202611060001 y board-delete NO está publicada."
     }
   ]
 }

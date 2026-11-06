@@ -26,10 +26,21 @@ Comandos disponibles:
 
 | Comando | Uso |
 | --- | --- |
-| `npm run dev` | Servidor de desarrollo de Vite |
+| `npm run dev` | Servidor de desarrollo de Vite. Limpia las variables Supabase heredadas del shell antes de arrancar (ver más abajo) |
 | `npm run build` | Verificación TypeScript y build de producción en `dist/` |
 | `npm run lint` | ESLint |
 | `npm run preview` | Previsualizar localmente el build |
+| `npm run test:dev-env` | Verifica la protección del arranque local (`node --test`) |
+
+### Variables heredadas en el arranque local
+
+Vite da prioridad a las variables de entorno heredadas del shell sobre la configuración
+local del proyecto, así que un `VITE_SUPABASE_URL` o `VITE_SUPABASE_PUBLISHABLE_KEY`
+exportado en tu terminal hacía que el desarrollo local apuntara a otro proyecto.
+`npm run dev` ejecuta ahora `scripts/dev.mjs`, que elimina ambas variables del
+entorno del proceso hijo antes de cargar Vite. No imprime sus valores ni modifica el
+entorno de tu shell. Si no existe `.env.local`, la aplicación fallará al inicializar el
+cliente, que es el comportamiento esperado.
 
 ## Configuración de Supabase
 
@@ -46,7 +57,11 @@ El bootstrap de referencia, incluidas tablas, RLS, Storage, vistas, grants y RPC
 
 **Administración de usuarios:** el alta, cambios de contraseña, activación y promoción a administrador pasan por la Edge Function `admin-users`; la función valida la sesión y el rol en servidor. El registro público de Auth debe estar deshabilitado. Las altas administrativas quedan confirmadas y activas sin enviar un enlace por correo. El build de GitHub Pages no despliega funciones ni SQL; consulta [`supabase/README.md`](supabase/README.md) para instalación y operación.
 
-**Ciclo de vida de tableros:** el selector consulta `list_boards_with_pending_counts`; el administrador puede renombrar, activar y desactivar. Desactivar conserva tareas y membresías, pero retira el acceso a los miembros. La interfaz local también permite eliminar permanentemente un tablero solo si ya está desactivado. Requiere `202610220001_board_access_returning.sql`, `202610220002_board_lifecycle.sql` y `202610260002_delete_inactive_boards.sql` en instalaciones existentes. La aplicación focalizada remota de `202610260002` se registró el 2026-11-02; no se verificaron navegador autenticado ni Storage real. [Detalle y límites](supabase/README.md#corrección-del-borrado-de-tableros--2026-11-02).
+**Ciclo de vida de tableros:** el selector consulta `list_boards_with_pending_counts`; el administrador puede renombrar, activar y desactivar. Desactivar conserva tareas y membresías, pero retira el acceso a los miembros. Un tablero desactivado queda además en **solo lectura para todos los roles, incluido el administrador**: no se pueden crear ni mover tareas, cambiar responsables, comentar, subir o borrar adjuntos, renombrar el tablero ni cambiar sus miembros. La interfaz lo refleja con un aviso «Tablero desactivado: solo lectura. Actívalo para realizar cambios.» y la garantía real está en Postgres y Storage.
+
+**Borrado permanente de tableros:** solo se elimina un tablero ya desactivado, y el borrado se ejecuta **solo en servidor**: la SPA invoca la Edge Function `board-delete`, que verifica la sesión del portal, rechaza sesiones OAuth, exige administrador activo y coordina la limpieza de Storage con el borrado relacional. El cliente no enumera rutas ni borra objetos, y no existe vía alternativa. Si el borrado falla a mitad, el tablero permanece desactivado, la reactivación queda bloqueada y hay que reintentar «Eliminar tablero»; no hay rollback de archivos ya eliminados.
+
+Instalaciones existentes requieren `202610220001_board_access_returning.sql`, `202610220002_board_lifecycle.sql`, `202610260002_delete_inactive_boards.sql` y `202611060001_inactive_board_readonly.sql`, más el despliegue de `board-delete`. La aplicación focalizada remota de `202610260002` se registró el 2026-11-02; **`202611060001` no está aplicada en remoto y `board-delete` no está desplegada**. El push a `main` publica la SPA en GitHub Pages, pero Pages no despliega SQL ni funciones: hasta aplicar la migración y desplegar la Edge, el entorno desplegado conserva el comportamiento anterior. No se verificaron navegador autenticado ni Storage real. [Detalle y límites](supabase/README.md#corrección-del-borrado-de-tableros--2026-11-02) y [guía de tableros en solo lectura](docs/tableros-solo-lectura.md).
 
 **Responsables de tareas:** creación y detalle permiten asignar/desasignar varias personas mediante un desplegable por nombre/correo. Los ya asignados desaparecen de las opciones y «Todos» añade a todos los usuarios activos disponibles. Requiere también la migración `202610200001_task_assignments.sql` de la misma guía. Cualquier cuenta activa, incluidos invitados, puede guardar asignaciones y editar otros campos de tareas ajenas dentro de un tablero accesible; guardar asignaciones es una acción separada y no concede permiso de eliminación. La tarea y sus responsables iniciales se crean en una sola transacción. El tablero permite filtrar por personas y precarga esas personas al crear una tarea; con el filtro «Todos» se inicia sin asignados.
 
@@ -88,9 +103,10 @@ src/
   lib/                       Cliente Supabase y utilidades Storage
   types/index.ts             Tipos compartidos
   index.css                  Estilos globales y tokens visuales
+scripts/                     Arranque local protegido (dev.mjs y pruebas)
 specs/                       Especificaciones de producto (fuente de verdad SDD)
 supabase-schema.sql          Schema SQL de referencia
-supabase/                    Edge Function, migraciones, pruebas SQL y guía operativa
+supabase/                    Edge Functions, migraciones, pruebas SQL y guía operativa
 ```
 
 Antes de implementar funcionalidad, actualiza o crea la especificación correspondiente en `specs/`. El progreso se sigue contra esas especificaciones.
@@ -103,6 +119,7 @@ Antes de implementar funcionalidad, actualiza o crea la especificación correspo
 - [Mapa de navegación](.navigator/ai-context.md) — contexto breve; [mapa de módulos](.navigator/module-map.json).
 - [MCP para clientes de desarrollo](mcp/README.md) — selector e instalación OAuth por plataforma.
 - [Preparar y probar MCP de tareas](docs/prueba-mcp.md) — identidad, lectura de contexto y workflow de tareas: activación en Supabase, despliegue de la Edge Function y checklist de verificación. Distingue lo verificado de lo pendiente; no acredita E2E en navegador.
+- [Tableros en solo lectura y borrado solo-servidor](docs/tableros-solo-lectura.md) — despliegue de `202611060001` y `board-delete`, y checklist de verificación manual.
 - [Especificaciones](specs/README.md) — requisitos, modelo de datos, permisos, UI/UX y flujo Kanban.
 - [Operación Supabase](supabase/README.md) — orden de migraciones, pruebas SQL y publicación de Edge Functions.
 

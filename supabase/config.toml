@@ -10,6 +10,10 @@ verify_jwt = false
 # Discovery is public. The handler validates issuer, audience, signature and live session.
 verify_jwt = false
 
+[functions.board-delete]
+# Auth verifies the bearer and the handler rejects OAuth/non-admin sessions.
+verify_jwt = false
+
 # Activate OAuth and the token hook together ONLY after applying the MCP migration,
 # setting mcp_oauth_configuration.resource_url and publishing the consent UI.
 # OAuth Server remains beta; do not push unrelated Auth settings blindly.

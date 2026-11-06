@@ -20,7 +20,7 @@ vi.mock('./api', () => ({
   useDeleteBoard: () => ({ mutateAsync: mocks.deleteBoard, isPending: false, error: null }),
 }))
 vi.mock('@/features/board/assigneesApi', () => ({ useAssignableUsers: mocks.users }))
-vi.mock('@/features/board/BoardPage', () => ({ BoardPage: ({ boardId, boardName }: { boardId: string; boardName: string }) => <h1>{boardName} · {boardId}</h1> }))
+vi.mock('@/features/board/BoardPage', () => ({ BoardPage: ({ boardId, boardName, readOnly }: { boardId: string; boardName: string; readOnly?: boolean }) => <h1 data-read-only={readOnly}>{boardName} · {boardId}</h1> }))
 vi.mock('react-router-dom', async (original) => ({ ...await original<typeof import('react-router-dom')>(), useParams: () => ({ boardId: mocks.boardId }) }))
 
 const board = { id: 'offline', name: 'Offline', is_active: true, pending_count: 3, my_pending_count: 0, people: [], created_at: '2026-10-21' }
@@ -32,6 +32,7 @@ const renderPage = () => render(<MemoryRouter><BoardsPage /></MemoryRouter>)
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.role = 'admin'
+  mocks.boardId = 'offline'
   mocks.boards.mockReturnValue({ data: [board], isLoading: false, error: null, refetch: vi.fn() })
   mocks.members.mockReturnValue({ data: [ana], isLoading: false, error: null, refetch: vi.fn() })
   mocks.users.mockReturnValue({ data: [ana], isLoading: false, error: null })
@@ -52,9 +53,9 @@ describe('Selección y gestión de tableros', () => {
     expect(getBoardUpdateErrorMessage({ code: '23505' })).toMatch(/Ya existe un tablero/i)
     expect(getBoardUpdateErrorMessage({ code: 'P0002' })).toMatch(/ya no existe/i)
     expect(getBoardDeleteErrorMessage({ code: '55000' })).toMatch(/desactivados/i)
-    expect(getBoardDeleteErrorMessage({ code: 'PGRST202' })).toMatch(/202610260002_delete_inactive_boards\.sql.*PostgREST/i)
-    expect(getBoardDeleteErrorMessage({ code: 'BOARD_ATTACHMENTS_DELETE_FAILED' })).toMatch(/archivos podrían haberse eliminado/i)
-    expect(getBoardDeleteErrorMessage({ code: 'BOARD_DELETE_FAILED_AFTER_STORAGE' })).toMatch(/archivos adjuntos ya se eliminaron/i)
+    expect(getBoardDeleteErrorMessage({ code: 'PGRST202' })).toMatch(/202611060001_inactive_board_readonly\.sql.*PostgREST/i)
+    expect(getBoardDeleteErrorMessage(Object.assign(new Error('Limpieza pendiente. Reintenta.'), { code: 'BOARD_DELETE_SERVICE_ERROR' }))).toBe('Limpieza pendiente. Reintenta.')
+    expect(getBoardUpdateErrorMessage({ code: '55000' })).toMatch(/borrado pendiente/i)
   })
   it('muestra cards con enlace al tablero y gestión solo para administradores', () => {
     renderPage()
@@ -150,6 +151,17 @@ describe('Resumen de tareas pendientes', () => {
 })
 
 describe('Ciclo de vida de los tableros', () => {
+  it.each(['Cambiar nombre', 'Gestionar miembros'])('cierra «%s» si se desactiva el tablero en otra sesión', async (action) => {
+    const user = userEvent.setup()
+    const view = renderPage()
+    await user.click(screen.getByRole('button', { name: `${action} de Offline` }))
+    expect(screen.getByRole('dialog')).toBeVisible()
+    mocks.boards.mockReturnValue({ data: [{ ...board, is_active: false }], isLoading: false, error: null })
+    view.rerender(<MemoryRouter><BoardsPage /></MemoryRouter>)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(mocks.rename).not.toHaveBeenCalled()
+    expect(mocks.save).not.toHaveBeenCalled()
+  })
   it('separa los tableros desactivados y ofrece reactivarlos al administrador', () => {
     mocks.boards.mockReturnValue({ data: [board, archivedBoard], isLoading: false, error: null })
     renderPage()
@@ -160,6 +172,8 @@ describe('Ciclo de vida de los tableros', () => {
     expect(screen.getByRole('button', { name: 'Activar Archivo 2025' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Eliminar tablero Offline' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Eliminar tablero Archivo 2025' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Gestionar miembros de Archivo 2025' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cambiar nombre de Archivo 2025' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Desactivar Archivo 2025' })).not.toBeInTheDocument()
   })
   it.each(['usuario', 'invitado'])('no muestra la sección de desactivados a %s', (role) => {
@@ -252,7 +266,7 @@ describe('Ciclo de vida de los tableros', () => {
   })
   it('mantiene abierto el diálogo y explica fallos en la limpieza de Storage', async () => {
     mocks.boards.mockReturnValue({ data: [board, archivedBoard], isLoading: false, error: null })
-    mocks.deleteBoard.mockRejectedValueOnce({ code: 'BOARD_ATTACHMENTS_DELETE_FAILED' })
+    mocks.deleteBoard.mockRejectedValueOnce(Object.assign(new Error('Limpieza pendiente. El tablero y sus tareas siguen; reintenta «Eliminar tablero».'), { code: 'BOARD_DELETE_SERVICE_ERROR' }))
     const user = userEvent.setup()
     renderPage()
 
@@ -265,6 +279,12 @@ describe('Ciclo de vida de los tableros', () => {
 })
 
 describe('Acceso a ruta de tablero', () => {
+  it('transmite solo lectura para el tablero desactivado', () => {
+    mocks.boardId = 'archived'
+    mocks.boards.mockReturnValue({ data: [archivedBoard], error: null, isLoading: false })
+    render(<MemoryRouter><BoardRoute /></MemoryRouter>)
+    expect(screen.getByRole('heading', { name: 'Archivo 2025 · archived' })).toHaveAttribute('data-read-only', 'true')
+  })
   it('monta el tablero con identidad explícita cuando está disponible', () => {
     render(<MemoryRouter><BoardRoute /></MemoryRouter>)
     expect(screen.getByRole('heading', { name: 'Offline · offline' })).toBeVisible()

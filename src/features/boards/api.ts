@@ -1,15 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import { getStorageObjectPath } from '@/lib/storage'
 import type { AssigneeProfile, Board, BoardPerson } from '@/types'
 
 type BoardRow = { id: string; name: string; is_active: boolean; pending_count: number | string; my_pending_count: number | string; people: BoardPerson[] | null; created_at: string }
-const boardDataPageSize = 500
-const storageRemovalBatchSize = 100
-
-function boardError(code: string, message: string) {
-  return Object.assign(new Error(message), { code })
-}
 
 export async function fetchBoards(): Promise<Board[]> {
   // The RPC applies visibility and returns task counts plus people shown on cards.
@@ -68,70 +61,20 @@ export async function setBoardActive(boardId: string, active: boolean): Promise<
   if (error) throw error
 }
 
-async function fetchBoardAttachmentPaths(boardId: string): Promise<string[]> {
-  const paths: string[] = []
-
-  for (let taskOffset = 0; ; taskOffset += boardDataPageSize) {
-    const { data: tasks, error: tasksError } = await supabase.from('tasks')
-      .select('id').eq('board_id', boardId).order('id')
-      .range(taskOffset, taskOffset + boardDataPageSize - 1)
-    if (tasksError) throw tasksError
-
-    const taskIds = (tasks ?? []).map((task) => task.id as string)
-    for (let taskStart = 0; taskStart < taskIds.length; taskStart += storageRemovalBatchSize) {
-      const taskBatch = taskIds.slice(taskStart, taskStart + storageRemovalBatchSize)
-      for (let attachmentOffset = 0; ; attachmentOffset += boardDataPageSize) {
-        const { data: attachments, error: attachmentsError } = await supabase.from('task_attachments')
-          .select('file_url').in('task_id', taskBatch).order('id')
-          .range(attachmentOffset, attachmentOffset + boardDataPageSize - 1)
-        if (attachmentsError) throw attachmentsError
-
-        for (const attachment of attachments ?? []) {
-          const path = getStorageObjectPath(attachment.file_url as string)
-          if (!path) throw boardError('BOARD_ATTACHMENT_PATH_INVALID', 'No se pudo identificar la ruta de un archivo adjunto.')
-          paths.push(path)
-        }
-
-        if (!attachments || attachments.length < boardDataPageSize) break
-      }
-    }
-
-    if (!tasks || tasks.length < boardDataPageSize) return paths
-  }
-}
-
 export async function deleteInactiveBoard(boardId: string): Promise<void> {
-  // Check before touching Storage; the database RPC below repeats this guard
-  // and is the authoritative protection against direct or stale clients.
-  const { data: board, error: boardErrorFromSupabase } = await supabase.from('boards')
-    .select('is_active').eq('id', boardId).maybeSingle()
-  if (boardErrorFromSupabase) throw boardErrorFromSupabase
-  if (!board) throw boardError('P0002', 'El tablero ya no existe.')
-  if (board.is_active) throw boardError('55000', 'Solo se pueden eliminar tableros desactivados.')
-
-  const paths = [...new Set(await fetchBoardAttachmentPaths(boardId))]
-  for (let offset = 0; offset < paths.length; offset += storageRemovalBatchSize) {
-    const { error } = await supabase.storage.from('task-attachments')
-      .remove(paths.slice(offset, offset + storageRemovalBatchSize))
-    if (error) {
-      throw Object.assign(new Error('Falló la eliminación de archivos adjuntos.'), {
-        code: 'BOARD_ATTACHMENTS_DELETE_FAILED',
-        cause: error,
-      })
-    }
-  }
-
-  const { error } = await supabase.rpc('delete_inactive_board', { p_board_id: boardId })
+  // Whole-board deletion is server-only; no direct Storage/RPC fallback.
+  const { data, error } = await supabase.functions.invoke('board-delete', { body: { boardId } })
   if (error) {
-    if (paths.length) {
-      throw Object.assign(new Error(error.message), {
-        code: 'BOARD_DELETE_FAILED_AFTER_STORAGE',
-        originalCode: error.code,
-        cause: error,
-      })
+    let message = 'No se pudo contactar con el borrado de tableros. Comprueba la conexión y el despliegue de board-delete.'
+    if (error.context instanceof Response) {
+      try {
+        const payload = await error.context.json()
+        if (typeof payload.error === 'string') message = payload.error
+      } catch { /* Keep safe fallback for gateway errors. */ }
     }
-    throw error
+    throw Object.assign(new Error(message), { code: 'BOARD_DELETE_SERVICE_ERROR' })
   }
+  if (data?.success !== true) throw Object.assign(new Error('El servidor no confirmó el borrado del tablero. Reintenta la operación.'), { code: 'BOARD_DELETE_SERVICE_ERROR' })
 }
 
 export function useDeleteBoard() {

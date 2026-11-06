@@ -2,6 +2,41 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
+## Actualización — tableros desactivados en solo lectura y borrado solo-servidor, 2026-11-06
+
+> **Estado: publicado en `v0.16.0`, sin desplegar en Supabase.** La migración
+> `202611060001_inactive_board_readonly.sql` **no está aplicada en remoto** y la Edge
+> Function `board-delete` **no está desplegada**. El push a `main` publica la SPA en
+> GitHub Pages, pero Pages no despliega SQL ni funciones. La interfaz refleja la
+> regla, pero la garantía efectiva está en Postgres/Storage.
+
+No se añaden tokens, paleta, tema, tipografía ni clases CSS propias: se reutilizan
+`ui-feedback`, `ui-button`, `ui-button--danger`, `Dialog` y los controles existentes.
+El estado de solo lectura se propaga como prop `readOnly` desde `BoardRoute` hasta
+`BoardColumn` y `SortableTaskCard`.
+
+| Componente/patrón | Propósito, estados y comportamiento | Fuente |
+| --- | --- | --- |
+| Aviso de solo lectura | `BoardPage` muestra un `p role="status"` con la clase `ui-feedback`: «Tablero desactivado: solo lectura. Actívalo para realizar cambios.». Se renderiza sobre las columnas, debajo de la barra de filtros, y no sustituye al aviso de error de movimiento | `src/features/board/BoardPage.tsx` |
+| Tablero en solo lectura | Con `readOnly`, `BoardPage` bloquea el alta de tareas, el arrastre, los movimientos entre columnas y dentro de la columna, la edición de campos, el borrado de la tarea, los comentarios, la subida/renombrado/borrado de adjuntos, el traslado a otro tablero y el guardado de responsables. Los callbacks de escritura se pasan como `undefined` al detalle, de modo que los controles no se ofrecen | `src/features/board/BoardPage.tsx` |
+| Columna no droppable | `BoardColumn` recibe `readOnly` y desactiva el `useDroppable`; el texto de ayuda «Arrastra una tarea aquí o usa sus controles para moverla.» se omite en modo solo lectura, dejando solo «Sin tareas en esta etapa» | `src/features/board/BoardColumn.tsx` |
+| Tarjeta sin asa ni movimientos | `SortableTaskCard` recibe `readOnly` y desactiva el `useSortable`; no renderiza el asa de arrastre y omite los botones de mover en las cuatro direcciones. La tarjeta sigue siendo legible y su título sigue abriendo el detalle | `src/features/board/SortableTaskCard.tsx` |
+| Acciones de administración por estado | En el selector, «Gestionar miembros» y «Cambiar nombre» solo se ofrecen en tableros **activos**; «Activar/Desactivar» y «Eliminar tablero» (solo para inactivos) siguen disponibles para el administrador activo. Los diálogos de miembros y renombrado se cierran si el tablero deja de estar activo mientras están abiertos | `src/features/boards/BoardsPage.tsx` |
+| Errores de escritura y borrado | `getBoardUpdateErrorMessage` traduce `55000` a «El tablero está desactivado o tiene un borrado pendiente. Reactívalo antes de editarlo; si el borrado ya comenzó, reintenta «Eliminar tablero».». `getBoardDeleteErrorMessage` propaga el mensaje `{ error }` de la Edge Function (`BOARD_DELETE_SERVICE_ERROR`) y orienta a comprobar `202611060001`, la recarga de PostgREST y el despliegue de `board-delete` ante `PGRST202` | `src/features/boards/BoardsPage.tsx` |
+
+### Verificación y límites
+
+La implementación local registró 215 pruebas Vitest, 18 pruebas Deno de Edge (6 de
+`board-delete` y 12 de `admin-users`), 19 Deno MCP, 2 comprobaciones de paridad
+bootstrap, SQL en PostgreSQL 16 desechable (incremental y bootstrap, con Auth/Storage
+simulados), `npm run test:dev-env` 4/4, lint, build y `git diff --check` correctos.
+Esta sincronización documental no repitió esos comandos.
+
+**Límites:** no se hizo revisión visual en navegador, responsive, cálculo de
+contraste ni prueba con lector de pantalla para este cambio; no se declara conformidad
+WCAG. Los mocks de la Edge Function **no son un E2E real** de Auth, OAuth ni Storage.
+No hay verificación en navegador autenticado contra el entorno desplegado.
+
 ## Actualización — selector de temas Noche y Estudio, 2026-11-04
 
 Permite alternar entre los temas Noche (oscuro, por defecto) y Estudio (claro) desde la página de perfil (`ProfilePage.tsx`), con persistencia en Supabase y aplicación instantánea vía atributo `data-theme` en el elemento raíz del documento.
@@ -64,7 +99,7 @@ No se añaden tokens, tema ni clases CSS; se reutilizan `ui-list-card`, `ui-fiel
 | `AttachmentsList` — renombrar | Cada archivo autorizado muestra «Cambiar nombre». Se edita la base y se muestra la última extensión como no editable, asociada al campo mediante `aria-describedby`; si no hay extensión se impide añadir una. «Guardar nombre» se deshabilita si está vacío, no cambió o incumple esa restricción; «Cancelar» abandona la edición. Durante una mutación se bloquean los controles; un fallo conserva el borrador y el detalle anuncia el error. Incluido en `ba13bfe` y Pages `v0.14.0`; revisión visual pendiente | `src/features/board/AttachmentsList.tsx:18-102`, `src/features/board/TaskDetailModal.tsx` |
 | `AttachmentsList` — eliminar | El botón contextual «Eliminar» abre la confirmación inline del detalle con el nombre del archivo y aviso de irreversibilidad. La acción espera resultado, comunica éxito/error y mantiene la confirmación ante un fallo | `src/features/board/AttachmentsList.tsx:92-96`, `src/features/board/TaskDetailModal.tsx:150-160,278-287` |
 | Disponibilidad por adjunto | La interfaz muestra ambas acciones al uploader, creador de la tarea o administrador activo; Postgres/Storage y el acceso activo al tablero siguen siendo la autoridad del permiso | `src/features/board/BoardPage.tsx:465-476`, `supabase/migrations/202610260001_task_attachment_management.sql:10-22` |
-| `BoardsPage` — eliminar tablero inactivo | Solo el admin ve «Eliminar tablero» en cards desactivadas. El `Dialog` identifica el tablero y advierte que tareas, comentarios, asignaciones y adjuntos se eliminan sin recuperación; la acción usa `ui-button--danger`, muestra espera y conserva el diálogo ante errores específicos de Storage/RPC. La orientación para `PGRST202` está versionada en `6c5b292`; no acredita el estado remoto ni sustituye comprobar ledger y objetos antes de aplicar migraciones | `src/features/boards/BoardsPage.tsx:114-119,200-224` |
+| `BoardsPage` — eliminar tablero inactivo | Solo el admin ve «Eliminar tablero» en cards desactivadas. El `Dialog` identifica el tablero y advierte que tareas, comentarios, asignaciones y adjuntos se eliminan sin recuperación; la acción usa `ui-button--danger`, muestra espera y conserva el diálogo ante errores específicos de Storage/RPC. **Superado** por la sección del 2026-11-06: el borrado se delega en la Edge Function `board-delete` y el cliente ya no distingue fallos de Storage de fallos de RPC | `src/features/boards/BoardsPage.tsx:114-119,200-224` |
 | `ProfileAvatar` | Círculo con imagen lazy/async y recorte `object-cover`; si no hay URL o falla la carga muestra icono o inicial. Tamaños `sm`, `md`, `lg`; la variante de administración conserva iniciales como fallback. Reutilizado en cuenta, lista de usuarios, autores de comentarios, tarjetas Kanban y responsables seleccionados. Usa superficie/color existentes y utilities, sin token ni clase propia | `src/shared/ui/ProfileAvatar.tsx:3-45`, `src/features/users/UsersPage.tsx:37-40,148-154`, `src/shared/ui/AccountMenu.tsx:61`, `src/features/board/CommentsList.tsx:28-30`, `src/features/board/TaskCard.tsx:101-112`, `src/features/board/AssigneePicker.tsx:27-34` |
 | `AccountMenu` — avatar propio | El panel de cuenta permite seleccionar una imagen; muestra espera, mensaje `role=status` o error `role=alert`. El selector acepta JPG/PNG/WebP y la ayuda visual declara máximo 2 MB | `src/shared/ui/AccountMenu.tsx:17-41,58-75` |
 | `UsersPage` — avatar administrativo | La fila de cuenta muestra el avatar/las iniciales y expone «Cambiar foto». El diálogo previsualiza archivo/foto existente, informa formatos/tamaño y bloquea el envío mientras guarda | `src/features/users/UsersPage.tsx:37-54,80-99,138-173` |
@@ -130,7 +165,7 @@ Describe el release `v0.6.0` (commit `21a44df`), ya versionado: el baseline Git 
 | Diálogo de renombrado | `Dialog` con el nombre precargado, campo `ui-field` con `maxLength={120}`, ayuda «El nombre debe ser único y tener entre 1 y 120 caracteres», error `role=alert` con `ui-feedback--error` y pie con «Cancelar» / «Guardar nombre». El envío se bloquea mientras está pendiente y un fallo conserva el borrador | `src/features/boards/BoardsPage.tsx:118-141` |
 | Diálogo de activar/desactivar | `Dialog` de confirmación con el texto del efecto: al desactivar avisa de que los miembros dejarán de ver el tablero y sus tareas y de que **no se borra ninguna tarea, comentario, adjunto ni membresía**; al activar avisa de que los miembros recuperan el acceso. Acción destructiva en `ui-button--danger` y acción principal en `ui-button--primary` | `src/features/boards/BoardsPage.tsx:143-165` |
 | Mensajes de error del ciclo de vida | `describeBoardError` traduce el código de Postgres a lenguaje claro: duplicado, permisos insuficientes, sesión caducada, nombre fuera de rango y tablero inexistente; `getBoardUpdateErrorMessage` lo reutiliza para renombrar y activar/desactivar | `src/features/boards/BoardsPage.tsx:72-91` |
-| Entrada a un tablero desactivado | La ruta resuelve el tablero contra el catálogo accesible; un tablero desactivado no aparece para sus miembros, así que la URL directa cae en el aviso «El tablero no existe o no tienes acceso.» con vuelta al selector. El admin activo sí lo ve en la sección de desactivados | `src/features/boards/BoardRoute.tsx:10-12`, `src/features/boards/BoardsPage.tsx:34-35` |
+| Entrada a un tablero desactivado | La ruta resuelve el tablero contra el catálogo accesible; un tablero desactivado no aparece para sus miembros, así que la URL directa cae en el aviso «El tablero no existe o no tienes acceso.» con vuelta al selector. El admin activo sí lo ve en la sección de desactivados. **Ampliado** por la sección del 2026-11-06: el admin activo abre el tablero en modo solo lectura, con aviso explícito | `src/features/boards/BoardRoute.tsx:10-12`, `src/features/boards/BoardsPage.tsx:34-35` |
 | Destinos de traslado | El selector de destino del detalle solo ofrece tableros activos distintos del actual; un tablero desactivado no se ofrece | `src/features/board/BoardPage.tsx:411` |
 
 ### Verificación y límites

@@ -17,6 +17,7 @@ interface SortableTaskCardProps {
   canMoveRight?: boolean
   canMoveUp?: boolean
   canMoveDown?: boolean
+  readOnly?: boolean
 }
 
 export function SortableTaskCard({
@@ -32,6 +33,7 @@ export function SortableTaskCard({
   canMoveRight,
   canMoveUp,
   canMoveDown,
+  readOnly = false,
 }: SortableTaskCardProps) {
   const {
     attributes,
@@ -40,7 +42,7 @@ export function SortableTaskCard({
     setActivatorNodeRef,
     transform,
     isDragging,
-  } = useSortable({ id: task.id })
+  } = useSortable({ id: task.id, disabled: readOnly })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -57,7 +59,7 @@ export function SortableTaskCard({
         isDragging={isDragging}
         onClick={onClick}
         onCommentClick={onCommentClick}
-        dragHandle={
+        dragHandle={!readOnly &&
           <button
             ref={setActivatorNodeRef}
             {...attributes}
@@ -77,10 +79,10 @@ export function SortableTaskCard({
             </svg>
           </button>
         }
-        onMoveLeft={onMoveLeft}
-        onMoveRight={onMoveRight}
-        onMoveUp={onMoveUp}
-        onMoveDown={onMoveDown}
+        onMoveLeft={readOnly ? undefined : onMoveLeft}
+        onMoveRight={readOnly ? undefined : onMoveRight}
+        onMoveUp={readOnly ? undefined : onMoveUp}
+        onMoveDown={readOnly ? undefined : onMoveDown}
         canMoveLeft={canMoveLeft}
         canMoveRight={canMoveRight}
         canMoveUp={canMoveUp}

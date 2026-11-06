@@ -58,9 +58,10 @@
   Las RPCs de tareas validan acceso en servidor; la consulta MCP conserva su regla
   más estricta de membresía. Administrar tableros y miembros sigue reservado a admin.
 - El apagado de un tablero no es una revocación de identidad: solo retira el acceso de sus miembros. El admin activo conserva el acceso, las membresías no se borran y los JWT no se invalidan (`supabase/migrations/202610220002_board_lifecycle.sql:5,27-36`).
-- El borrado permanente es otra operación: solo acepta tableros ya desactivados y elimina primero los objetos de Storage desde cliente; la RPC repite la comprobación de admin/estado y borra las filas relacionales en PostgreSQL. Las dos fases no son atómicas (`src/features/boards/api.ts:101-131`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-21`).
-- El selector local traduce `PGRST202` a una indicación sobre la migración `202610260002` o la recarga del esquema PostgREST (`src/features/boards/BoardsPage.tsx:114-119`). Es un mensaje de UI, no prueba que falte la RPC ni autoriza aplicar SQL: contrastar ledger y objetos remotos antes de operar; Storage pudo haberse limpiado antes del fallo de la RPC.
-- Caso remoto verificado 2026-11-02: faltaban la RPC y su entrada `202610260002`; se aplicó solo esa migración, se registró en la misma transacción y se solicitó recarga de PostgREST. El probe SQL focalizado pasó y revirtió sus fixtures. Esta corrección no elimina el riesgo de fallos entre Storage y SQL ni acredita una llamada HTTP autenticada posterior. [Evidencia y límites](../supabase/README.md#corrección-del-borrado-de-tableros--2026-11-02).
+- **Solo lectura de tableros desactivados (local, 2026-11-06):** con `202611060001` aplicada, un tablero con `is_active = false` rechaza toda escritura —tareas, responsables, comentarios, adjuntos, objetos de Storage, renombrado, cambio de miembros y traslado— **también para el administrador activo**. La frontera son las policies restrictivas y las guardas `lock_writable_*` de las RPCs; la interfaz solo refleja la regla. Un cliente que omita React recibe el mismo `55000` (`supabase/migrations/202611060001_inactive_board_readonly.sql:13-111`).
+- **Borrado permanente solo en servidor (local, 2026-11-06):** la SPA invoca la Edge Function `board-delete` con `{ boardId }` y no tiene fallback a Storage ni a RPC. La función verifica el bearer con `auth.getUser`, **rechaza sesiones OAuth** (`client_id` presente o `role != authenticated`) y exige admin activo; el actor y las rutas los determina el servidor, nunca el cliente. `delete_inactive_board` queda revocada para `public`, `anon` y `authenticated` (`supabase/functions/board-delete/index.ts:16-38`, `supabase/migrations/202611060001_inactive_board_readonly.sql:169-170`).
+- El selector local traduce `PGRST202` a una indicación sobre la migración `202611060001`, la recarga del esquema PostgREST y el despliegue de `board-delete`, y desaconseja el borrado directo anterior (`src/features/boards/BoardsPage.tsx`). Es un mensaje de UI, no prueba que falte ningún objeto ni autoriza aplicar SQL: contrastar ledger y objetos remotos antes de operar.
+- Caso remoto verificado 2026-11-02: faltaban la RPC `delete_inactive_board` y su entrada `202610260002`; se aplicó solo esa migración, se registró en la misma transacción y se solicitó recarga de PostgREST. El probe SQL focalizado pasó y revirtió sus fixtures. Esa corrección queda **superada** por el diseño local del 2026-11-06, que retira esa RPC y la sustituye por el borrado solo-servidor. [Evidencia y límites](../supabase/README.md#corrección-del-borrado-de-tableros--2026-11-02).
 - Avatares: una cuenta puede cambiar el propio y la UI admin permite cambiar otros; el servidor Storage permite escribir solo al propietario o admin activo. La lectura es pública; el bucket local limita MIME a JPEG/PNG/WebP y tamaño a 2 MiB (`src/features/users/avatarApi.ts:3-35`, `supabase/migrations/202610260003_profile_avatars.sql:5-50`).
 - Las cuentas activas ya existentes se asignan inicialmente a `Offline`; `General` queda vacío. Cuentas nuevas no reciben membresías automáticamente. Un traslado requiere acceso a origen y destino, y el acceso a comments/attachments sigue al tablero actual de la tarea.
 
@@ -74,8 +75,9 @@
 - Crear un comentario invalida `['comments', taskId]` y `['tasks']`; eliminarlo invalida `['comments']` y `['tasks']`, de modo que el detalle y `comment_count` de las tarjetas se refrescan desde Supabase (`src/features/board/commentsApi.ts:53-75`).
 - El catálogo de tableros se consulta por RPC (`list_boards_with_pending_counts`), no con un `select` directo: la RPC replica la visibilidad de RLS y añade el conteo de pendientes. La query usa `staleTime: 0` y refresca cada 30 segundos (`src/features/boards/api.ts:20-22`).
 - Crear, renombrar y activar/desactivar un tablero invalidan la clave `['boards']` tras el éxito, de modo que el listado se recalcula con los valores nuevos del servidor (`src/features/boards/api.ts:24-60`).
-- Eliminar un tablero elimina las cachés de sus tareas, comentarios, adjuntos y miniaturas, e invalida `['boards']` tras completarse Storage y la RPC (`src/features/boards/api.ts:135-145`).
+- Eliminar un tablero elimina las cachés de sus tareas, comentarios, adjuntos y miniaturas, e invalida `['boards']` tras completarse el borrado en servidor (`src/features/boards/api.ts`).
 - La sección «Tableros desactivados» se deriva en cliente de `is_active` sobre el mismo resultado de la query; no hay una segunda consulta para los tableros inactivos (`src/features/boards/BoardsPage.tsx:19-20,32-35`).
+- El estado de solo lectura se propaga como prop `readOnly` desde `BoardRoute` a `BoardPage`, `BoardColumn` y `SortableTaskCard`; no es un estado de caché ni una consulta adicional (`src/features/boards/BoardRoute.tsx`, `src/features/board/BoardPage.tsx`).
 - Los destinos de traslado se filtran por `board.is_active` antes de ofrecerse, además de la comprobación del servidor en `move_task_to_board` (`src/features/board/BoardPage.tsx:411`).
 - Tras un traslado se eliminan cachés de comentarios/adjuntos/miniaturas y se invalidan tareas; se valida el nuevo tablero en el servidor (`src/features/boards/api.ts:102-108`).
 - Usuarios asignables y administración usan `staleTime: 0`; adjuntos y miniaturas emiten URLs firmadas de 60 segundos y refrescan cada 45 segundos. No se observó sincronización Realtime.
@@ -93,11 +95,9 @@
 | HTTP 401 | Sesión caducada |
 | `22023` / `23514` | El nombre no cumple la regla de 1–120 caracteres sin espacios exteriores |
 | `P0002` | El tablero ya no existe |
-| `55000` | Solo se pueden eliminar tableros desactivados |
-| `PGRST202` al borrar tablero | PostgREST no encuentra la firma RPC esperada; comprobar función, migración y caché antes de actuar |
-| `BOARD_ATTACHMENT_PATH_INVALID` | No se pudo identificar el path de un adjunto; no se inicia el borrado de Storage |
-| `BOARD_ATTACHMENTS_DELETE_FAILED` | Falló la eliminación de objetos de Storage; la RPC no se invoca |
-| `BOARD_DELETE_FAILED_AFTER_STORAGE` | La limpieza de Storage terminó, pero falló el borrado SQL del tablero |
+| `55000` | Solo se pueden eliminar tableros desactivados; también «tablero no editable» (solo lectura) o «borrado pendiente» |
+| `PGRST202` al borrar tablero | PostgREST no encuentra la firma RPC esperada; en el diseño local la causa probable es que falte `202611060001` o su recarga de esquema. Comprobar función, migración y caché antes de actuar |
+| `BOARD_DELETE_SERVICE_ERROR` | La Edge Function `board-delete` no confirmó el borrado. El mensaje concreto llega en `{ error }`; si no es legible, se muestra un aviso de conexión/despliegue |
 | Cualquier otro | Mensaje genérico que añade el código del error |
 
 - `retry: 1` aplica al comportamiento de queries de TanStack Query; no se encontró timeout explícito ni retry propio del cliente Supabase (`src/App.tsx:10-17`, `src/lib/supabase.ts:1-10`).
@@ -112,6 +112,7 @@
   Fuentes: `supabase/functions/mcp/task.ts:41-92`, `workflow.ts:28-50`.
 - Administración pagina de 50 en 50; usuarios asignables se recuperan en lotes de 500 y se filtran por nombre/correo en cliente (`supabase/functions/admin-users/index.ts:34-41`, `src/features/board/assigneesApi.ts:5-15`).
 - Las respuestas de Edge usan `{ error: string }`; el cliente extrae JSON del error HTTP o muestra fallback de conexión. No devuelve contraseñas ni errores internos en crudo. Las RPC propagan el error del SDK y la UI conserva borrador con mensaje seguro (`src/features/users/api.ts:11-24`, `supabase/functions/admin-users/index.ts:73-75`).
+- `board-delete` sigue la misma convención: `Cache-Control: no-store`, `OPTIONS` soportado, `405` para métodos distintos de POST y errores `400`/`401`/`403`/`404`/`409`/`500`/`503`. El cliente lee `error.context` como `Response` y, si no puede leer el JSON, muestra un aviso de conexión/despliegue; nunca reintenta automáticamente ni degrada a un borrado directo (`supabase/functions/board-delete/index.ts:10-59`, `src/features/boards/api.ts`).
 - El upload de adjuntos en UI rechaza archivos mayores a 5 MiB; el bucket `task-attachments` no declara `file_size_limit` en el bootstrap, así que no asumir enforcement servidor de ese máximo (`src/features/board/CreateTaskModal.tsx`, `src/features/board/TaskDetailModal.tsx`, `supabase-schema.sql:354-357`). Los avatares son distintos: el bucket `avatars` declara máximo 2 MiB y MIME permitidos en el bootstrap/migración (`supabase-schema.sql:348-352`, `supabase/migrations/202610260003_profile_avatars.sql:5-10`).
 
 ## Nombres, versiones y serialización

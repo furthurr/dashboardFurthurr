@@ -16,6 +16,63 @@ como aplicadas. No inferir aplicación registrada por presencia de objetos ni ej
 `db push` a ciegas.
 Detalle operativo: [Supabase](../supabase/README.md); [registro de fase 2](../docs/prueba-mcp.md#8-registro-de-resultados-sin-secretos).
 
+## Tableros desactivados en solo lectura y borrado solo en servidor — 2026-11-06
+
+> **Estado:** la migración `202611060001_inactive_board_readonly.sql` **NO está
+> aplicada en el proyecto remoto**. La Edge Function `board-delete` **NO está
+> desplegada**. El push a `main` publica la SPA en GitHub Pages, pero Pages no
+> despliega SQL ni funciones: el entorno desplegado conserva el comportamiento
+> anterior. El bootstrap `supabase-schema.sql` ya incluye los mismos objetos para
+> instalaciones nuevas. No es idempotente: **no debe reaplicarse**.
+
+La migración introduce cuatro capas.
+
+**1. Policies restrictivas de escritura.** `INSERT`/`UPDATE`/`DELETE` sobre `tasks`,
+`task_assignees`, `comments`, `task_attachments` y `storage.objects` (bucket
+`task-attachments`) quedan condicionados a `lock_writable_board`,
+`lock_writable_task` o `lock_writable_task_object`. Como son restrictivas, se
+combinan con (`AND`) las policies permisivas existentes: un tablero desactivado
+rechaza cualquier escritura **también al administrador activo**
+(`supabase/migrations/202611060001_inactive_board_readonly.sql:13-62`).
+
+**2. Guardas en las RPCs de escritura.** Las funciones `SECURITY DEFINER` que evitan
+RLS se renombran a `*_writable_internal` —conservando sus validaciones originales— y
+se recrean como envoltorios que comprueban admin/acceso y `lock_writable_*` antes de
+delegar. Afecta a `rename_board`, `set_board_members`, `set_task_assignees`,
+`create_task_with_assignees` y `move_task_to_board`. Un tablero inactivo responde
+`55000` («Board is not writable»). Las funciones internas quedan revocadas para
+`public`, `anon` y `authenticated`
+(`supabase/migrations/202611060001_inactive_board_readonly.sql:64-111`).
+
+**3. Manifiesto y RPCs de servicio.** `public.board_deletion_jobs` (`board_id` PK/FK
+con cascada, `paths text[]`, `created_at`) guarda el manifiesto de objetos a eliminar;
+tiene RLS y ningún grant cliente. `prepare_board_deletion(p_board_id, p_actor_id)`
+bloquea la fila, exige tablero inactivo y devuelve el manifiesto (reutilizándolo si
+ya existe); `finish_board_deletion(p_board_id, p_actor_id)` comprueba que no queden
+objetos del manifiesto y elimina tareas y tablero. Ambas son `SECURITY DEFINER` con
+`search_path = ''` y ejecución **solo para `service_role`**
+(`supabase/migrations/202611060001_inactive_board_readonly.sql:5-11,124-168`).
+
+**4. Reactivación bloqueada y retiro del borrado cliente.** El trigger
+`board_deletion_pending` (`guard_board_reactivation`) impide `is_active = true` si
+existe un trabajo de borrado registrado, con `55000`. `delete_inactive_board(uuid)`
+queda **revocada** para `public`, `anon` y `authenticated`: no hay vía cliente de
+borrado (`supabase/migrations/202611060001_inactive_board_readonly.sql:113-122,169-170`).
+
+La Edge Function `board-delete` es la única vía de borrado: verifica el bearer con
+`auth.getUser`, rechaza sesiones OAuth, exige admin activo, llama a
+`prepare_board_deletion`, borra los objetos en lotes de 100 mediante la API de Storage
+y finally llama a `finish_board_deletion`. No acepta rutas ni identidad del actor
+desde el cliente (`supabase/functions/board-delete/index.ts:1-63`).
+
+**Límites:** no hay transacción distribuida entre Storage y PostgreSQL, ni rollback de
+archivos ya eliminados, ni worker automático. Un fallo deja el tablero visible para el
+admin, inactivo y con sus metadatos; algunos archivos pueden haber desaparecido y la
+reactivación queda bloqueada. Reintentar «Eliminar tablero» reutiliza el manifiesto y
+completa la operación. La verificación local usó PostgreSQL 16 desechable con
+Auth/Storage simulados y mocks de Edge: **no es E2E de Auth, OAuth ni Storage real**.
+[Guía operativa y checklist](../docs/tableros-solo-lectura.md).
+
 ## Corrección focalizada del borrado — 2026-11-02
 
 La ausencia de la RPC registrada en el inventario histórico anterior se confirmó
@@ -82,6 +139,7 @@ erDiagram
   PROFILES o|--o{ TASKS : "crea"
   BOARDS ||--o{ TASKS : "contiene"
   BOARDS ||--o{ BOARD_MEMBERS : "asigna"
+  BOARDS ||--o| BOARD_DELETION_JOBS : "manifiesto de borrado"
   PROFILES ||--o{ BOARD_MEMBERS : "miembro"
   TASKS ||--o{ TASK_ASSIGNEES : "tiene"
   PROFILES ||--o{ TASK_ASSIGNEES : "asignado"
@@ -113,6 +171,11 @@ erDiagram
   BOARD_MEMBERS {
     uuid board_id PK
     uuid profile_id PK
+  }
+  BOARD_DELETION_JOBS {
+    uuid board_id PK
+    text_array paths
+    timestamptz created_at
   }
   TASKS {
     uuid id PK
@@ -218,6 +281,7 @@ membresía explícita para no admin. No certifica configuración remota.
 | `task_assignees` | RPC | cuenta activa de cualquier rol con acceso al tablero sustituye responsables; la RPC no edita la tarea | `supabase/migrations/202610200001_task_assignments.sql:7-45`, `supabase/migrations/202610210001_boards.sql:82-92` |
 | `comments` | select/insert/update/delete | gate activo AND políticas anteriores: lectura autenticada, alta admin/usuario, update/delete autor/admin | `supabase-schema.sql:273-309`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
 | `task_attachments` | select/insert/update(`file_name`)/delete | gate de cuenta activa y acceso al tablero; SELECT para autenticados, INSERT admin/usuario, UPDATE de `file_name` y DELETE para uploader, creador de tarea o admin activo. El cliente no puede modificar las demás columnas | `supabase-schema.sql:314-340,458-461,617-628`, `supabase/migrations/202610260001_task_attachment_management.sql:4-22`, `supabase/migrations/202610190001_user_administration.sql:24-30` |
+| `tasks`, `task_assignees`, `comments`, `task_attachments`, `storage.objects` | **escrituras** (local, 2026-11-06) | Policies **restrictivas** «Active board insert/update/delete» que exigen `lock_writable_board` / `lock_writable_task` / `lock_writable_task_object`: un tablero con `is_active = false` rechaza toda escritura, **también al administrador activo**. Requiere `202611060001` | `supabase/migrations/202611060001_inactive_board_readonly.sql:46-62` |
 
 Los comentarios de algunas policies de Storage describen roles distintos de lo que comprueba su predicado. El predicado SQL es la evidencia de esta tabla de Storage; no se interpreta aquí la intención de seguridad. Contrastar con `specs/05-auth-roles-permisos.md` y solicitar revisión de seguridad antes de cambiarlo.
 
@@ -240,7 +304,11 @@ La migración `202610220002_board_lifecycle.sql` (aplicada en el proyecto Supaba
 | RPC `rename_board(p_board_id, p_name)` | Solo admin (`42501`); nombre recortado de 1–120 (`22023`); tablero inexistente (`P0002`); unicidad por índice `lower(name)` | `supabase/migrations/202610220002_board_lifecycle.sql:38-54` |
 | RPC `set_board_active(p_board_id, p_active)` | Solo admin (`42501`); alterna `is_active` sin borrar tareas, comentarios, adjuntos ni membresías | `supabase/migrations/202610220002_board_lifecycle.sql:56-66` |
 | RPC `list_boards_with_pending_counts()` | Devuelve `id, name, is_active, created_at, pending_count` con la misma visibilidad que RLS; `pending_count` suma tareas en `backlog`, `por_hacer` y `haciendo` | `supabase/migrations/202610220002_board_lifecycle.sql:68-85` |
-| RPC `delete_inactive_board(p_board_id)` | Solo admin activo; bloquea y vuelve a validar el tablero inactivo (`55000` si está activo), elimina tareas y luego tablero; `void` | `supabase-schema.sql:727-739`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-25` |
+| RPC `delete_inactive_board(p_board_id)` | **Retirada en local (2026-11-06):** revocada para `public`/`anon`/`authenticated`. El estado remoto del 2026-11-02 la tenía aplicada y concedida a `authenticated`; ese grant queda obsoleto al aplicar `202611060001` | `supabase-schema.sql:727-739`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-25`, `supabase/migrations/202611060001_inactive_board_readonly.sql:169-170` |
+| Tabla `board_deletion_jobs` (local, 2026-11-06) | Manifiesto de borrado: `board_id` PK/FK con cascada, `paths text[]`, `created_at`. RLS y sin grants cliente; solo `service_role` la usa vía las RPCs de borrado | `supabase/migrations/202611060001_inactive_board_readonly.sql:5-11` |
+| RPC `prepare_board_deletion(p_board_id, p_actor_id)` (local, 2026-11-06) | Solo `service_role`; exige admin activo (`42501`), tablero existente (`P0002`) e inactivo (`55000`); bloquea la fila y devuelve el manifiesto de rutas, reutilizándolo si ya existe | `supabase/migrations/202611060001_inactive_board_readonly.sql:124-148` |
+| RPC `finish_board_deletion(p_board_id, p_actor_id)` (local, 2026-11-06) | Solo `service_role`; exige admin activo (`42501`), tablero inactivo (`55000`), trabajo preparado (`55000`) y ausencia de objetos del manifiesto (`55000`); elimina tareas y tablero | `supabase/migrations/202611060001_inactive_board_readonly.sql:149-166` |
+| Trigger `board_deletion_pending` (local, 2026-11-06) | Impide `is_active = true` mientras exista un trabajo de borrado registrado (`55000`), para que un fallo de limpieza no deje un tablero parcialmente vaciado y reutilizable | `supabase/migrations/202611060001_inactive_board_readonly.sql:113-122` |
 
 Las tres RPCs se revocan a `public`/`anon` y se conceden a `authenticated` (`supabase/migrations/202610220002_board_lifecycle.sql:87-90`).
 
@@ -254,6 +322,15 @@ La RPC de borrado también se revoca a `public`/`anon` y se concede a `authentic
 Consecuencia observable: `can_access_board()` sí puede leer `boards` (necesita `is_active`), pero **la policy de lectura de `boards` ya no lo hace**. Añadir en el futuro una función que lea `boards` a esa policy reintroduciría la recursión.
 
 **Efecto del apagado.** Con `is_active = false`, los miembros pierden la lectura del tablero y `can_access_board()` deja de concederles acceso a sus tareas, comentarios, adjuntos y asignaciones —también por URL directa—, porque la policy restrictiva «Board access required» se apoya en `can_access_board()` (`supabase/migrations/202610220002_board_lifecycle.sql:27-36`, `supabase-schema.sql:634-641`). El admin activo mantiene el acceso y puede reactivar el tablero; la membresía no se borra.
+
+**Efecto del apagado sobre las escrituras (local, 2026-11-06).** La migración
+`202611060001_inactive_board_readonly.sql` amplía el apagado más allá de la pérdida de
+acceso: un tablero desactivado queda en **solo lectura para todos los roles,
+incluido el administrador activo**. La garantía son policies restrictivas de
+escritura sobre `tasks`, `task_assignees`, `comments`, `task_attachments` y
+`storage.objects`, más guardas `lock_writable_*` en las RPCs de escritura. La
+reactivación (`set_board_active`) es la operación que devuelve el tablero a estado
+editable, y queda bloqueada con `55000` si existe un borrado pendiente.
 
 ### Edición compartida de tareas
 
@@ -275,9 +352,26 @@ El renombrado modifica solo `file_name`: no mueve el objeto ni altera su path, M
 
 ### Borrado permanente de tableros inactivos
 
-`delete_inactive_board(uuid)` exige admin activo y un tablero existente con `is_active = false`. Bloquea la fila, elimina las tareas del tablero y después la fila de `boards`; las FK eliminan por cascada asignaciones, comentarios y metadata de adjuntos. La FK de `tasks.board_id` usa `ON DELETE RESTRICT`, por lo que el borrado explícito de tareas precede al de tablero (`supabase-schema.sql:727-739`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-21`).
+**Estado vigente (local, 2026-11-06):** el borrado es **solo de servidor**. La
+migración `202611060001_inactive_board_readonly.sql` revoca `delete_inactive_board(uuid)`
+para `public`, `anon` y `authenticated` y la sustituye por el par
+`prepare_board_deletion` / `finish_board_deletion`, ejecutable solo por
+`service_role`, más la Edge Function `board-delete`. El cliente ya no enumera rutas
+ni borra objetos de Storage. Ver [la sección de solo lectura](#tableros-desactivados-en-solo-lectura-y-borrado-solo-en-servidor--2026-11-06).
 
-La API cliente enumera metadata/paths y elimina objetos de Storage antes de invocar la RPC. La limpieza de archivos y la transacción PostgreSQL no son atómicas: si falla Storage, la RPC no se invoca; si falla la RPC después de Storage, los objetos pueden haberse eliminado aunque las filas sigan. La migración local no se verificó en remoto (`src/features/boards/api.ts:69-145`).
+**Estado histórico (aplicado en remoto el 2026-11-02):** `delete_inactive_board(uuid)`
+exigía admin activo y un tablero existente con `is_active = false`. Bloqueaba la fila,
+eliminaba las tareas del tablero y después la fila de `boards`; las FK eliminaban por
+cascada asignaciones, comentarios y metadata de adjuntos. La FK de `tasks.board_id`
+usa `ON DELETE RESTRICT`, por lo que el borrado explícito de tareas precede al de
+tablero (`supabase-schema.sql:727-739`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-21`).
+
+Ese flujo cliente (enumerar metadata/paths, borrar objetos y luego invocar la RPC) ya
+no existe en el árbol local. La API cliente enumeraba metadata/paths y eliminaba
+objetos de Storage antes de invocar la RPC. La limpieza de archivos y la transacción
+PostgreSQL no eran atómicas: si fallaba Storage, la RPC no se invocaba; si fallaba la
+RPC después de Storage, los objetos podían haberse eliminado aunque las filas
+siguieran (`src/features/boards/api.ts:69-145`).
 
 ## Role, hook y persistencia auxiliar del MCP
 

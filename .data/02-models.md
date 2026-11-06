@@ -17,11 +17,28 @@ Los tipos del portal viven en `src/types/index.ts`; los casts de queries no vali
   personas son proyecciones de RPC, no columnas de `boards`
   (`src/types/index.ts:33-43`, `supabase/migrations/202610280001_board_assignment_access.sql:44-83`).
 - `public.boards.name` es único sin distinguir mayúsculas (`boards_unique_name` sobre `lower(name)`), y valida nombre recortado de 1–120 caracteres (`supabase-schema.sql:576,580`).
-- `public.boards.is_active` es `boolean not null default true`; modela el ciclo de vida activo/desactivado sin borrar contenido al desactivar. Un admin puede borrar permanentemente un tablero solo después de desactivarlo, mediante `delete_inactive_board`; esta operación elimina sus tareas y datos relacionales (`supabase-schema.sql:577,727-739`, `supabase/migrations/202610260002_delete_inactive_boards.sql:5-21`).
+- `public.boards.is_active` es `boolean not null default true`; modela el ciclo de vida activo/desactivado sin borrar contenido al desactivar. Un admin puede borrar permanentemente un tablero solo después de desactivarlo; desde la revisión local del 2026-11-06 ese borrado es **solo de servidor** (Edge Function `board-delete`) y un tablero desactivado queda en **solo lectura para todos los roles**, incluido el admin activo (`supabase-schema.sql:577,727-739`, `supabase/migrations/202611060001_inactive_board_readonly.sql:13-170`).
 - `pending_count` **no es una columna**: es un valor calculado por la RPC `list_boards_with_pending_counts` y devuelto como `bigint`; el cliente lo normaliza a `number` (`src/features/boards/api.ts:5,15`).
 - `board_members` es la relación many-to-many entre `boards.id` y `profiles.id`, con PK compuesta `(board_id, profile_id)`; se representa como perfiles `AssigneeProfile[]` en el cliente, no como entidad TS independiente.
 - Solo admins activos pueden crear tableros, renombrarlos, activarlos/desactivarlos y gestionar membresías. `Offline` y `General` se crean por migración; los miembros activos existentes se asignan a Offline y General empieza vacío.
 - Fuente: `src/types/index.ts:33-39`, `src/features/boards/api.ts:5-18`, `supabase/migrations/202610210001_boards.sql:4-22,63-80`, `supabase/migrations/202610220002_board_lifecycle.sql:5,40-66`.
+
+### `board_deletion_jobs` — manifiesto de borrado (local, 2026-11-06)
+
+Tabla auxiliar del borrado de tableros, creada por
+`supabase/migrations/202611060001_inactive_board_readonly.sql:5-11`. No tiene
+representación en TypeScript: solo la consume la Edge Function `board-delete` a
+través de las RPCs `service_role`.
+
+| Campo | Tipo SQL | Nullable | Notas |
+| --- | --- | --- | --- |
+| `board_id` | `uuid` | No | PK y FK a `public.boards(id)` con `ON DELETE CASCADE` |
+| `paths` | `text[]` | No | Rutas de objetos del bucket fijo `task-attachments` que pertenecen al tablero |
+| `created_at` | `timestamptz` | No | `default now()` |
+
+RLS habilitado y sin grants para `public`, `anon` y `authenticated`. La existencia de
+una fila bloquea la reactivación del tablero (`guard_board_reactivation`) y permite
+reutilizar el manifiesto en un reintento.
 
 ## `Profile`
 
@@ -187,3 +204,5 @@ Fuente: `src/types/index.ts:68-78`, `supabase-schema.sql:89-99`.
 - No se encontró JSON Schema o validación runtime de estos tipos en las rutas de datos consultadas.
 - No hay tipos generados desde el schema Supabase en el repositorio; los tipos locales son mantenidos manualmente.
 - `tasks_with_assignees` existe, pero `fetchTasks` no la usa: obtiene responsables mediante la relación de `tasks`. `tasks_with_stats` sí se consulta, limitada a `id` y `comment_count`; `attachment_count` no se solicita en la query actual (`supabase-schema.sql:408-435`, `src/features/board/api.ts:5-35`).
+- El estado de solo lectura de un tablero desactivado **no es un campo de `Board`**: se deriva de `Board.is_active` y se propaga como prop `readOnly` en la interfaz. La garantía real está en Postgres/Storage, no en el tipo (`src/features/boards/BoardRoute.tsx`, `src/features/board/BoardPage.tsx`).
+- La respuesta de `board-delete` no tiene DTO propio en TypeScript: el cliente solo comprueba `data?.success === true` y, en error, extrae `{ error: string }` de `error.context` (`src/features/boards/api.ts`).

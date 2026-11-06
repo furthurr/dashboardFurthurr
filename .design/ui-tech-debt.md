@@ -2,6 +2,28 @@
 
 Hallazgos visuales/documentales detectados en los componentes y estilos revisados. Esta revisión es documental: no se modificó UI ni se ejecutó una auditoría automatizada de accesibilidad.
 
+## Revisión focalizada — tableros en solo lectura y borrado solo-servidor (2026-11-06)
+
+El modo solo lectura no introduce tokens, paleta, tema ni clases CSS propias: reutiliza
+`ui-feedback` para el aviso «Tablero desactivado: solo lectura. Actívalo para realizar
+cambios.» y los controles existentes para el resto. El aviso usa `role="status"`, por lo
+que se anuncia sin mover el foco; los errores de escritura y de borrado siguen siendo
+`role="alert"` (`src/features/board/BoardPage.tsx`).
+
+No se abre un hallazgo de accesibilidad verificable nuevo por lectura estática: la
+ausencia del asa de arrastre y de los botones de mover evita exponer controles
+inoperantes, y el detalle deja de recibir los callbacks de escritura, de modo que no se
+ofrece una acción que el servidor vaya a rechazar. Queda **sin comprobar** la
+comunicación del estado solo lectura con lector de pantalla, el contraste real del
+aviso `ui-feedback` sobre la superficie del tablero y el comportamiento responsive del
+banner en viewports estrechos.
+
+La evidencia de implementación local (215 Vitest, 18 Deno de Edge, 19 Deno MCP, SQL
+en PostgreSQL 16 desechable, lint y build) es de pruebas DOM y de mocks: **no**
+constituye revisión visual en navegador, cálculo de contraste, lector de pantalla ni
+auditoría WCAG. La migración y la Edge Function no están desplegadas, por lo que no hay
+comprobación en navegador autenticado contra el entorno real.
+
 ## Revisión focalizada — copia de UUID y lectura MCP (2026-10-28)
 
 `CopyTaskId` y comentarios comparten botón `ui-button--sm`, iconos decorativos de

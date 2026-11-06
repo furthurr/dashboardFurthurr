@@ -16,5 +16,6 @@ Deno.test('MCP bootstrap and incremental migration stay identical', async () => 
   const unifiedMarker = '-- MCP unified consent bootstrap: equivalent to 202610300002_mcp_unified_consent.sql.'
   if (tokens(schema.slice(schema.indexOf(marker), schema.indexOf(unifiedMarker))) !== tokens(automation)) throw new Error('Automation bootstrap SQL differs from incremental migration')
   const unified = await Deno.readTextFile(new URL('supabase/migrations/202610300002_mcp_unified_consent.sql', root))
-  if (tokens(schema.slice(schema.indexOf(unifiedMarker))) !== tokens(unified)) throw new Error('Unified consent bootstrap differs from migration')
+  const readonlyMarker = '-- Read-only inactive boards (202611060001). Deletion requires board-delete Edge.'
+  if (tokens(schema.slice(schema.indexOf(unifiedMarker), schema.indexOf(readonlyMarker))) !== tokens(unified)) throw new Error('Unified consent bootstrap differs from migration')
 })

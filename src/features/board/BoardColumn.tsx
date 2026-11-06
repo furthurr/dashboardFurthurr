@@ -13,10 +13,11 @@ interface BoardColumnProps {
   onTaskCommentsClick?: (task: TaskWithAssignees) => void
   onMoveTask?: (taskId: string, direction: 'left' | 'right') => void
   onMoveTaskVertical?: (taskId: string, direction: 'up' | 'down') => void
+  readOnly?: boolean
 }
 
-export function BoardColumn({ id, label, tasks, taskImages = {}, onTaskClick, onTaskCommentsClick, onMoveTask, onMoveTaskVertical }: BoardColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id })
+export function BoardColumn({ id, label, tasks, taskImages = {}, onTaskClick, onTaskCommentsClick, onMoveTask, onMoveTaskVertical, readOnly = false }: BoardColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: readOnly })
   const columnIndex = BOARD_COLUMNS.findIndex((col) => col.id === id)
 
   return (
@@ -35,13 +36,14 @@ export function BoardColumn({ id, label, tasks, taskImages = {}, onTaskClick, on
                 <path strokeLinecap="round" d="M8 9h8M8 13h5" />
               </svg>
               <strong>Sin tareas en esta etapa</strong>
-              <p>Arrastra una tarea aquí o usa sus controles para moverla.</p>
+              {!readOnly && <p>Arrastra una tarea aquí o usa sus controles para moverla.</p>}
             </div>
           )}
           {tasks.map((task, index) => (
             <SortableTaskCard
               key={task.id}
               task={task}
+              readOnly={readOnly}
               images={taskImages[task.id]}
               onClick={() => onTaskClick?.(task)}
               onCommentClick={() => onTaskCommentsClick?.(task)}

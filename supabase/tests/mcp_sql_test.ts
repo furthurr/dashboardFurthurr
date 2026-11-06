@@ -20,6 +20,7 @@ Deno.test('MCP SQL isolation and portal regressions: incremental + fresh bootstr
   const schema = await read('supabase-schema.sql')
   const marker = '-- MCP identity-only bootstrap.'
   const unifiedMarker = '-- MCP unified consent bootstrap: equivalent to 202610300002_mcp_unified_consent.sql.'
+  const readonlyMarker = '-- Read-only inactive boards (202611060001). Deletion requires board-delete Edge.'
   if (!schema.includes(marker)) throw new Error('Missing bootstrap boundary')
   await docker(['run', '--rm', '--network', 'none', '--name', name, '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', '-d', 'postgres:16-alpine'])
   try {
@@ -39,21 +40,23 @@ Deno.test('MCP SQL isolation and portal regressions: incremental + fresh bootstr
           await sql(mode, await read(`supabase/migrations/${migration}.sql`))
         }
       }
+      await sql(mode, mode === 'bootstrap' ? schema.slice(schema.indexOf(readonlyMarker))
+        : await read('supabase/migrations/202611060001_inactive_board_readonly.sql'))
       // user_access.sql expects a pre-existing administrator. This seed exists
       // only in the disposable test database; the probes themselves ROLLBACK.
       await sql(mode, `insert into auth.users(id,email,raw_user_meta_data)
         values('00000000-0000-0000-0000-000000000001','admin@example.test','{}');
         update public.profiles set role='admin' where id='00000000-0000-0000-0000-000000000001';`)
-      for (const probe of ['mcp_identity', 'mcp_task_read', 'mcp_workflow', 'mcp_automation', 'boards', 'task_assignments', 'user_access']) {
+      for (const probe of ['mcp_identity', 'mcp_task_read', 'mcp_workflow', 'mcp_automation', 'boards', 'task_assignments', 'user_access', 'inactive_board_readonly', 'board_assignment_access']) {
         await sql(mode, await read(`supabase/tests/${probe}.sql`))
         console.log(`PASS ${mode}: ${probe}`)
       }
       await sql(mode, await read('supabase/tests/support/mcp_unified_seed.sql'))
-      await sql(mode, mode === 'bootstrap' ? schema.slice(schema.indexOf(unifiedMarker))
+      await sql(mode, mode === 'bootstrap' ? schema.slice(schema.indexOf(unifiedMarker), schema.indexOf(readonlyMarker))
         : await read('supabase/migrations/202610300002_mcp_unified_consent.sql'))
       await sql(mode, await read('supabase/tests/mcp_unified_consent.sql'))
       console.log(`PASS ${mode}: unified consent migration, grants, automatic workflow and revocation`)
-      for (const probe of ['boards','task_assignments','user_access']) {
+      for (const probe of ['boards','task_assignments','user_access','inactive_board_readonly']) {
         await sql(mode, await read(`supabase/tests/${probe}.sql`))
         console.log(`PASS ${mode}: post-unification ${probe}`)
       }
@@ -137,6 +140,38 @@ Deno.test('MCP SQL isolation and portal regressions: incremental + fresh bootstr
           select id,user_id,client_id,granted_at,array['read_tasks','read_attachments','start_task','comment_task','review_task'] from auth.oauth_consents where id='${consent}';`)
       }
       console.log(`PASS ${mode}: concurrent connection and session revocation block automatic mutations`)
+      // Inactive-board guards must serialize with lifecycle updates, not just
+      // pass single-session RLS tests with a previously read is_active flag.
+      const lockedBoard = crypto.randomUUID()
+      const adminClaims = JSON.stringify({ sub: '00000000-0000-0000-0000-000000000001', role: 'authenticated' })
+      const portal = `select set_config('request.jwt.claims','${adminClaims}',false); set role authenticated;`
+      await sql(mode, `insert into public.boards(id,name) values('${lockedBoard}','Readonly concurrency fixture');`)
+      const awaitSleeping = async (label: string) => {
+        for (let attempt = 0; attempt < 40; attempt++) {
+          const ready = await sql(mode, `select exists(select 1 from pg_stat_activity where application_name='${label}' and wait_event='PgSleep');`)
+          if (/\bt\b/.test(ready)) return
+          await new Promise(resolve => setTimeout(resolve, 20))
+        }
+        throw new Error(`Did not observe ${label}`)
+      }
+      const disabling = sql(mode, `set application_name='readonly-disable'; begin; ${portal}
+        select public.set_board_active('${lockedBoard}',false); select pg_sleep(1); commit;`)
+      await awaitSleeping('readonly-disable')
+      const afterDisable = await Promise.allSettled([disabling, sql(mode, `${portal}
+        select public.create_task_with_assignees('${lockedBoard}','Must fail',null,'backlog','normal','{}');`)])
+      if (afterDisable[0].status !== 'fulfilled' || afterDisable[1].status !== 'rejected'
+        || !String(afterDisable[1].reason).includes('Board is not writable')) throw new Error('Concurrent disable failed closed check')
+      await sql(mode, `update public.boards set is_active=true where id='${lockedBoard}';`)
+      const creating = sql(mode, `set application_name='readonly-create'; begin; ${portal}
+        select public.create_task_with_assignees('${lockedBoard}','Created while active',null,'backlog','normal','{}'); select pg_sleep(1); commit;`)
+      await awaitSleeping('readonly-create')
+      await Promise.all([creating, sql(mode, `${portal} select public.set_board_active('${lockedBoard}',false);`)])
+      await sql(mode, `do $$ begin
+        if (select is_active from public.boards where id='${lockedBoard}')
+          or (select count(*) from public.tasks where board_id='${lockedBoard}') <> 1
+        then raise exception 'Lifecycle/write serialization lost data'; end if;
+      end $$;`)
+      console.log(`PASS ${mode}: concurrent creation/deactivation serialize in both orders`)
     }
   } finally { await docker(['stop', name]) }
 })

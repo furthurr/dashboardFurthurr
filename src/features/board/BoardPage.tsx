@@ -34,7 +34,7 @@ import { AccountMenu } from '@/shared/ui/AccountMenu'
 import { Toast } from '@/shared/ui/Toast'
 import { useToast } from '@/shared/ui/useToast'
 
-export function BoardPage({ boardId, boardName, boards }: { boardId: string; boardName: string; boards: Board[] }) {
+export function BoardPage({ boardId, boardName, boards, readOnly = false }: { boardId: string; boardName: string; boards: Board[]; readOnly?: boolean }) {
   const { user, profile } = useAuth()
   const { data: tasks = [], isLoading, error, refetch } = useTasks(boardId)
   const moveToBoard = useMoveTaskToBoard()
@@ -144,7 +144,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
   }, {} as Record<TaskStatus, typeof displayTasks>)
 
   async function performMovement(action: () => Promise<unknown>) {
-    if (pendingRef.current || movementBusy) return
+    if (readOnly || pendingRef.current || movementBusy) return
     pendingRef.current = true
     setMovementPending(true)
     setMoveError(null)
@@ -162,7 +162,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
   }
 
   function handleDragStart(event: DragStartEvent) {
-    if (pendingRef.current || movementBusy) return
+    if (readOnly || pendingRef.current || movementBusy) return
     const { active } = event
     const task = displayTasks.find((t) => t.id === active.id)
     if (task) setActiveTask(task)
@@ -172,7 +172,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
     const { active, over } = event
     setActiveTask(null)
 
-    if (pendingRef.current || movementBusy) return
+    if (readOnly || pendingRef.current || movementBusy) return
     if (!over) {
       setNotice('Movimiento cancelado.')
       return
@@ -212,7 +212,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
   }
 
   function handleMoveTask(taskId: string, direction: 'left' | 'right') {
-    if (pendingRef.current || movementBusy) return
+    if (readOnly || pendingRef.current || movementBusy) return
     const task = displayTasks.find((t) => t.id === taskId)
     if (!task) return
 
@@ -236,7 +236,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
   }
 
   function handleMoveTaskVertical(taskId: string, direction: 'up' | 'down') {
-    if (pendingRef.current || movementBusy) return
+    if (readOnly || pendingRef.current || movementBusy) return
     const task = displayTasks.find((t) => t.id === taskId)
     if (!task) return
 
@@ -287,7 +287,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
     files: File[]
     assigneeIds: string[]
   }) {
-    if (!user || createPendingRef.current) return
+    if (readOnly || !user || createPendingRef.current) return
 
     createPendingRef.current = true
     setIsCreateSubmitting(true)
@@ -368,10 +368,11 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
           </dl>
           <div className="flex max-w-full flex-wrap items-center gap-2">
             <AssigneeFilter {...assigneeOptions} value={filterUserIds} onChange={setFilterUserIds} />
-            {profile?.role !== 'invitado' && <button type="button" className="ui-button ui-button--primary" onClick={() => setIsModalOpen(true)}>+ Nueva Tarea</button>}
+            {!readOnly && profile?.role !== 'invitado' && <button type="button" className="ui-button ui-button--primary" onClick={() => setIsModalOpen(true)}>+ Nueva Tarea</button>}
           </div>
         </div>
         <div className="px-4 sm:px-8">
+          {readOnly && <p role="status" className="ui-feedback mb-4">Tablero desactivado: solo lectura. Actívalo para realizar cambios.</p>}
           {filterUserIds.length > 0 && visibleTasks.length === 0 && <p role="status" className="ui-feedback mb-4">No hay tareas asignadas a los usuarios seleccionados.</p>}
           {moveError && <p role="alert" className="ui-feedback ui-feedback--error mb-4">{moveError}</p>}
           {createWarning && <div role="alert" className="ui-feedback ui-feedback--error mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -403,6 +404,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
                     id={col.id}
                     label={col.label}
                     tasks={visibleTasksByColumn[col.id]}
+                    readOnly={readOnly}
                     taskImages={taskImages}
                     onTaskClick={(task) => openTaskDetail(task)}
                     onTaskCommentsClick={(task) => openTaskDetail(task, 'comments')}
@@ -420,7 +422,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
 
         <CreateTaskModal
           key={isModalOpen ? 'open' : 'closed'}
-          isOpen={isModalOpen}
+          isOpen={isModalOpen && !readOnly}
           onClose={() => {
             setIsModalOpen(false)
             setCreateError(null)
@@ -433,8 +435,9 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
         />
 
         <TaskDetailModal
+          key={readOnly ? 'read-only' : 'editable'}
           boards={boards.filter((board) => board.id !== boardId && board.is_active)}
-          onMoveToBoard={selectedTask ? async (destinationId) => {
+          onMoveToBoard={!readOnly && selectedTask ? async (destinationId) => {
             await moveToBoard.mutateAsync({ taskId: selectedTask.id, boardId: destinationId })
             setOptimisticTasks(null)
             setNotice('Tarea trasladada al tablero seleccionado.')
@@ -448,7 +451,7 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
           commentsError={Boolean(commentsError)}
           attachmentsError={Boolean(attachmentsError)}
           assigneeOptions={assigneeOptions}
-          onSaveAssignees={selectedTask ? async (assigneeIds) => {
+          onSaveAssignees={!readOnly && selectedTask ? async (assigneeIds) => {
             const taskId = selectedTask.id
             const assignees = await setTaskAssignees.mutateAsync({ taskId, assigneeIds })
             setSelectedTask((current) => current?.id === taskId ? { ...current, assignees } : current)
@@ -460,42 +463,42 @@ export function BoardPage({ boardId, boardName, boards }: { boardId: string; boa
             setSelectedTask(null)
           }}
           // Edición compartida: cualquier cuenta activa puede editar los campos de cualquier tarea.
-          onSave={selectedTask ? (data) => {
+          onSave={!readOnly && selectedTask ? (data) => {
             setNotice('')
             return updateTask.mutateAsync({ taskId: selectedTask.id, ...data }).then(() => {
               setNotice('Tarea guardada correctamente.')
             })
           } : undefined}
-          onDelete={selectedTask && canDeleteSelectedTask ? () => {
+          onDelete={!readOnly && selectedTask && canDeleteSelectedTask ? () => {
             setNotice('')
             return deleteTask.mutateAsync(selectedTask.id).then(() => {
               setNotice('Tarea eliminada correctamente.')
             })
           } : undefined}
-          onAddComment={selectedTask && user ? (body) =>
+          onAddComment={!readOnly && selectedTask && user ? (body) =>
             createComment.mutateAsync({ taskId: selectedTask.id, authorId: user.id, body })
           : undefined}
-          onDeleteComment={(commentId) => {
+          onDeleteComment={!readOnly ? (commentId) => {
             return deleteComment.mutateAsync({ commentId })
-          }}
-          onUploadAttachment={selectedTask && user ? (file) =>
+          } : undefined}
+          onUploadAttachment={!readOnly && selectedTask && user ? (file) =>
             uploadAttachment.mutateAsync({ taskId: selectedTask.id, uploadedBy: user.id, file })
           : undefined}
-          onRenameAttachment={selectedTask ? (attachmentId, fileName) =>
+          onRenameAttachment={!readOnly && selectedTask ? (attachmentId, fileName) =>
             renameAttachment.mutateAsync({ attachmentId, fileName })
           : undefined}
-          onDeleteAttachment={(attachmentId) => {
+          onDeleteAttachment={!readOnly ? (attachmentId) => {
             const attachment = attachments.find((a) => a.id === attachmentId)
             if (!attachment) return Promise.reject(new Error('Adjunto no disponible'))
             return deleteAttachment.mutateAsync({ attachmentId, fileUrl: attachment.file_url })
-          }}
+          } : undefined}
           canDeleteComments={user?.id === selectedTask?.created_by || false}
-          canManageAttachment={(attachment) => Boolean(user && (
+          canManageAttachment={(attachment) => Boolean(!readOnly && user && (
             isAdmin || user.id === selectedTask?.created_by || user.id === attachment.uploaded_by
           ))}
         />
       </main>
-      {profile?.role !== 'invitado' && (
+      {!readOnly && profile?.role !== 'invitado' && (
         <button
           type="button"
           className="ui-button ui-button--primary board-create-fab"
