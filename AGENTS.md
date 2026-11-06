@@ -108,4 +108,6 @@ Release GitHub [v0.14.0](https://github.com/furthurr/dashboardFurthurr/releases/
 
 Los cambios de solo lectura, borrado solo-servidor y arranque local protegido se publican en `v0.16.0` sobre `acf85d7` (`v0.15.0`): el código llega a `main` y a GitHub Pages, pero **la migración `202611060001` no está aplicada en Supabase y `board-delete` no está desplegada**, por lo que el entorno remoto conserva el comportamiento anterior.
 
+Release GitHub [v0.16.0](https://github.com/furthurr/dashboardFurthurr/releases/tag/v0.16.0): tag en `771e5b15315859a662dde8b626d57f5d9623d63b`; [Pages run 42164792619](https://github.com/furthurr/dashboardFurthurr/actions/runs/42164792619) terminó correctamente para ese commit. El HTML y el bundle publicados respondieron 200 y el aviso «Tablero desactivado: solo lectura…» está presente en el bundle servido. La publicación SPA no acredita el despliegue de Supabase ni E2E.
+
 <!-- ai-agents-kit:documentation:end -->
