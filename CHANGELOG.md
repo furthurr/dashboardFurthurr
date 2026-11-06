@@ -1,5 +1,31 @@
 # Changelog
 
+## [v0.16.0] - 2026-11-06
+
+### Funcionalidades
+
+- Dejar los tableros desactivados en **solo lectura para todos los roles**, incluido el administrador activo. La migración `202611060001_inactive_board_readonly.sql` añade policies restrictivas de escritura sobre `tasks`, `task_assignees`, `comments`, `task_attachments` y `storage.objects`, y guardas `lock_writable_*` en las RPCs de escritura; el rechazo del servidor es `55000`.
+- Reflejar la regla en la interfaz: `BoardRoute` propaga `readOnly` y el tablero muestra el aviso «Tablero desactivado: solo lectura. Actívalo para realizar cambios.»; «Gestionar miembros» y «Cambiar nombre» solo se ofrecen en tableros activos.
+- Ejecutar el borrado permanente **solo en servidor** mediante la nueva Edge Function `board-delete`: valida el bearer, rechaza sesiones OAuth, exige administrador activo y coordina la limpieza de Storage con el borrado relacional mediante `prepare_board_deletion` y `finish_board_deletion`, con manifiesto en `board_deletion_jobs`.
+- Revocar `delete_inactive_board` y sus grants: el cliente deja de enumerar rutas y borrar objetos de Storage, y no conserva una vía alternativa de borrado. Un fallo deja el tablero inactivo, bloquea la reactivación y permite reintentar.
+- Proteger el arranque local: `npm run dev` ejecuta `scripts/dev.mjs`, que elimina `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` del entorno heredado antes de cargar Vite, sin registrar valores ni alterar el shell padre.
+
+### Documentación
+
+- ADR 0007 (`borrado-tablero-solo-servidor`) y guía `docs/tableros-solo-lectura.md` con el orden de despliegue, el checklist manual y los límites.
+- Sincronización de `.architecture/`, `.data/`, `.design/`, `.navigator/`, `README.md`, `AGENTS.md` y `supabase/README.md`.
+
+### Otros
+
+- Sincronizar `package-lock.json`, que permanecía en `0.14.0` pese a la publicación de `v0.15.0`.
+
+### Verificación y límites
+
+- 215 pruebas Vitest superadas (23 archivos), 18 pruebas Deno de Edge (6 de `board-delete` y 12 de `admin-users`), 19 pruebas Deno MCP y 2 comprobaciones de paridad de bootstrap.
+- Suites SQL en PostgreSQL 16 desechable con Auth y Storage simulados, en modos incremental y bootstrap, incluida la concurrencia de creación y desactivación; `npm run test:dev-env` 4/4, lint, build y `git diff --check` correctos.
+- **La migración `202611060001` no está aplicada en el proyecto remoto y `board-delete` no está desplegada.** El push a `main` publica la SPA en GitHub Pages, pero Pages no despliega SQL ni Edge Functions: hasta aplicar la migración y desplegar la función, el entorno desplegado conserva el comportamiento anterior. La migración no es idempotente: no debe reaplicarse.
+- No hay E2E automatizado con cuentas reales, ni verificación en navegador autenticado, ni Storage real; los mocks de Edge no acreditan Auth, OAuth ni Storage reales.
+
 ## [v0.15.0] - 2026-11-04
 
 ### Funcionalidades
