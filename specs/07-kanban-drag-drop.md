@@ -23,6 +23,13 @@ Columnas iniciales:
 - En revisión.
 - Finalizadas.
 
+## Vaciar Finalizadas
+
+- En tableros activos, un administrador puede usar la papelera junto al contador de Finalizadas.
+- La confirmación identifica el tablero y advierte que se eliminarán permanentemente todas las tareas de esa columna, incluso las ocultas por filtros. Cancelar no modifica nada.
+- El borrado usa el tablero seleccionado y el estado `finalizadas` en el momento de ejecutar la operación, sin afectar otras columnas ni tableros. Conserva los permisos existentes de borrado.
+- Durante el envío se bloquea la confirmación; si falla, se muestra un error y se permite reintentar.
+
 ## Comportamiento
 
 - Una card puede moverse dentro de la misma columna.

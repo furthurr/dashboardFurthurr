@@ -214,6 +214,30 @@ export function useDeleteTask() {
   })
 }
 
+export async function deleteCompletedTasks(boardId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('tasks')
+    .delete({ count: 'exact' })
+    .eq('board_id', boardId)
+    .eq('status', 'finalizadas')
+
+  if (error) throw error
+  return count ?? 0
+}
+
+export function useDeleteCompletedTasks() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: deleteCompletedTasks,
+    onSuccess: async (_count, boardId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tasks', boardId], exact: true }),
+        queryClient.invalidateQueries({ queryKey: ['boards'] }),
+      ])
+    },
+  })
+}
+
 export function useUpdateTaskPositions() {
   const queryClient = useQueryClient()
 

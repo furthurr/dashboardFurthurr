@@ -379,6 +379,15 @@ La firma incremental actual incluye `p_board_id` y exige acceso al tablero adem�
 - Response: no se consume fila; error se lanza.
 - Fuente: `src/features/board/api.ts:155-170`, `supabase/migrations/202610200002_shared_task_editing.sql:16-18`.
 
+### Vaciar Finalizadas — `tasks.delete`
+
+- **Versión:** `v0.17.0`. No requiere migraciones nuevas; no se verificó un borrado contra Supabase remoto.
+- La SPA ofrece el vaciado solo a administradores activos en tableros editables. La operación reutiliza las políticas RLS de `tasks`; no añade una RPC ni modifica permisos de servidor.
+- Una sola petición al SDK: `tasks.delete({ count: 'exact' })` con `board_id` igual al tablero seleccionado y `status = 'finalizadas'`. No envía IDs ni aplica los filtros visuales; el conjunto se determina al ejecutar la petición.
+- Ante error del servidor, la mutación falla. Si tiene éxito, devuelve el contador de filas eliminadas (`0` si no se recibe contador) e invalida las consultas del tablero y del listado de tableros.
+- El borrado elimina por cascada filas de asignaciones, comentarios y metadatos de adjuntos; **no elimina los archivos de Storage**. No usa la Edge Function `board-delete`.
+- Fuentes: `src/features/board/api.ts:217-239`, `src/features/board/BoardPage.tsx:72-92`, `supabase-schema.sql:62,77,93,224-234`.
+
 ### Leer / crear / eliminar comentarios — `comments`
 
 - Lectura: filtra por `task_id`, ordena por `created_at` ascendente y proyecta `author` desde `profiles` (`src/features/board/commentsApi.ts:5-24`).

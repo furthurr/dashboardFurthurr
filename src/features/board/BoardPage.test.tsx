@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => {
   const mutation = () => ({ mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false })
   return {
     tasks: vi.fn(), refetch: vi.fn(), update: mutation(), status: mutation(), positions: mutation(),
-    create: mutation(), remove: mutation(), comment: mutation(), deleteComment: mutation(),
+    create: mutation(), remove: mutation(), clearCompleted: mutation(), comment: mutation(), deleteComment: mutation(),
     upload: mutation(), renameAttachment: mutation(), deleteAttachment: mutation(), taskImages: vi.fn(), assign: mutation(), users: vi.fn(), role: 'admin',
     attachments: [] as TaskAttachment[],
   }
@@ -19,6 +19,7 @@ vi.mock('./api', () => ({
   useTasks: mocks.tasks, useUpdateTask: () => mocks.update,
   useUpdateTaskStatus: () => mocks.status, useUpdateTaskPositions: () => mocks.positions,
   useCreateTask: () => mocks.create, useDeleteTask: () => mocks.remove,
+  useDeleteCompletedTasks: () => mocks.clearCompleted,
   useSetTaskAssignees: () => mocks.assign,
 }))
 vi.mock('./assigneesApi', () => ({ useAssignableUsers: mocks.users }))
@@ -65,12 +66,42 @@ beforeEach(() => {
 })
 
 describe('Integración del tablero', () => {
+  it('vacía Finalizadas solo después de confirmar y reintenta si falla', async () => {
+    const user = userEvent.setup()
+    mocks.tasks.mockReturnValue({ data: [task, { ...task, id: 'done', status: 'finalizadas' }], isLoading: false })
+    mocks.clearCompleted.mutateAsync.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(1)
+    renderBoard()
+
+    const trigger = within(screen.getByRole('region', { name: 'Finalizadas' })).getByRole('button', { name: 'Vaciar Finalizadas' })
+    await user.click(trigger)
+    const dialog = screen.getByRole('dialog', { name: '¿Vaciar Finalizadas?' })
+    expect(dialog).toHaveAccessibleDescription(/permanentemente.*Offline.*ocultas por filtros/)
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    expect(mocks.clearCompleted.mutateAsync).not.toHaveBeenCalled()
+
+    await user.click(trigger)
+    await user.click(screen.getByRole('button', { name: 'Eliminar permanentemente' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron eliminar')
+    await user.click(screen.getByRole('button', { name: 'Eliminar permanentemente' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(mocks.clearCompleted.mutateAsync.mock.calls).toEqual([['offline'], ['offline']])
+    expect(mocks.remove.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('no ofrece el vaciado a usuarios no administradores aunque haya tareas finalizadas', () => {
+    mocks.role = 'usuario'
+    mocks.tasks.mockReturnValue({ data: [{ ...task, status: 'finalizadas' }], isLoading: false })
+    renderBoard()
+    expect(screen.queryByRole('button', { name: 'Vaciar Finalizadas' })).not.toBeInTheDocument()
+  })
+
   it('mantiene un tablero desactivado consultable sin ofrecer mutaciones', async () => {
     const user = userEvent.setup()
     mocks.attachments = [attachment]
     render(<MemoryRouter><BoardPage boardId="offline" boardName="Offline" boards={[]} readOnly /></MemoryRouter>)
     expect(screen.getByText(/tablero desactivado: solo lectura/i)).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Crear tarea' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Vaciar Finalizadas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /nueva tarea/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /arrastrar tarea/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /mover a la lista/i })).not.toBeInTheDocument()

@@ -14,9 +14,11 @@ interface BoardColumnProps {
   onMoveTask?: (taskId: string, direction: 'left' | 'right') => void
   onMoveTaskVertical?: (taskId: string, direction: 'up' | 'down') => void
   readOnly?: boolean
+  onClearCompleted?: () => void
+  clearCompletedDisabled?: boolean
 }
 
-export function BoardColumn({ id, label, tasks, taskImages = {}, onTaskClick, onTaskCommentsClick, onMoveTask, onMoveTaskVertical, readOnly = false }: BoardColumnProps) {
+export function BoardColumn({ id, label, tasks, taskImages = {}, onTaskClick, onTaskCommentsClick, onMoveTask, onMoveTaskVertical, readOnly = false, onClearCompleted, clearCompletedDisabled }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: readOnly })
   const columnIndex = BOARD_COLUMNS.findIndex((col) => col.id === id)
 
@@ -24,9 +26,20 @@ export function BoardColumn({ id, label, tasks, taskImages = {}, onTaskClick, on
     <section ref={setNodeRef} className="board-column" data-column-id={id} data-drag-over={isOver} aria-labelledby={`column-${id}`}>
       <div className="board-column-header">
         <h2 id={`column-${id}`}>{label}</h2>
-        <span className="board-column-count" aria-label={`${tasks.length} tareas`}>
-          {tasks.length}
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {id === 'finalizadas' && !readOnly && onClearCompleted && (
+            <button type="button" className="ui-button ui-button--danger ui-button--sm"
+              aria-label="Vaciar Finalizadas" title="Vaciar Finalizadas"
+              disabled={clearCompletedDisabled} onClick={onClearCompleted}>
+              <svg aria-hidden="true" className="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 7h16m-14 0 1 13h10l1-13M9 7V4h6v3m-5 4v5m4-5v5" />
+              </svg>
+            </button>
+          )}
+          <span className="board-column-count" aria-label={`${tasks.length} tareas`}>
+            {tasks.length}
+          </span>
+        </div>
       </div>
       <div className="board-column-body">
           {tasks.length === 0 && (

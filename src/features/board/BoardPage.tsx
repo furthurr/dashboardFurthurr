@@ -18,7 +18,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { useTasks, useUpdateTaskStatus, useCreateTask, useDeleteTask, useUpdateTask, useUpdateTaskPositions, useSetTaskAssignees } from './api'
+import { useTasks, useUpdateTaskStatus, useCreateTask, useDeleteTask, useDeleteCompletedTasks, useUpdateTask, useUpdateTaskPositions, useSetTaskAssignees } from './api'
 import { useAssignableUsers } from './assigneesApi'
 import { useComments, useCreateComment, useDeleteComment } from './commentsApi'
 import { useAttachments, useTaskImagePreviews, useUploadAttachment, useRenameAttachment, useDeleteAttachment } from './attachmentsApi'
@@ -31,6 +31,7 @@ import { TaskDetailModal } from './TaskDetailModal'
 import { type TaskPriority, type TaskStatus, type TaskWithAssignees } from '@/types'
 import { useAuth } from '@/features/auth/AuthContext'
 import { AccountMenu } from '@/shared/ui/AccountMenu'
+import { Dialog } from '@/shared/ui/Dialog'
 import { Toast } from '@/shared/ui/Toast'
 import { useToast } from '@/shared/ui/useToast'
 
@@ -42,6 +43,9 @@ export function BoardPage({ boardId, boardName, boards, readOnly = false }: { bo
   const updateTaskStatus = useUpdateTaskStatus()
   const createTask = useCreateTask()
   const deleteTask = useDeleteTask()
+  const deleteCompleted = useDeleteCompletedTasks()
+  const [clearBoardId, setClearBoardId] = useState<string | null>(null)
+  const [clearError, setClearError] = useState(false)
   const updateTask = useUpdateTask()
   const updateTaskPositions = useUpdateTaskPositions()
   const [activeTask, setActiveTask] = useState<TaskWithAssignees | null>(null)
@@ -65,11 +69,26 @@ export function BoardPage({ boardId, boardName, boards, readOnly = false }: { bo
   const movementBusy = movementPending || updateTaskStatus.isPending || updateTaskPositions.isPending
 
   const isAdmin = profile?.role === 'admin'
+  const canClearCompleted = !readOnly && isAdmin && profile?.is_active !== false
+  const hasCompleted = tasks.some((task) => task.status === 'finalizadas')
   // El borrado no se amplía respecto a la regla anterior: solo el creador o un admin.
   const canDeleteSelectedTask = isAdmin || selectedTask?.created_by === user?.id
   const assigneeOptions = {
     users: assignableUsers.data ?? [], loading: assignableUsers.isLoading,
     error: Boolean(assignableUsers.error), onRetry: () => { void assignableUsers.refetch() },
+  }
+
+  async function clearCompleted() {
+    if (!canClearCompleted || clearBoardId !== boardId || deleteCompleted.isPending) return
+    setClearError(false)
+    try {
+      const count = await deleteCompleted.mutateAsync(boardId)
+      setOptimisticTasks(null)
+      setClearBoardId(null)
+      setNotice(count > 0 ? 'Se eliminaron las tareas finalizadas.' : 'No se eliminó ninguna tarea finalizada.')
+    } catch {
+      setClearError(true)
+    }
   }
 
   function openTaskDetail(task: TaskWithAssignees, initialTab: 'details' | 'comments' = 'details') {
@@ -405,6 +424,11 @@ export function BoardPage({ boardId, boardName, boards, readOnly = false }: { bo
                     label={col.label}
                     tasks={visibleTasksByColumn[col.id]}
                     readOnly={readOnly}
+                    onClearCompleted={canClearCompleted ? () => {
+                      setClearError(false)
+                      setClearBoardId(boardId)
+                    } : undefined}
+                    clearCompletedDisabled={!hasCompleted || deleteCompleted.isPending}
                     taskImages={taskImages}
                     onTaskClick={(task) => openTaskDetail(task)}
                     onTaskCommentsClick={(task) => openTaskDetail(task, 'comments')}
@@ -419,6 +443,24 @@ export function BoardPage({ boardId, boardName, boards, readOnly = false }: { bo
         <DragOverlay>
           {activeTask ? <TaskCard task={activeTask} images={taskImages[activeTask.id]} isDragging /> : null}
         </DragOverlay>
+
+        {canClearCompleted && clearBoardId === boardId && (
+          <Dialog title="¿Vaciar Finalizadas?"
+            subtitle={`Se eliminarán permanentemente todas las tareas de Finalizadas del tablero «${boardName}», incluidas las ocultas por filtros. Esta acción no se puede deshacer.`}
+            busy={deleteCompleted.isPending} onClose={() => setClearBoardId(null)}>
+            {clearError && <div className="dialog-body">
+              <p role="alert" className="ui-feedback ui-feedback--error">No se pudieron eliminar las tareas finalizadas. Inténtalo de nuevo.</p>
+            </div>}
+            <footer className="dialog-footer">
+              <button type="button" className="ui-button ui-button--secondary"
+                disabled={deleteCompleted.isPending} onClick={() => setClearBoardId(null)}>Cancelar</button>
+              <button type="button" className="ui-button ui-button--danger"
+                disabled={deleteCompleted.isPending} onClick={() => { void clearCompleted() }}>
+                {deleteCompleted.isPending ? 'Eliminando…' : 'Eliminar permanentemente'}
+              </button>
+            </footer>
+          </Dialog>
+        )}
 
         <CreateTaskModal
           key={isModalOpen ? 'open' : 'closed'}

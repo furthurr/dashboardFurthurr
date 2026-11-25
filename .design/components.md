@@ -2,6 +2,13 @@
 
 Catálogo de componentes actuales, no una promesa de API reutilizable fuera de sus props observadas.
 
+## Vaciar Finalizadas
+
+**Versión:** `v0.17.0`. La versión no acredita una prueba en navegador autenticado.
+
+- `BoardColumn` muestra una papelera junto al contador de **Finalizadas**, con nombre accesible «Vaciar Finalizadas». Reutiliza `ui-button--danger` y `ui-button--sm`. Solo se ofrece a administradores activos en tableros editables y queda deshabilitada si el tablero no tiene tareas finalizadas, independientemente del filtro visual (`src/features/board/BoardColumn.tsx:28-41`, `src/features/board/BoardPage.tsx:72-75,427-431`).
+- `Dialog` identifica el tablero y advierte que el borrado es permanente e incluye las tareas ocultas por filtros. **Cancelar** no envía la operación; **Eliminar permanentemente** la inicia. Durante el envío no se puede cerrar ni confirmar de nuevo. Si falla, el diálogo conserva un aviso accesible y permite reintentar; al completarse, se cierra y se muestra un aviso de resultado (`src/features/board/BoardPage.tsx:81-92,447-464`).
+
 ## Actualización — tableros desactivados en solo lectura y borrado solo-servidor, 2026-11-06
 
 > **Estado: publicado en `v0.16.0`, sin desplegar en Supabase.** La migración
