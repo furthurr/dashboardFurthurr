@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.17.0] - 2026-11-24
+
+### Funcionalidades
+
+- Añadir «Vaciar Finalizadas» junto al contador para administradores de tableros activos. La acción exige confirmar el borrado permanente de todas las tareas finalizadas del tablero, incluso las ocultas por filtros.
+- Mantener intactos los demás tableros y columnas. El borrado usa los permisos existentes y no elimina los archivos adjuntos de Storage.
+
+### Documentación
+
+- Documentar la confirmación y el contrato de borrado en la spec Kanban y en los catálogos de datos y componentes.
+
 ## [v0.16.0] - 2026-11-06
 
 ### Funcionalidades
